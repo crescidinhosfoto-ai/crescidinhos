@@ -5,13 +5,13 @@
 // ─────────────────────────────────────────────────────────────────
 
 export const PHOTOGRAPHER = {
-  email: "crescidinhosfoto@gmail.com",     // ⚠️ Substitua pelo seu e-mail Google
+  email: "crescidinhosfoto@gmail.com",
   name: "Crescidinhos Fotografia",
-  owner: "Thais de Sá Nascimento Dutra",
-  cpf: "410.593.908-41",           // ⚠️ Preencha seu CPF
+  owner: "Thais de Sá Nascimento",
+  cpf: "000.000.000-00",           // ⚠️ Preencha seu CPF
   phone: "(14) 99684-5521",
   whatsapp: "5514996845521",
-  instagram: "@thaisdesafotografia",
+  instagram: "@crescidinhosfotografia",
   pix: "(14) 99684-5521",
   cidade: "Bauru e Região",
 };
