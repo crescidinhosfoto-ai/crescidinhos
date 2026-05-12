@@ -17,7 +17,7 @@ export const PHOTOGRAPHER = {
 };
 
 // ⚠️ Cole aqui a URL do Webhook do n8n (Cloudfy) após configurar
-export const WEBHOOK_URL = "https://seu-n8n.cloudfy.host/webhook/novo-agendamento";
+export const WEBHOOK_URL = "https://ribbitingboar-n8n.cloudfy.live/webhook/novo-agendamento";
 
 // ─── SERVIÇOS ─────────────────────────────────────────────────────
 export const SERVICES = [
