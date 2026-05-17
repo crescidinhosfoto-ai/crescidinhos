@@ -52,6 +52,13 @@ function pad(n)              { return String(n).padStart(2,"0"); }
 function formatDate(y,m,d)  { return `${y}-${pad(m+1)}-${pad(d)}`; }
 function formatDateBR(iso)  { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
 function mesAno(iso)        { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MONTHS[parseInt(m)-1]}/${y}`; }
+function fmtPreco(price, priceLabel, periodo) {
+  if (priceLabel) return priceLabel;
+  if (!price) return "A consultar";
+  const base = `R$ ${price.toLocaleString("pt-BR")}`;
+  if (periodo === "mensal") return `${base}/mês`;
+  return base;
+}
 
 // ─── SHARED STYLES ────────────────────────────────────────────────
 const inp = { width:"100%", padding:"11px 13px", borderRadius:8, border:"1.5px solid #e0d8d0", fontSize:13, boxSizing:"border-box", outline:"none", background:"#fff", fontFamily:"inherit", color:"#1a1a1a" };
@@ -152,25 +159,21 @@ function StepBar({ step }) {
   );
 }
 
-// ─── SERVIÇO STEP 1 (novo) ────────────────────────────────────────
-// Lista serviços sem preço. Ao clicar, expande e mostra modalidades.
-// Ao escolher modalidade, habilita botão "Continuar".
+// ─── SERVICE SELECTOR ────────────────────────────────────────────
 function ServiceSelector({ onConfirm }) {
   const [openId, setOpenId] = useState(null);
-  const [selectedService, setSelectedService] = useState(null);   // objeto do serviço
-  const [selectedModality, setSelectedModality] = useState(null); // objeto da modalidade
+  const [selectedService, setSelectedService] = useState(null);
+  const [selectedModality, setSelectedModality] = useState(null);
 
   const handleServiceClick = (s) => {
     if (openId === s.id) {
       setOpenId(null);
     } else {
       setOpenId(s.id);
-      // se só tem 1 modalidade, já seleciona automaticamente
       if (s.modalities.length === 1) {
         setSelectedService(s);
         setSelectedModality(s.modalities[0]);
       } else {
-        // se mudou de serviço, limpa modalidade anterior de outro serviço
         if (selectedService?.id !== s.id) {
           setSelectedService(s);
           setSelectedModality(null);
@@ -212,11 +215,7 @@ function ServiceSelector({ onConfirm }) {
               overflow:"hidden",
               transition:"border-color .15s",
             }}>
-              {/* Cabeçalho do serviço */}
-              <div
-                onClick={() => handleServiceClick(s)}
-                style={{padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}
-              >
+              <div onClick={() => handleServiceClick(s)} style={{padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
                 <span style={{fontSize:26,flexShrink:0}}>{s.icon}</span>
                 <div style={{flex:1,minWidth:0}}>
                   <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:"#1a1a1a",margin:0,lineHeight:1.2}}>{s.label}</p>
@@ -227,24 +226,27 @@ function ServiceSelector({ onConfirm }) {
                 </span>
               </div>
 
-              {/* Modalidades (expande ao clicar) */}
               {isOpen && (
                 <div style={{borderTop:"1px solid #f0e8e0",padding:"12px 16px 16px"}}>
                   {s.modalities.length === 1 ? (
-                    // Única modalidade — mostra detalhes, sem escolha
-                    <div style={{
-                      padding:"12px 14px",
-                      borderRadius:10,
-                      background:"#e6f4ea",
-                      border:"2px solid #a5d6a7",
-                    }}>
+                    <div style={{padding:"12px 14px",borderRadius:10,background:"#e6f4ea",border:"2px solid #a5d6a7"}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
                         <span style={{fontSize:13,color:"#2e7d32",fontWeight:700}}>✅ {s.modalities[0].label}</span>
                       </div>
                       <p style={{fontSize:12,color:"#555",margin:0,lineHeight:1.6}}>{s.modalities[0].detail}</p>
+                      {s.modalities[0].obs && (
+                        <p style={{fontSize:11,color:"#856404",margin:"5px 0 0"}}>⚠ {s.modalities[0].obs}</p>
+                      )}
+                      {s.modalities[0].price && (
+                        <p style={{fontSize:13,fontWeight:700,color:"#2e7d32",margin:"6px 0 0"}}>
+                          {fmtPreco(s.modalities[0].price, s.modalities[0].priceLabel, s.modalities[0].periodo)}
+                        </p>
+                      )}
+                      {!s.modalities[0].price && (
+                        <p style={{fontSize:12,color:"#999",margin:"5px 0 0"}}>Valor a consultar</p>
+                      )}
                     </div>
                   ) : (
-                    // Múltiplas modalidades — cliente escolhe
                     <div>
                       <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>
                         Escolha uma opção:
@@ -265,19 +267,38 @@ function ServiceSelector({ onConfirm }) {
                                 transition:"all .15s",
                               }}
                             >
-                              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                                {/* Bolinha radio */}
+                              <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
                                 <div style={{
                                   width:18,height:18,borderRadius:"50%",flexShrink:0,
                                   border:"2px solid "+(isSel?"#fff":"#ccc"),
                                   background:isSel?"#fff":"transparent",
                                   display:"flex",alignItems:"center",justifyContent:"center",
+                                  marginTop:2,
                                 }}>
                                   {isSel && <div style={{width:8,height:8,borderRadius:"50%",background:"#1a1a1a"}}/>}
                                 </div>
                                 <div style={{flex:1}}>
                                   <p style={{fontSize:14,fontWeight:700,color:isSel?"#fff":"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>{m.label}</p>
                                   <p style={{fontSize:12,color:isSel?"#ccc":"#888",margin:"3px 0 0",lineHeight:1.5}}>{m.detail}</p>
+                                  {m.obs && (
+                                    <p style={{fontSize:11,color:isSel?"#ffd":"#856404",margin:"3px 0 0"}}>⚠ {m.obs}</p>
+                                  )}
+                                  {m.incluso && (
+                                    <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5}}>
+                                      {m.incluso.map(i=>(
+                                        <span key={i} style={{fontSize:10,padding:"1px 7px",borderRadius:20,background:isSel?"rgba(255,255,255,0.2)":"#f0e8e0",color:isSel?"#fff":"#b8967e",fontWeight:600}}>{i}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {m.price ? (
+                                    <p style={{fontSize:13,fontWeight:700,color:isSel?"#fff":"#b8967e",margin:"5px 0 0"}}>
+                                      {fmtPreco(m.price, m.priceLabel, m.periodo)}
+                                      {m.fotos && !m.priceLabel ? <span style={{fontSize:11,fontWeight:400,marginLeft:6}}>{m.fotos === 70 ? "a partir de 70 fotos" : `· ${m.fotos} fotos`}</span> : null}
+                                      {m.duracao ? <span style={{fontSize:11,fontWeight:400,marginLeft:6}}>· {m.duracao}</span> : null}
+                                    </p>
+                                  ) : (
+                                    <p style={{fontSize:12,color:isSel?"#ddd":"#999",margin:"5px 0 0"}}>Valor a consultar</p>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -293,7 +314,6 @@ function ServiceSelector({ onConfirm }) {
         })}
       </div>
 
-      {/* Resumo da escolha + botão */}
       {canContinue && (
         <div style={{
           padding:"14px 16px",
@@ -310,6 +330,11 @@ function ServiceSelector({ onConfirm }) {
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 2px",textTransform:"uppercase",letterSpacing:"1px"}}>Selecionado</p>
             <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0}}>{selectedService.icon} {selectedService.label}</p>
             <p style={{fontSize:12,color:"#888",margin:"2px 0 0"}}>{selectedModality.label}</p>
+            {selectedModality.price && (
+              <p style={{fontSize:13,fontWeight:700,color:"#b8967e",margin:"2px 0 0"}}>
+                {fmtPreco(selectedModality.price, selectedModality.priceLabel, selectedModality.periodo)}
+              </p>
+            )}
           </div>
           <button style={{padding:"6px 10px",borderRadius:8,background:"#f0e8e0",border:"none",cursor:"pointer",fontSize:18,color:"#b8967e",lineHeight:1}} onClick={()=>{ setSelectedService(null); setSelectedModality(null); setOpenId(null); }}>✕</button>
         </div>
@@ -518,7 +543,7 @@ const PAG_COLORS = {
   "Cancelado": { bg:"#fde8e8", color:"#c62828" },
 };
 
-// ─── FICHA RÁPIDA (overlay da agenda) ────────────────────────────
+// ─── FICHA RÁPIDA ────────────────────────────────────────────────
 function FichaRapida({ agendamento, onVerMais, onFechar }) {
   const cl = agendamento?.clientes || {};
   const anamnese = cl.anamnese || {};
@@ -730,7 +755,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const mesesDisp=[...new Set(agendamentos.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
   const filtered=agendamentos.filter(a=>{ const statusOk=filter==="Todos"||a.status===filter; const mesOk=mesFiltro==="todos"||(a.data&&a.data.startsWith(mesFiltro)); return statusOk&&mesOk; });
 
-  // ── Resumo Financeiro ──────────────────────────────────────────
   if(!loading&&tab==="stats"){
     const porMes={};
     agendamentos.filter(a=>a.status!=="Cancelado").forEach(a=>{
@@ -811,7 +835,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     />
   );
 
-  // ── Detalhe do agendamento ──
   if(agendamento){
     const st=STATUS_COLORS[agendamento.status]||STATUS_COLORS["Pendente"];
     const pc=PAG_COLORS[agendamento.pagamento_status]||PAG_COLORS["Pendente"];
@@ -889,7 +912,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  // ── Detalhe do cliente ──
   if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
     const camposAnamnese=Object.entries(cliente.anamnese||{}).filter(([k,v])=>v&&v!==""&&!["nome_mae","email","phone","nome_crianca","idade","atipico"].includes(k));
@@ -944,7 +966,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  // ── Lista agendamentos / clientes ──
   return(
     <div>
       {showNew&&(
@@ -989,7 +1010,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
                   else{ const nc=await criarCliente({nome_mae:newClient.nome_mae,nome_crianca:newClient.nome_crianca,email:newClient.email,telefone:newClient.telefone,atipico:newAnamnese.atipico==="sim",anamnese:newAnamnese}); cid=nc[0].id; }
                   const svc=SERVICES.find(s=>s.label===newClient.servico);
                   const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";
-                  await criarAgendamento({cliente_id:cid,servico:newClient.servico,modalidade:modLabel,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});
+                  await criarAgendamento({cliente_id:cid,servico:newClient.servico,servico_id:svc?.id||null,modalidade:modLabel,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});
                   setShowNew(false); setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""}); setNewAnamnese({}); carregar();
                 }catch(e){ alert("Erro: "+e.message); }
                 finally{ setSalvando(false); }
@@ -1078,8 +1099,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
 // ─── CLIENT BOOKING FLOW ──────────────────────────────────────────
 function ClientView() {
   const [step,setStep]=useState(1);
-  const [service,setService]=useState(null);     // objeto completo do serviço
-  const [modality,setModality]=useState(null);   // objeto da modalidade escolhida
+  const [service,setService]=useState(null);
+  const [modality,setModality]=useState(null);
   const [date,setDate]=useState(null);
   const [time,setTime]=useState(null);
   const [anamnese,setAnamnese]=useState({});
@@ -1099,7 +1120,12 @@ function ClientView() {
     }catch(e){}
     finally{setVerificandoCliente(false);}
   };
-  const precisaAnamnese=()=>!clienteExistente||diasDesdeUltimoEnsaio(clienteExistente.ultimo_ensaio)>180;
+
+  const precisaAnamnese=()=>{
+    // Serviços que não precisam de anamnese infantil
+    if(service && !service.requerCrianca) return !clienteExistente || diasDesdeUltimoEnsaio(clienteExistente?.ultimo_ensaio) > 180;
+    return !clienteExistente || diasDesdeUltimoEnsaio(clienteExistente?.ultimo_ensaio) > 180;
+  };
 
   const handleSubmit=async()=>{
     setLoading(true);
@@ -1107,10 +1133,45 @@ function ClientView() {
       const telefone=(anamnese.phone||"").replace(/\D/g,"");
       let cid;
       const ex=await getClienteByTelefone(telefone);
-      if(ex&&ex.length>0){ cid=ex[0].id; await atualizarCliente(cid,{anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()}); }
-      else{ const nc=await criarCliente({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_crianca,email:anamnese.email,telefone,idade:anamnese.idade,atipico:anamnese.atipico==="sim",anamnese,ultimo_ensaio:date,total_ensaios:1}); cid=nc[0].id; }
-      await criarAgendamento({cliente_id:cid,servico:service?.label,modalidade:modality?.label,data:date,hora:time,status:"Pendente",pagamento_status:"Pendente"});
-      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_crianca,email:anamnese.email,phone:anamnese.phone,servico:service?.label,modalidade:modality?.label,data:date,hora:time,atipico:anamnese.atipico,idade:anamnese.idade})}).catch(()=>{});
+      if(ex&&ex.length>0){
+        cid=ex[0].id;
+        await atualizarCliente(cid,{anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()});
+      } else {
+        const nc=await criarCliente({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_crianca,email:anamnese.email,telefone,idade:anamnese.idade,atipico:anamnese.atipico==="sim",anamnese,ultimo_ensaio:date,total_ensaios:1});
+        cid=nc[0].id;
+      }
+      await criarAgendamento({
+        cliente_id:cid,
+        servico:service?.label,
+        servico_id:service?.id||null,
+        modalidade:modality?.label,
+        modalidade_id:modality?.id||null,
+        data:date,
+        hora:time,
+        valor:modality?.price||null,
+        status:"Pendente",
+        pagamento_status:"Pendente",
+      });
+      await fetch(WEBHOOK_URL,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          nome_mae:anamnese.nome_mae,
+          nome_crianca:anamnese.nome_crianca,
+          email:anamnese.email,
+          phone:anamnese.phone,
+          servico:service?.label,
+          servico_id:service?.id,
+          modalidade:modality?.label,
+          modalidade_id:modality?.id,
+          grupo:service?.grupo||null,
+          data:date,
+          hora:time,
+          atipico:anamnese.atipico,
+          idade:anamnese.idade,
+          valor:modality?.price||null,
+        })
+      }).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false); setSubmitted(true);
   };
@@ -1121,34 +1182,48 @@ function ClientView() {
       <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Solicitação enviada!</h2>
       <p style={{color:"#888",fontSize:14,lineHeight:1.7,marginBottom:20}}>Em breve a <strong>Crescidinhos</strong> confirmará seu horário pelo WhatsApp. 🤍</p>
       <div style={{padding:16,background:"#faf8f5",borderRadius:12,textAlign:"left"}}>
-        {[["Serviço",service?.label],["Modalidade",modality?.label],["Data",formatDateBR(date)],["Horário",time],["Mãe",anamnese.nome_mae],["Criança",anamnese.nome_crianca]].map(([k,v])=>(
-          v && <p key={k} style={{fontSize:13,color:"#666",margin:"0 0 5px"}}><strong>{k}:</strong> {v}</p>
+        {[
+          ["Serviço",service?.label],
+          ["Modalidade",modality?.label],
+          ["Data",formatDateBR(date)],
+          ["Horário",time],
+          ["Mãe",anamnese.nome_mae],
+          ["Criança",anamnese.nome_crianca],
+        ].filter(([,v])=>v).map(([k,v])=>(
+          <p key={k} style={{fontSize:13,color:"#666",margin:"0 0 5px"}}><strong>{k}:</strong> {v}</p>
         ))}
       </div>
     </div>
   );
 
-  const Btn=({disabled,onClick,label})=><button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>;
-  const Back=({onClick})=><button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>;
+  const Btn=({disabled,onClick,label})=>(
+    <button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>
+  );
+  const Back=({onClick})=>(
+    <button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>
+  );
 
   return(
     <div>
       <StepBar step={step}/>
 
-      {/* ── Step 1: Seleção de serviço + modalidade ── */}
       {step===1&&(
         <ServiceSelector onConfirm={(s,m)=>{ setService(s); setModality(m); setStep(2); }}/>
       )}
 
-      {/* ── Step 2: Data e hora ── */}
       {step===2&&(
         <div>
           <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:20}}>{service?.icon}</span>
-            <div>
+            <div style={{flex:1}}>
               <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{service?.label}</p>
               <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{modality?.label} · {modality?.detail}</p>
             </div>
+            {modality?.price && (
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:"#b8967e",flexShrink:0}}>
+                {fmtPreco(modality.price, modality.priceLabel, modality.periodo)}
+              </p>
+            )}
           </div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
@@ -1161,11 +1236,13 @@ function ClientView() {
               </div>
             </div>
           )}
-          <div style={{display:"flex",gap:10,marginTop:20}}><Back onClick={()=>setStep(1)}/><Btn disabled={!date||!time} onClick={()=>setStep(3)} label="Continuar →"/></div>
+          <div style={{display:"flex",gap:10,marginTop:20}}>
+            <Back onClick={()=>setStep(1)}/>
+            <Btn disabled={!date||!time} onClick={()=>setStep(3)} label="Continuar →"/>
+          </div>
         </div>
       )}
 
-      {/* ── Step 3: Anamnese ── */}
       {step===3&&(
         <div>
           <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
@@ -1190,8 +1267,8 @@ function ClientView() {
             )}
           </div>
           {precisaAnamnese()
-            ?<AnamneseForm data={anamnese} onChange={setAnamnese}/>
-            :(
+            ? <AnamneseForm data={anamnese} onChange={setAnamnese}/>
+            : (
               <div>
                 <p style={{fontSize:12,color:"#999",marginBottom:16}}>Confirme seus dados para o agendamento 🤍</p>
                 <Field label="Nome da mãe" required><input style={inp} value={anamnese.nome_mae||""} onChange={e=>setAnamnese(a=>({...a,nome_mae:e.target.value}))}/></Field>
@@ -1201,11 +1278,13 @@ function ClientView() {
               </div>
             )
           }
-          <div style={{display:"flex",gap:10,marginTop:24}}><Back onClick={()=>setStep(2)}/><Btn disabled={false} onClick={()=>setStep(4)} label="Revisar →"/></div>
+          <div style={{display:"flex",gap:10,marginTop:24}}>
+            <Back onClick={()=>setStep(2)}/>
+            <Btn disabled={false} onClick={()=>setStep(4)} label="Revisar →"/>
+          </div>
         </div>
       )}
 
-      {/* ── Step 4: Confirmação ── */}
       {step===4&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
@@ -1217,21 +1296,30 @@ function ClientView() {
               ["Modalidade", modality?.label],
               ["Data", formatDateBR(date)],
               ["Horário", time],
+              modality?.price ? ["Valor estimado", fmtPreco(modality.price, modality.priceLabel, modality.periodo)] : null,
               ["Mãe / responsável", anamnese.nome_mae],
               ["Criança", anamnese.nome_crianca],
               ["E-mail", anamnese.email],
-              ["Perfil", anamnese.atipico==="sim"?"🧡 Criança atípica":anamnese.atipico==="Não"?"🌿 Criança típica":"—"],
-            ].map(([k,v])=>v&&(
+              ["Perfil", anamnese.atipico==="sim"?"🧡 Criança atípica":anamnese.atipico==="Não"?"🌿 Criança típica":null],
+            ].filter(Boolean).map(([k,v])=>v&&(
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{fontSize:12,color:"#999"}}>{k}</span>
                 <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
               </div>
             ))}
           </div>
+          {modality?.price && (
+            <div style={{padding:12,background:"#fdf8f5",border:"1.5px solid #f0ddd0",borderRadius:10,marginBottom:12}}>
+              <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 O valor exibido é uma estimativa. A Crescidinhos confirmará o valor final pelo WhatsApp.</p>
+            </div>
+          )}
           <div style={{padding:12,background:"#fdf8f5",border:"1.5px solid #f0ddd0",borderRadius:10,marginBottom:16}}>
             <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 Em breve a <strong>Crescidinhos</strong> entrará em contato pelo WhatsApp para confirmar seu horário e passar as informações de pagamento.</p>
           </div>
-          <div style={{display:"flex",gap:10}}><Back onClick={()=>setStep(3)}/><Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/></div>
+          <div style={{display:"flex",gap:10}}>
+            <Back onClick={()=>setStep(3)}/>
+            <Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
+          </div>
         </div>
       )}
     </div>
