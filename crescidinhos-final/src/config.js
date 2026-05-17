@@ -7,7 +7,97 @@
 export const PHOTOGRAPHER = {
   email: "crescidinhosfoto@gmail.com",
   name: "Crescidinhos Fotografia",
-  owner: "Thais de Sá Nascimento",
+  owner: "Thais de Sá Nas// =============================================================
+// config.js — Crescidinhos Fotografia
+// Versão SEM preços e pacotes (info de valores fica com a Clarice)
+// =============================================================
+
+export const PHOTOGRAPHER = {
+  email: "crescidinhosfoto@gmail.com",
+  name: "Crescidinhos Fotografia",
+  owner: "Thais de Sa Nascimento Dutra",
+  phone: "(14) 99684-5521",
+  whatsapp: "5514996845521",
+  instagram: "@thaisdesafotografia",
+  pix: "(14) 99684-5521",
+  cidade: "Bauru e Regiao",
+  endereco: "Padre Anchieta 775, Bela Vista, Bauru/SP",
+  site: "crescidinhosfoto.com.br",
+  agendamento: "app.crescidinhosfoto.com.br",
+};
+
+export const WEBHOOK_URL =
+  "https://ribbitingboar-n8n.cloudfy.live/webhook/novo-agendamento";
+
+// Horários disponíveis para agendamento
+export const TIMES = [
+  "08:00", "09:00", "09:30",
+  "10:00", "10:30", "11:00",
+  "13:00", "13:30", "14:00",
+  "14:30", "15:00", "15:30",
+  "16:00", "16:30", "17:00",
+];
+
+// =============================================================
+// SERVIÇOS — apenas ícone e nome, SEM preços e pacotes
+// (Detalhes de valores são passados pela Clarice no WhatsApp)
+// =============================================================
+export const SERVICES = [
+  {
+    id: "gestante",
+    label: "Gestante",
+    icon: "🤰",
+    description: "De 28 a 38 semanas de gestação",
+  },
+  {
+    id: "newborn",
+    label: "Newborn",
+    icon: "👶",
+    description: "Bebês até 12 dias de vida",
+  },
+  {
+    id: "acompanhamento",
+    label: "Acompanhamento Mensal",
+    icon: "📅",
+    description: "Contrato de 11 meses — do primeiro mês ao primeiro aninho",
+  },
+  {
+    id: "tematico",
+    label: "Temático Sazonal",
+    icon: "🎨",
+    description: "Cenários temáticos e sazonais",
+  },
+  {
+    id: "adulto-familia",
+    label: "Adulto / Família",
+    icon: "👨‍👩‍👧",
+    description: "Ensaio para casais, famílias e adultos",
+  },
+  {
+    id: "infantil",
+    label: "Infantil Avulso",
+    icon: "🧒",
+    description: "Ensaio externo para crianças",
+  },
+  {
+    id: "aniversario",
+    label: "Aniversário",
+    icon: "🎂",
+    description: "Cobertura completa de festas de aniversário",
+  },
+  {
+    id: "batizado",
+    label: "Batizado / Confraternização",
+    icon: "✝️",
+    description: "Cobertura de batizados e eventos sociais em Bauru",
+  },
+  {
+    id: "quinze-anos",
+    label: "15 Anos",
+    icon: "👑",
+    description: "Ensaio e cobertura completa para debutantes",
+  },
+];cimento",
   cpf: "000.000.000-00",           // ⚠️ Preencha seu CPF
   phone: "(14) 99684-5521",
   whatsapp: "5514996845521",
