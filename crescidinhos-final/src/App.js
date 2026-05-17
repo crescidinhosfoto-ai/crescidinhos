@@ -3,73 +3,72 @@ import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL } from "./config";
 import { createCalendarEvent, fetchCalendarEvents } from "./googleCalendar";
 
-// ─── CONFIGURAÇÃO SUPABASE ───────────────────────────────────────────────
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 
 const sb = async (path, options = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    cabeçalhos: {
+    headers: {
       apikey: SUPABASE_KEY,
-      Autorização: `Portador ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      Preferência: "retorno=representação",
-      ...opções.cabeçalhos,
+      Prefer: "return=representation",
+      ...options.headers,
     },
-    ...opções,
+    ...options,
   });
   if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
-  retornar texto ? JSON.parse(texto) : nulo;
+  return text ? JSON.parse(text) : null;
 };
 
 const getClienteByTelefone = (tel) =>
   sb(`clientes?telefone=eq.${encodeURIComponent(tel)}&limit=1`);
-const criarCliente = (dados) =>
+const criarCliente = (data) =>
   sb("clientes", { method: "POST", body: JSON.stringify(data) });
-const atualizarCliente = (id, dados) =>
+const atualizarCliente = (id, data) =>
   sb(`clientes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
-const criarAgendamento = (dados) =>
+const criarAgendamento = (data) =>
   sb("agendamentos", { method: "POST", body: JSON.stringify(data) });
 const getAgendamentos = () =>
   sb("agendamentos?select=*,clientes(*)&order=data.asc,hora.asc");
 const getClientes = () =>
   sb("clientes?select=*,agendamentos(*)&order=created_at.desc");
-const atualizarAgendamento = (id, dados) =>
+const atualizarAgendamento = (id, data) =>
   sb(`agendamentos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
 
 const diasDesdeUltimoEnsaio = (ultimoEnsaio) => {
-  if (!ultimoEnsaio) retornar 9999;
-  const diff = new Date() - new Date(ultimoEnsaio);
-  retornar Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (!ultimoEnsaio) return 9999;
+  return Math.floor((new Date() - new Date(ultimoEnsaio)) / (1000 * 60 * 60 * 24));
 };
 
-// ─── AJUDANTES ──────────────────────────────────────────────────────
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sexo","Sáb"];
-função obterDiasNoMês(y,m){ retornar novo Date(y,m+1,0).obterData(); }
-function getFirstDay(y,m) { return new Date(y,m,1).getDay(); }
-function pad(n) { return String(n).padStart(2,"0"); }
-function formatDate(y,m,d) { return `${y}-${pad(m+1)}-${pad(d)}`; }
-function formatDateBR(iso) { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
-function mesAno(iso) { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MESES[parseInt(m)-1]}/${y}`; }
+// ─── HELPERS ─────────────────────────────────────────────────────
+const MONTHS   = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+function getDaysInMonth(y,m){ return new Date(y,m+1,0).getDate(); }
+function getFirstDay(y,m)   { return new Date(y,m,1).getDay(); }
+function pad(n)              { return String(n).padStart(2,"0"); }
+function formatDate(y,m,d)  { return `${y}-${pad(m+1)}-${pad(d)}`; }
+function formatDateBR(iso)  { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; }
+function mesAno(iso)        { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MONTHS[parseInt(m)-1]}/${y}`; }
 
-// ─── ESTILOS COMPARTILHADOS ─────────────────────────────────────────────────
+// ─── SHARED STYLES ────────────────────────────────────────────────
 const inp = { width:"100%", padding:"11px 13px", borderRadius:8, border:"1.5px solid #e0d8d0", fontSize:13, boxSizing:"border-box", outline:"none", background:"#fff", fontFamily:"inherit", color:"#1a1a1a" };
 const lbl = { fontSize:12, color:"#555", fontWeight:600, display:"block", marginBottom:5 };
 const sec = { fontFamily:"'Cormorant Garamond',serif", fontSize:15, color:"#b8967e", fontWeight:700, margin:"20px 0 10px", borderBottom:"1px solid #f0e8e0", paddingBottom:5 };
 
-função Campo({ rótulo, obrigatório, filhos }) {
-  retornar (
+function Field({ label, required, children }) {
+  return (
     <div style={{ marginBottom:14 }}>
-      <label style={lbl}>{label}{obrigatório && <span style={{color:"#b8967e"}}> *</span> xallabel>
-      {crianças}
+      <label style={lbl}>{label}{required && <span style={{color:"#b8967e"}}> *</span>}</label>
+      {children}
     </div>
   );
 }
 
-função Radio({ opções, valor, onChange }) {
-  retornar (
+function Radio({ options, value, onChange }) {
+  return (
     <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
       {options.map(o => (
         <label key={o} style={{ display:"flex", alignItems:"flex-start", gap:10, cursor:"pointer", fontSize:13, color:"#333", lineHeight:1.5 }}>
@@ -83,9 +82,9 @@ função Radio({ opções, valor, onChange }) {
   );
 }
 
-função Verificar({ opções, valores=[], onChange }) {
+function Check({ options, values=[], onChange }) {
   const toggle = o => onChange(values.includes(o) ? values.filter(x=>x!==o) : [...values,o]);
-  retornar (
+  return (
     <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:4 }}>
       {options.map(o => (
         <label key={o} style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:13, color:"#333" }}>
@@ -99,17 +98,17 @@ função Verificar({ opções, valores=[], onChange }) {
   );
 }
 
-// ─── CALENDÁRIO ──────────────────────────────────────────────────────
-function Calendar({ selectedDate, onSelectDate, busyDates=[] }) {
-  const hoje = novo Date();
+// ─── CALENDAR ────────────────────────────────────────────────────
+function Calendar({ selectedDate, onSelectDate }) {
+  const today = new Date();
   const [vy, setVy] = useState(today.getFullYear());
   const [vm, setVm] = useState(today.getMonth());
-  const dias = obterDiasNoMês(vy,vm);
+  const days = getDaysInMonth(vy,vm);
   const firstDay = getFirstDay(vy,vm);
-  const células = [];
+  const cells = [];
   for(let i=0;i<firstDay;i++) cells.push(null);
   for(let d=1;d<=days;d++) cells.push(d);
-  retornar (
+  return (
     <div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
         <button onClick={()=>vm===0?(setVm(11),setVy(y=>y-1)):setVm(m=>m-1)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>‹</button>
@@ -124,9 +123,8 @@ function Calendar({ selectedDate, onSelectDate, busyDates=[] }) {
           const isPast=new Date(ds)<new Date(today.toDateString());
           const isSun=i%7===0;
           const isSel=selectedDate===ds;
-          const isBusy=busyDates.includes(ds);
-          retornar(
-            <div key={i} onClick={()=>!isPast&&!isSun&&onSelectDate(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":isBusy?"#fdf0e8":"transparent",color:isSel?"#fff":isPast||isSun?"#ccc":isBusy?"#b8967e":"#1a1a1a",cursor:isPast||isSun?"default":"pointer"}}>{d}</div>
+          return(
+            <div key={i} onClick={()=>!isPast&&!isSun&&onSelectDate(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":"transparent",color:isSel?"#fff":isPast||isSun?"#ccc":"#1a1a1a",cursor:isPast||isSun?"default":"pointer"}}>{d}</div>
           );
         })}
       </div>
@@ -134,10 +132,10 @@ function Calendar({ selectedDate, onSelectDate, busyDates=[] }) {
   );
 }
 
-// ─── BARRA DE ETAPAS ─────────────────────────────────────────────────────
-função StepBar({ passo }) {
-  const steps = ["Serviço","Dados & Hora","Anamnese","Confirmar"];
-  retornar (
+// ─── STEP BAR ────────────────────────────────────────────────────
+function StepBar({ step }) {
+  const steps = ["Serviço","Data & Hora","Anamnese","Confirmar"];
+  return (
     <div style={{display:"flex",alignItems:"center",marginBottom:26}}>
       {steps.map((l,i)=>(
         <div key={l} style={{display:"contents"}}>
@@ -154,7 +152,192 @@ função StepBar({ passo }) {
   );
 }
 
-// ─── ETIQUETAS DE ANAMNESE ─────────────────────── ───────────────────────
+// ─── SERVIÇO STEP 1 (novo) ────────────────────────────────────────
+// Lista serviços sem preço. Ao clicar, expande e mostra modalidades.
+// Ao escolher modalidade, habilita botão "Continuar".
+function ServiceSelector({ onConfirm }) {
+  const [openId, setOpenId] = useState(null);
+  const [selectedService, setSelectedService] = useState(null);   // objeto do serviço
+  const [selectedModality, setSelectedModality] = useState(null); // objeto da modalidade
+
+  const handleServiceClick = (s) => {
+    if (openId === s.id) {
+      setOpenId(null);
+    } else {
+      setOpenId(s.id);
+      // se só tem 1 modalidade, já seleciona automaticamente
+      if (s.modalities.length === 1) {
+        setSelectedService(s);
+        setSelectedModality(s.modalities[0]);
+      } else {
+        // se mudou de serviço, limpa modalidade anterior de outro serviço
+        if (selectedService?.id !== s.id) {
+          setSelectedService(s);
+          setSelectedModality(null);
+        }
+      }
+    }
+  };
+
+  const handleModalityClick = (s, m) => {
+    setSelectedService(s);
+    setSelectedModality(m);
+  };
+
+  const canContinue = selectedService && selectedModality;
+
+  return (
+    <div>
+      <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#1a1a1a",marginBottom:4}}>
+        Que tipo de ensaio você deseja?
+      </h3>
+      <p style={{fontSize:13,color:"#999",marginBottom:20,lineHeight:1.6}}>
+        Escolha o serviço e depois selecione o que melhor combina com você 🌸
+      </p>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
+        {SERVICES.map(s => {
+          const isOpen = openId === s.id;
+          const isSelected = selectedService?.id === s.id;
+
+          return (
+            <div key={s.id} style={{
+              borderRadius:14,
+              border: isSelected
+                ? "2px solid #1a1a1a"
+                : isOpen
+                  ? "2px solid #b8967e"
+                  : "2px solid #e8e0d8",
+              background: isOpen ? "#faf8f5" : "#fff",
+              overflow:"hidden",
+              transition:"border-color .15s",
+            }}>
+              {/* Cabeçalho do serviço */}
+              <div
+                onClick={() => handleServiceClick(s)}
+                style={{padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}
+              >
+                <span style={{fontSize:26,flexShrink:0}}>{s.icon}</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:"#1a1a1a",margin:0,lineHeight:1.2}}>{s.label}</p>
+                  <p style={{fontSize:12,color:"#999",margin:"4px 0 0",lineHeight:1.5}}>{s.description}</p>
+                </div>
+                <span style={{fontSize:13,color:"#b8967e",flexShrink:0,fontWeight:700,marginLeft:8}}>
+                  {isOpen ? "▲" : "▼"}
+                </span>
+              </div>
+
+              {/* Modalidades (expande ao clicar) */}
+              {isOpen && (
+                <div style={{borderTop:"1px solid #f0e8e0",padding:"12px 16px 16px"}}>
+                  {s.modalities.length === 1 ? (
+                    // Única modalidade — mostra detalhes, sem escolha
+                    <div style={{
+                      padding:"12px 14px",
+                      borderRadius:10,
+                      background:"#e6f4ea",
+                      border:"2px solid #a5d6a7",
+                    }}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <span style={{fontSize:13,color:"#2e7d32",fontWeight:700}}>✅ {s.modalities[0].label}</span>
+                      </div>
+                      <p style={{fontSize:12,color:"#555",margin:0,lineHeight:1.6}}>{s.modalities[0].detail}</p>
+                    </div>
+                  ) : (
+                    // Múltiplas modalidades — cliente escolhe
+                    <div>
+                      <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>
+                        Escolha uma opção:
+                      </p>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {s.modalities.map(m => {
+                          const isSel = selectedService?.id === s.id && selectedModality?.id === m.id;
+                          return (
+                            <div
+                              key={m.id}
+                              onClick={() => handleModalityClick(s, m)}
+                              style={{
+                                padding:"12px 14px",
+                                borderRadius:10,
+                                border: isSel ? "2px solid #1a1a1a" : "2px solid #e8e0d8",
+                                background: isSel ? "#1a1a1a" : "#fff",
+                                cursor:"pointer",
+                                transition:"all .15s",
+                              }}
+                            >
+                              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                {/* Bolinha radio */}
+                                <div style={{
+                                  width:18,height:18,borderRadius:"50%",flexShrink:0,
+                                  border:"2px solid "+(isSel?"#fff":"#ccc"),
+                                  background:isSel?"#fff":"transparent",
+                                  display:"flex",alignItems:"center",justifyContent:"center",
+                                }}>
+                                  {isSel && <div style={{width:8,height:8,borderRadius:"50%",background:"#1a1a1a"}}/>}
+                                </div>
+                                <div style={{flex:1}}>
+                                  <p style={{fontSize:14,fontWeight:700,color:isSel?"#fff":"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>{m.label}</p>
+                                  <p style={{fontSize:12,color:isSel?"#ccc":"#888",margin:"3px 0 0",lineHeight:1.5}}>{m.detail}</p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Resumo da escolha + botão */}
+      {canContinue && (
+        <div style={{
+          padding:"14px 16px",
+          background:"#faf8f5",
+          border:"1.5px solid #e8e0d8",
+          borderRadius:12,
+          marginBottom:16,
+          display:"flex",
+          alignItems:"center",
+          justifyContent:"space-between",
+          gap:12,
+        }}>
+          <div>
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 2px",textTransform:"uppercase",letterSpacing:"1px"}}>Selecionado</p>
+            <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0}}>{selectedService.icon} {selectedService.label}</p>
+            <p style={{fontSize:12,color:"#888",margin:"2px 0 0"}}>{selectedModality.label}</p>
+          </div>
+          <button style={{padding:"6px 10px",borderRadius:8,background:"#f0e8e0",border:"none",cursor:"pointer",fontSize:18,color:"#b8967e",lineHeight:1}} onClick={()=>{ setSelectedService(null); setSelectedModality(null); setOpenId(null); }}>✕</button>
+        </div>
+      )}
+
+      <button
+        disabled={!canContinue}
+        onClick={() => onConfirm(selectedService, selectedModality)}
+        style={{
+          width:"100%",padding:"14px",borderRadius:12,
+          background: canContinue ? "#1a1a1a" : "#e8e0d8",
+          color: canContinue ? "#fff" : "#aaa",
+          border:"none",
+          fontFamily:"'Cormorant Garamond',serif",fontSize:17,
+          cursor: canContinue ? "pointer" : "default",
+          transition:"background .2s",
+        }}
+      >
+        {canContinue
+          ? `Continuar com ${selectedService.label} — ${selectedModality.label} →`
+          : "Selecione um serviço para continuar"
+        }
+      </button>
+    </div>
+  );
+}
+
+// ─── ANAMNESE LABELS ──────────────────────────────────────────────
 const ANAMNESE_LABELS = {
   transtorno:"Transtorno", tempo_transtorno:"Tempo desde diagnóstico", fazTerapia:"Faz terapia",
   desc_terapias:"Terapias", medicamentos:"Medicamentos", estereotipias:"Estereotipias",
@@ -173,49 +356,49 @@ const ANAMNESE_LABELS = {
   extra_tip:"Informações extras", eca_tip:"Concordou com ECA",
 };
 
-const ECA = `Em conformidade com o ECA Digital (Lei nº 15.211/2025) e a LGPD: (1) As imagens do menor serão utilizadas apenas para as finalidades autorizadas, zelando pela dignidade da criança. (2) Fica vedada a publicação de fotos que expõem rotina ou localização escolar. (3) Você pode solicitar a remoção de qualquer imagem em até 24 horas.`;
+const ECA = `Em conformidade com o ECA Digital (Lei nº 15.211/2025) e a LGPD: (1) As imagens do menor serão utilizadas apenas para as finalidades autorizadas, zelando pela dignidade da criança. (2) Fica vedada a publicação de fotos que exponham rotina ou localização escolar. (3) Você pode solicitar a remoção de qualquer imagem em até 24 horas.`;
 
-// ─── FORMULÁRIO DE ANAMNESE ──────────────────────── ────────────────────────
-função AnamneseForm({ dados, onChange }) {
+// ─── ANAMNESE FORM ────────────────────────────────────────────────
+function AnamneseForm({ data, onChange }) {
   const set = (k,v) => onChange({...data,[k]:v});
   const atipico = data.atipico;
-  retornar (
+  return (
     <div>
       <p style={sec}>📋 Informações de contato</p>
-      <Field label="Nome da mãe completo" obrigatório><input style={inp} value={data.nome_mae||""} onChange={e=>set("nome_mae",e.target.value)} placeholder="Nome completo" /></Field>
+      <Field label="Nome da mãe completo" required><input style={inp} value={data.nome_mae||""} onChange={e=>set("nome_mae",e.target.value)} placeholder="Nome completo" /></Field>
       <Field label="E-mail" required><input style={inp} type="email" value={data.email||""} onChange={e=>set("email",e.target.value)} placeholder="seu@email.com" /></Field>
       <Field label="WhatsApp" required><input style={inp} type="tel" value={data.phone||""} onChange={e=>set("phone",e.target.value)} placeholder="(00) 00000-0000" /></Field>
-      <Field label="Nome da criança" obrigatório><input style={inp} value={data.nome_crianca||""} onChange={e=>set("nome_crianca",e.target.value)} placeholder="Não precisa ser o nome inteiro" /></Field>
-      <Field label="Idade da criança" obrigatório><input style={inp} value={data.idade||""} onChange={e=>set("idade",e.target.value)} placeholder="Ex: 2 anos e 3 meses" /></Field>
+      <Field label="Nome da criança" required><input style={inp} value={data.nome_crianca||""} onChange={e=>set("nome_crianca",e.target.value)} placeholder="Não precisa ser o nome inteiro" /></Field>
+      <Field label="Idade da criança" required><input style={inp} value={data.idade||""} onChange={e=>set("idade",e.target.value)} placeholder="Ex: 2 anos e 3 meses" /></Field>
       <p style={sec}>🌟 Perfil da criança</p>
-      <Field label="Seu filho é atípico? (TEA, TDAH, Síndrome de Down...)" obrigatório>
-        <Opções de rádio={["sim","Não"]} value={data.atipico} onChange={v=>set("atipico",v)} />
-      </Campo>
+      <Field label="Seu filho é atípico? (TEA, TDAH, Síndrome de Down...)" required>
+        <Radio options={["sim","Não"]} value={data.atipico} onChange={v=>set("atipico",v)} />
+      </Field>
       {atipico==="sim" && (
         <div style={{background:"#fdf9f6",border:"1.5px solid #f0ddd0",borderRadius:12,padding:"16px 14px",marginTop:4}}>
           <p style={{...sec,marginTop:0}}>🧡 Crianças atípicas</p>
-          <Field label="Qual transtorno?" obrigatório><input style={inp} value={data.transtorno||""} onChange={e=>set("transtorno",e.target.value)} placeholder="Ex: TEA nível 1, TDAH..." /></Field>
+          <Field label="Qual transtorno?" required><input style={inp} value={data.transtorno||""} onChange={e=>set("transtorno",e.target.value)} placeholder="Ex: TEA nível 1, TDAH..." /></Field>
           <Field label="Há quanto tempo descobriu?"><Radio options={["a menos de seis meses","a menos de 1 ano","a mais de 1 ano","a mais de 2 anos"]} value={data.tempo_transtorno} onChange={v=>set("tempo_transtorno",v)} /></Field>
           <Field label="Faz terapias?"><Radio options={["sim","não"]} value={data.fazTerapia} onChange={v=>set("fazTerapia",v)} /></Field>
           {data.fazTerapia==="sim" && <Field label="Quais terapias e há quanto tempo?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.desc_terapias||""} onChange={e=>set("desc_terapias",e.target.value)} placeholder="Ex: ABA há 1 ano..." /></Field>}
           <Field label="Medicamentos ou métodos alternativos"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.medicamentos||""} onChange={e=>set("medicamentos",e.target.value)} /></Field>
-          <Field label="Possui estereotipias? Se sim, descreva."><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.estereotipias||""} onChange={e=>set("estereotipias",e.target.value)} /></Field>
+          <Field label="Possui estereotipias? Descreva."><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.estereotipias||""} onChange={e=>set("estereotipias",e.target.value)} /></Field>
           <Field label="Como podemos prevenir crises?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.prevenir_crises||""} onChange={e=>set("prevenir_crises",e.target.value)} /></Field>
-          <Field label="Como você costuma contornar momentos difíceis?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.contornar||""} onChange={e=>set("contornar",e.target.value)} /></Field>
+          <Field label="Como contornar momentos difíceis?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.contornar||""} onChange={e=>set("contornar",e.target.value)} /></Field>
           <Field label="O que incomoda a criança?">
-            <Check options={["Luzes fortes / Flashes","Barulhos altos / Música","Toque físico / Texturas","Cheiros fortes"]} valores={data.incomoda||[]} onChange={v=>set("incomoda",v)} />
+            <Check options={["Luzes fortes / Flashes","Barulhos altos / Música","Toque físico / Texturas","Cheiros fortes"]} values={data.incomoda||[]} onChange={v=>set("incomoda",v)} />
             <input style={{...inp,marginTop:8}} value={data.incomoda_outro||""} onChange={e=>set("incomoda_outro",e.target.value)} placeholder="Outro..." />
-          </Campo>
-          <Field label="Do que gosta muito?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.gosta||""} onChange={e=>set("gosta",e.target.value)} placeholder="Personagens, músicas — uso para criar conexão!" /></Campo>
-          <Field label="Estilo de brinquedo favorito?">
-            <Check options={["Fidget Spinner","Squishies/Slime","Bolas texturizadas"]} valores={data.brinquedos||[]} onChange={v=>set("brinquedos",v)} />
+          </Field>
+          <Field label="Do que gosta muito?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.gosta||""} onChange={e=>set("gosta",e.target.value)} placeholder="Personagens, músicas — usamos para criar conexão!" /></Field>
+          <Field label="Brinquedos favoritos?">
+            <Check options={["Fidget Spinner","Squishies/Slime","Bolas texturizadas"]} values={data.brinquedos||[]} onChange={v=>set("brinquedos",v)} />
             <input style={{...inp,marginTop:8}} value={data.brinquedos_outro||""} onChange={e=>set("brinquedos_outro",e.target.value)} placeholder="Outro..." />
-          </Campo>
+          </Field>
           <Field label="Interação social"><Radio options={["Tranquilo, se relaciona com todos.","Não gosta de se socializar."]} value={data.social_atip} onChange={v=>set("social_atip",v)} /></Field>
-          <Field label="Como se comunicar melhor?">
+          <Field label="Como se comunica?">
             <Radio options={["Fala verbalmente","Aponta/Gestos","Usa comunicação alternativa (cartões/tablet)","Não verbal"]} value={data.comunicacao} onChange={v=>set("comunicacao",v)} />
             <input style={{...inp,marginTop:8}} value={data.comunicacao_outro||""} onChange={e=>set("comunicacao_outro",e.target.value)} placeholder="Outro..." />
-          </Campo>
+          </Field>
           <Field label="Precisa de tempo para se acostumar?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.tempo_amb_atip||""} onChange={e=>set("tempo_amb_atip",e.target.value)} /></Field>
           <Field label="Já fez ensaios?"><Radio options={["Sim","Não"]} value={data.ensaio_atip} onChange={v=>set("ensaio_atip",v)} /></Field>
           {data.ensaio_atip==="Sim" && <Field label="Como foi?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.desc_ensaio_atip||""} onChange={e=>set("desc_ensaio_atip",e.target.value)} /></Field>}
@@ -224,28 +407,28 @@ função AnamneseForm({ dados, onChange }) {
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:10,padding:14,marginTop:10}}>
             <p style={{fontSize:12,fontWeight:700,color:"#1a1a1a",margin:"0 0 8px"}}>🔒 ECA Digital e LGPD</p>
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
-            <Field label="Concorda com o ECA Digital?" obrigatório><Opções de rádio={["Sim","Não"]} valor={data.eca_atip} onChange={v=>set("eca_atip",v)} /></Field>
-            {data.eca_atip==="Sim" && <Field label="Podemos postar sobre o transtorno?"><Radio options={["Sim, pode postar e falar sobre as questões dele!","Não, prefiro ficar mais reservado."]} value={data.postar_transtorno} onChange={v=>set("postar_transtorno",v)} /></Field>}
+            <Field label="Concorda com o ECA Digital?" required><Radio options={["Sim","Não"]} value={data.eca_atip} onChange={v=>set("eca_atip",v)} /></Field>
+            {data.eca_atip==="Sim" && <Field label="Podemos postar sobre o transtorno?"><Radio options={["Sim, pode postar e falar sobre as questões dele!","Não, prefiro ficar mais reservada."]} value={data.postar_transtorno} onChange={v=>set("postar_transtorno",v)} /></Field>}
           </div>
         </div>
       )}
       {atipico==="Não" && (
         <div style={{background:"#f8fbf9",border:"1.5px solid #d8ece0",borderRadius:12,padding:"16px 14px",marginTop:4}}>
           <p style={{...sec,marginTop:0,color:"#5a9a6a"}}>🌿 Crianças típicas</p>
-          <Field label="O que faz esquecer o mundo por 10 minutos?" obrigatório><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.esquecer_mundo||""} onChange={e=>set("esquecer_mundo",e.target.value)} /></Field>
-          <Field label="Personagem ou música favorita?" obrigatório><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.personagem||""} onChange={e=>set("personagem",e.target.value)} /></Field>
+          <Field label="O que faz esquecer o mundo por 10 minutos?" required><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.esquecer_mundo||""} onChange={e=>set("esquecer_mundo",e.target.value)} /></Field>
+          <Field label="Personagem ou música favorita?" required><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.personagem||""} onChange={e=>set("personagem",e.target.value)} /></Field>
           <Field label="Mania com roupas?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.mania_roupa||""} onChange={e=>set("mania_roupa",e.target.value)} /></Field>
           <Field label="Como lida com barulhos inesperados?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.barulhos||""} onChange={e=>set("barulhos",e.target.value)} /></Field>
           <Field label="Reação quando quer muito algo?"><textarea style={{...inp,resize:"vertical"}} rows={2} value={data.reacao_querer||""} onChange={e=>set("reacao_querer",e.target.value)} /></Field>
           <Field label="Gosta de abraço?"><Radio options={["Gosta de abraços quentinhos!","Mais na dele(a)!"]} value={data.toque} onChange={v=>set("toque",v)} /></Field>
-          <Field label="Precisa de tempo para se adaptar?" requerido><Radio options={["Melhor ter um tempo para se adaptar","Ele é tranquilo, vai que vai!"]} value={data.tempo_amb_tip} onChange={v=>set("tempo_amb_tip",v)} /></Field>
+          <Field label="Precisa de tempo para se adaptar?" required><Radio options={["Melhor ter um tempo para se adaptar","Ele é tranquilo, vai que vai!"]} value={data.tempo_amb_tip} onChange={v=>set("tempo_amb_tip",v)} /></Field>
           <Field label="Já fez ensaios?"><Radio options={["Sim","Não"]} value={data.ensaio_tip} onChange={v=>set("ensaio_tip",v)} /></Field>
           {data.ensaio_tip==="Sim" && <Field label="Como foi?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.desc_ensaio_tip||""} onChange={e=>set("desc_ensaio_tip",e.target.value)} /></Field>}
           <Field label="Mais alguma informação?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.extra_tip||""} onChange={e=>set("extra_tip",e.target.value)} /></Field>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:10,padding:14,marginTop:10}}>
             <p style={{fontSize:12,fontWeight:700,color:"#1a1a1a",margin:"0 0 8px"}}>🔒 ECA Digital e LGPD</p>
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
-            <Field label="Concorda com o ECA Digital?" obrigatório><Opções de rádio={["Sim","Não"]} valor={data.eca_tip} onChange={v=>set("eca_tip",v)} /></Field>
+            <Field label="Concorda com o ECA Digital?" required><Radio options={["Sim","Não"]} value={data.eca_tip} onChange={v=>set("eca_tip",v)} /></Field>
           </div>
         </div>
       )}
@@ -253,18 +436,18 @@ função AnamneseForm({ dados, onChange }) {
   );
 }
 
-// ─── BLOCO DE ASSINATURA ──────────────────────────────────────────────────
-função SignaturePad({ onSave, onCancel }) {
+// ─── SIGNATURE PAD ────────────────────────────────────────────────
+function SignaturePad({ onSave, onCancel }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
   const [hasDrawn, setHasDrawn] = useState(false);
   const getPos=(e,c)=>{ const r=c.getBoundingClientRect(); return{x:(e.touches?e.touches[0].clientX:e.clientX)-r.left,y:(e.touches?e.touches[0].clientY:e.clientY)-r.top}; };
-  const start=(e)=>{ e.preventDefault(); drawing.current=true; const c=canvasRef.current; const ctx=c.getContext("2d"); const p=getPos(e,c); ctx.beginPath(); ctx.moveTo(px,py); };
-  const draw=(e)=>{ e.preventDefault(); if(!drawing.current)return; const c=canvasRef.current; const ctx=c.getContext("2d"); const p=getPos(e,c); ctx.lineWidth=2; ctx.lineCap="round"; ctx.strokeStyle="#1a1a1a"; ctx.lineTo(px,py); ctx.stroke(); setHasDrawn(true); };
+  const start=(e)=>{ e.preventDefault(); drawing.current=true; const c=canvasRef.current; const ctx=c.getContext("2d"); const p=getPos(e,c); ctx.beginPath(); ctx.moveTo(p.x,p.y); };
+  const draw=(e)=>{ e.preventDefault(); if(!drawing.current)return; const c=canvasRef.current; const ctx=c.getContext("2d"); const p=getPos(e,c); ctx.lineWidth=2; ctx.lineCap="round"; ctx.strokeStyle="#1a1a1a"; ctx.lineTo(p.x,p.y); ctx.stroke(); setHasDrawn(true); };
   const stop=()=>{ drawing.current=false; };
   const clear=()=>{ canvasRef.current.getContext("2d").clearRect(0,0,380,160); setHasDrawn(false); };
   const save=()=>onSave(canvasRef.current.toDataURL("image/png"));
-  retornar (
+  return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
       <div style={{background:"#fff",borderRadius:16,padding:20,width:"100%",maxWidth:420}}>
         <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 4px"}}>Assinar contrato</h3>
@@ -280,12 +463,11 @@ função SignaturePad({ onSave, onCancel }) {
   );
 }
 
-// ─── VISUALIZAÇÃO DO CONTRATO ─────────────────────────────────────────────────
-função ContractView({ contract, onSigned }) {
+// ─── CONTRACT VIEW ────────────────────────────────────────────────
+function ContractView({ contract, onSigned }) {
   const [showPad, setShowPad] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const s = SERVICES.find(x=>x.label===contract.service)||{};
-  retornar (
+  return (
     <div>
       {showPad && <SignaturePad onSave={(sig)=>{ setShowPad(false); onSigned({...contract,signature:sig,signedAt:new Date().toLocaleString("pt-BR")}); }} onCancel={()=>setShowPad(false)} />}
       <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:20,marginBottom:16}}>
@@ -294,14 +476,14 @@ função ContractView({ contract, onSigned }) {
         <p style={{fontSize:13,color:"#444",lineHeight:1.7,margin:"0 0 8px"}}><strong>CONTRATADA:</strong> {PHOTOGRAPHER.name}, {PHOTOGRAPHER.owner}, CPF {PHOTOGRAPHER.cpf}, {PHOTOGRAPHER.email}</p>
         <p style={{fontSize:13,color:"#444",lineHeight:1.7,margin:0}}><strong>CONTRATANTE:</strong> {contract.nome_mae}, CPF {contract.cpf_mae||"___.___.___-__"}, {contract.email}</p>
         <p style={sec}>Objeto</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Prestação de serviços fotográficos — ensaio <strong>{contract.service}</strong> de <strong>{contract.nome_crianca}</strong> em <strong>{formatDateBR(contract.date)}</strong> às <strong>{contract.time}</strong>.</p>
+        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Prestação de serviços fotográficos — <strong>{contract.service}</strong>{contract.modality ? ` · ${contract.modality}` : ""} · criança: <strong>{contract.nome_crianca}</strong> · data: <strong>{formatDateBR(contract.date)}</strong> às <strong>{contract.time}</strong>.</p>
         <p style={sec}>Valor e Pagamento</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Valor total: <strong>R$ {Number(contract.valor||s.price||0).toFixed(2).replace(".",",")}</strong>, a ser pago conforme combinado.</p>
+        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Valor total: <strong>R$ {Number(contract.valor||0).toFixed(2).replace(".",",")}</strong>, conforme combinado.</p>
         {contract.pagamento_link && <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Link de pagamento: <a href={contract.pagamento_link} target="_blank" rel="noreferrer" style={{color:"#b8967e"}}>{contract.pagamento_link}</a></p>}
         <p style={sec}>Cancelamento e Reagendamento</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{"• Cancelamento com mais de 7 dias: reembolso integral do sinal.\n• Cancelamento entre 3 e 7 dias: sinal não reembolsável, pode ser usado para reagendamento.\n• Cancelamento com menos de 48h: sinal perdido, novos dados sujeitos à disponibilidade.\n• Imprevisto da CONTRATADA: novos dados sem custos adicionais."}</p>
+        <p style={{fontSize:13,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{"• Cancelamento com mais de 7 dias: reembolso integral do sinal.\n• Cancelamento entre 3 e 7 dias: sinal não reembolsável, pode ser usado para reagendamento.\n• Cancelamento com menos de 48h: sinal perdido, nova data sujeita à disponibilidade.\n• Imprevisto da CONTRATADA: nova data sem custos adicionais."}</p>
         <p style={sec}>Direitos de Imagem</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>A CONTRATANTE autoriza o uso de imagens para portfólio e redes sociais. A remoção pode ser solicitada a qualquer momento, atendida em até 24 horas.</p>
+        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>A CONTRATANTE autoriza o uso das imagens para portfólio e redes sociais. A remoção pode ser solicitada a qualquer momento, atendida em até 24 horas.</p>
         <p style={sec}>🔒 ECA Digital — Lei nº 15.211/2025 e LGPD</p>
         <p style={{fontSize:12,color:"#555",lineHeight:1.7}}>{ECA}</p>
         {contract.obs && <><p style={sec}>Observações</p><p style={{fontSize:13,color:"#444",lineHeight:1.7}}>{contract.obs}</p></>}
@@ -309,34 +491,34 @@ função ContractView({ contract, onSigned }) {
       </div>
       <label style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:20,cursor:"pointer"}}>
         <div onClick={()=>setAgreed(!agreed)} style={{width:20,height:20,borderRadius:4,border:"2px solid "+(agreed?"#1a1a1a":"#ccc"),background:agreed?"#1a1a1a":"#fff",flexShrink:0,marginTop:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {concordo && <span style={{color:"#fff",fontSize:12}}>✓</span>}
+          {agreed && <span style={{color:"#fff",fontSize:12}}>✓</span>}
         </div>
         <span style={{fontSize:13,color:"#444",lineHeight:1.6}}>Li e concordo com todos os termos deste contrato.</span>
       </label>
-      {contrato.assinatura}
-        <div style={{padding:16,background:"#e6f4ea",borderRadius:12,textAlign:"center"}}><p style={{fontSize:14,color:"#2e7d32",fontWeight:600,margin:"0 0 4px"}}>✅ Contrato assinado!</p><p style={{fontSize:12,color:"#555",margin:0}}>Assinado em {contract.signedAt}</p><img src={contract.signature} alt="assinatura" style={{marginTop:8,maxWidth:200,opacity:0.7}} /></div>
-        <button onClick={()=>setShowPad(true)} disabled={!agreed} style={{width:"100%",padding:14,borderRadius:10,background:agreed?"#1a1a1a":"#e8e0d8",color:agreed?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:agreed?"pointer":"default"}}>✍️ Assinar contrato</button>
+      {contract.signature
+        ? <div style={{padding:16,background:"#e6f4ea",borderRadius:12,textAlign:"center"}}><p style={{fontSize:14,color:"#2e7d32",fontWeight:600,margin:"0 0 4px"}}>✅ Contrato assinado!</p><p style={{fontSize:12,color:"#555",margin:0}}>Assinado em {contract.signedAt}</p><img src={contract.signature} alt="assinatura" style={{marginTop:8,maxWidth:200,opacity:0.7}} /></div>
+        : <button onClick={()=>setShowPad(true)} disabled={!agreed} style={{width:"100%",padding:14,borderRadius:10,background:agreed?"#1a1a1a":"#e8e0d8",color:agreed?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:agreed?"pointer":"default"}}>✍️ Assinar contrato</button>
       }
     </div>
   );
 }
 
-// ─── STATUS / PAGAMENTO ───────────────────── ──────────────────────
+// ─── STATUS / PAGAMENTO ───────────────────────────────────────────
 const STATUS_COLORS = {
-  "Pendente": { bg:"#fff8e1", color:"#f57c00" },
+  "Pendente":   { bg:"#fff8e1", color:"#f57c00" },
   "Confirmado": { bg:"#e3f2fd", color:"#1565C0" },
-  "Contrato": { bg:"#f3e5f5", color:"#7b1fa2" },
-  "Concluído": { bg:"#e6f4ea", color:"#2e7d32" },
-  "Cancelado": { bg:"#fde8e8", color:"#c62828" },
+  "Contrato":   { bg:"#f3e5f5", color:"#7b1fa2" },
+  "Concluído":  { bg:"#e6f4ea", color:"#2e7d32" },
+  "Cancelado":  { bg:"#fde8e8", color:"#c62828" },
 };
 const PAG_COLORS = {
-  "Pendente": { bg:"#fff8e1", color:"#f57c00" },
-  "Parcial": { bg:"#e3f2fd", cor:"#1565C0" },
-  "Pago": { bg:"#e6f4ea", color:"#2e7d32" },
+  "Pendente":  { bg:"#fff8e1", color:"#f57c00" },
+  "Parcial":   { bg:"#e3f2fd", color:"#1565C0" },
+  "Pago":      { bg:"#e6f4ea", color:"#2e7d32" },
   "Cancelado": { bg:"#fde8e8", color:"#c62828" },
 };
 
-// ─── FICHA RÁPIDA (sobreposição da agenda) ────────────────────────────
+// ─── FICHA RÁPIDA (overlay da agenda) ────────────────────────────
 function FichaRapida({ agendamento, onVerMais, onFechar }) {
   const cl = agendamento?.clientes || {};
   const anamnese = cl.anamnese || {};
@@ -349,12 +531,14 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
     ["esquecer_mundo","O que faz esquecer o mundo"],["personagem","Personagem / música favorita"],
     ["toque","Gosta de toque"],["tempo_amb_tip","Adaptação"],["barulhos","Como lida com barulhos"],
   ];
-  retornar (
+  return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div style={{background:"#fff",borderRadius:"20px 20px 0 0",width:"100%",maxWidth:480,maxHeight:"90vh",overflowY:"auto",padding:20,paddingBottom:36}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
-            <p style={{fontSize:10,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px"}}>📸 {agendamento.servico} — {formatDateBR(agendamento.data)} às {agendamento.hora}</p>
+            <p style={{fontSize:10,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px"}}>
+              📸 {agendamento.servico}{agendamento.modalidade ? ` — ${agendamento.modalidade}` : ""} · {formatDateBR(agendamento.data)} às {agendamento.hora}
+            </p>
             <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,margin:"0 0 2px"}}>{cl.nome_mae}</h2>
             <p style={{fontSize:13,color:"#888",margin:0}}>👶 {cl.nome_crianca} · {cl.idade}{atipico?" · 🧡 Atípico":" · 🌿 Típico"}</p>
           </div>
@@ -369,8 +553,8 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese — {atipico?"🧡 Atípica":"🌿 Típica"}</p>
             {camposPrio.map(([k,label]) => {
               const v = anamnese[k];
-              se (!v || v==="") retornar nulo;
-              retornar (
+              if (!v || v==="") return null;
+              return (
                 <div key={k} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f0e8e0"}}>
                   <span style={{fontSize:10,color:"#b8967e",display:"block",fontWeight:700,marginBottom:3}}>{label}</span>
                   <span style={{fontSize:13,color:"#333",lineHeight:1.5}}>{Array.isArray(v)?v.join(", "):String(v)}</span>
@@ -398,105 +582,91 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
   );
 }
 
-// ─── VISUALIZAÇÃO DA AGENDA (Google Calendar sincronizado) ───────────────────
+// ─── AGENDA VIEW ─────────────────────────────────────────────────
 function AgendaView({ auth, onVerCliente }) {
   const [calEvents, setCalEvents] = useState([]);
   const [agendamentos, setAgendamentos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fichaSelecionada, setFichaSelecionada] = useState(null);
 
-  const carregando = useCallback(async () => {
-    definirCarregando(verdadeiro);
-    tentar {
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    try {
       const [eventos, ags] = await Promise.all([
-        buscarEventosCalendar(auth.token.access_token),
-        obterAgendamentos(),
+        fetchCalendarEvents(auth.token.access_token),
+        getAgendamentos(),
       ]);
-      setCalEvents(eventos || []);
-      setAgendamentos(ags || []);
-    } catch(e) { console.error(e); }
-    finalmente {setLoading(falso); }
+      setCalEvents(eventos||[]); setAgendamentos(ags||[]);
+    } catch(e){ console.error(e); }
+    finally{ setLoading(false); }
   }, [auth]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(()=>{ carregar(); },[carregar]);
 
   const cruzarEvento = (evento) => {
-    const dt = evento.start?.dateTime || evento.start?.date;
-    se (!dt) retornar nulo;
+    const dt = evento.start?.dateTime||evento.start?.date;
+    if(!dt) return null;
     const dataEvento = dt.substring(0,10);
-    const horaEvento = dt.length > 10 ? new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : null;
-    return agendamentos.find(a => {
-      Se (a.data !== dataEvento) retorne falso;
-      se (!horaEvento) retornar verdadeiro;
-      return a.hora && a.hora.startsWith(horaEvento.substring(0,5));
-    }) || nulo;
+    const horaEvento = dt.length>10 ? new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : null;
+    return agendamentos.find(a=>{
+      if(a.data!==dataEvento) return false;
+      if(!horaEvento) return true;
+      return a.hora&&a.hora.startsWith(horaEvento.substring(0,5));
+    })||null;
   };
 
   const hoje = new Date().toISOString().substring(0,10);
   const upcoming = calEvents
-    .filter(e => { const dt=e.start?.dateTime||e.start?.date; return dt && dt.substring(0,10) >= hoje; })
-    .sort((a,b) => ((a.start?.dateTime||a.start?.date||"")).localeCompare(b.start?.dateTime||b.start?.date||""))
+    .filter(e=>{ const dt=e.start?.dateTime||e.start?.date; return dt&&dt.substring(0,10)>=hoje; })
+    .sort((a,b)=>((a.start?.dateTime||a.start?.date||"")).localeCompare(b.start?.dateTime||b.start?.date||""))
     .slice(0,30);
 
-  const porDia = {};
-  próximo.forEach(e => {
-    const dt = e.start?.dateTime||e.start?.date||"";
-    const dia = dt.substring(0,10);
-    if (!porDia[dia]) porDia[dia] = [];
-    porDia[dia].push(e);
-  });
-  const dias = Object.keys(porDia).sort();
+  const porDia={};
+  upcoming.forEach(e=>{ const dt=e.start?.dateTime||e.start?.date||""; const dia=dt.substring(0,10); if(!porDia[dia])porDia[dia]=[]; porDia[dia].push(e); });
+  const dias=Object.keys(porDia).sort();
 
-  retornar (
+  return (
     <div>
       {fichaSelecionada && (
-        <FichaRápida
-          agendamento={fichaSelecionada}
-          onFechar={() => setFichaSelecionada(null)}
-          onVerMais={() => { setFichaSelecionada(null); onVerCliente(fichaSelecionada.id); }}
-        />
+        <FichaRapida agendamento={fichaSelecionada} onFechar={()=>setFichaSelecionada(null)} onVerMais={()=>{ setFichaSelecionada(null); onVerCliente(fichaSelecionada.id); }} />
       )}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
         <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,margin:0}}>📅 Próximos ensaios</h3>
         <button onClick={carregar} style={{padding:"6px 12px",borderRadius:7,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>🔄 Atualizar</button>
       </div>
-      {loading && <p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Sincronizando com o Google Agenda...</p>}
-      {!loading && dias.length===0 && (
-        <div style={{textAlign:"center",padding:"48px 16px"}}>
-          <div style={{fontSize:40,marginBottom:12}}>📭</div>
-          <p style={{fontSize:14,color:"#bbb"}}>Nenhum evento nos próximos dias</p>
-        </div>
-      )}
-      {!carregando && dias.map(dia => {
-        const isHoje = dia===hoje;
-        const d = new Date(dia+"T12:00:00");
-        const diaLabel = isHoje ? "Hoje" : d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
-        retornar (
+      {loading && <p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Sincronizando com Google Calendar...</p>}
+      {!loading&&dias.length===0&&<div style={{textAlign:"center",padding:"48px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum evento nos próximos dias</p></div>}
+      {!loading&&dias.map(dia=>{
+        const isHoje=dia===hoje;
+        const d=new Date(dia+"T12:00:00");
+        const diaLabel=isHoje?"Hoje":d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
+        return(
           <div key={dia} style={{marginBottom:20}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
               <span style={{fontSize:12,fontWeight:700,color:isHoje?"#b8967e":"#888",textTransform:"capitalize"}}>{diaLabel}</span>
-              {isHoje && <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
+              {isHoje&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
               <div style={{flex:1,height:1,background:"#f0e8e0"}}/>
             </div>
-            {porDia[dia].map(evento => {
-              const ag = cruzarEvento(evento);
-              const cl = ag?.clientes||{};
-              const dt = evento.start?.dateTime||evento.start?.date;
-              const hora = dt&&dt.length>10 ? new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "";
-              const st = ag ? STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"] : null;
-              const pc = ag? PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"] : null;
-              retornar (
+            {porDia[dia].map(evento=>{
+              const ag=cruzarEvento(evento);
+              const cl=ag?.clientes||{};
+              const dt=evento.start?.dateTime||evento.start?.date;
+              const hora=dt&&dt.length>10?new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";
+              const st=ag?STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"]:null;
+              const pc=ag?PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"]:null;
+              return(
                 <div key={evento.id} onClick={()=>ag&&setFichaSelecionada(ag)}
-                  style={{padding:14,border:"1.5px sólido "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:ag?"pointer":"default",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px sólido ${isHoje?"#b8967e":"#e8e0d8"}`}}>
+                  style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:ag?"pointer":"default",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        {hora && <span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{hora}</span>}
+                        {hora&&<span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{hora}</span>}
                         <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{evento.summary?.replace("📸 ","")}</span>
                       </div>
-                      {ag && (
+                      {ag&&(
                         <div>
                           <p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>👶 {cl.nome_crianca} · {cl.atipico?"🧡 Atípico":"🌿 Típico"} · {cl.idade}</p>
+                          {ag.modalidade&&<p style={{margin:"0 0 4px",fontSize:11,color:"#b8967e"}}>📌 {ag.modalidade}</p>}
                           <p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p>
                           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                             <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span>
@@ -505,11 +675,11 @@ function AgendaView({ auth, onVerCliente }) {
                           </div>
                         </div>
                       )}
-                      {!ag && evento.description && <p style={{margin:"4px 0 0",fontSize:11,color:"#aaa",lineHeight:1.5}}>{evento.description.substring(0,80)}</p>}
+                      {!ag&&evento.description&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa",lineHeight:1.5}}>{evento.description.substring(0,80)}</p>}
                     </div>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
-                      {ag && <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>}
-                      {ag && <span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>}
+                      {ag&&<p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>}
+                      {ag&&<span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>}
                     </div>
                   </div>
                 </div>
@@ -522,7 +692,7 @@ function AgendaView({ auth, onVerCliente }) {
   );
 }
 
-// ─── VISUALIZAÇÃO CRM ──────────────────────────────────────────────────────
+// ─── CRM VIEW ─────────────────────────────────────────────────────
 function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [agendamentos, setAgendamentos] = useState([]);
   const [clientes, setClientes] = useState([]);
@@ -534,27 +704,20 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [mesFiltro, setMesFiltro] = useState("todos");
   const [showContract, setShowContract] = useState(false);
   const [showNew, setShowNew] = useState(false);
-  const [newClient, setNewClient] = useState({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
+  const [newClient, setNewClient] = useState({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
   const [newAnamnese, setNewAnamnese] = useState({});
   const [salvando, setSalvando] = useState(false);
 
-  const carregando = useCallback(async () => {
-    definirCarregando(verdadeiro);
-    tentar {
-      const [ags, cls] = await Promise.all([getAgendamentos(), getClientes()]);
-      setAgendamentos(ags||[]); setClientes(cls||[]);
-    } catch(e){ console.error(e); }
-    finalmente{ definirCarregamento(falso); }
-  }, []);
+  const carregar = useCallback(async()=>{
+    setLoading(true);
+    try{ const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]); setAgendamentos(ags||[]); setClientes(cls||[]); }
+    catch(e){ console.error(e); }
+    finally{ setLoading(false); }
+  },[]);
 
   useEffect(()=>{ carregar(); },[carregar]);
-
   useEffect(()=>{
-    if (abrirAgendamentoId && agendamentos.length>0) {
-      setSelected(abrirAgendamentoId);
-      setTab("agendamentos");
-      onAgendamentoAberto&&onAgendamentoAberto();
-    }
+    if(abrirAgendamentoId&&agendamentos.length>0){ setSelected(abrirAgendamentoId); setTab("agendamentos"); onAgendamentoAberto&&onAgendamentoAberto(); }
   },[abrirAgendamentoId,agendamentos]);
 
   const update = async(id,patch)=>{
@@ -562,31 +725,24 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     catch(e){ alert("Erro: "+e.message); }
   };
 
-  const agendamento = selecionado ? agendamentos.find(a=>a.id===selected) : null;
-  const cliente=selecionadoCliente? clientes.find(c=>c.id===selectedCliente) : null;
-  const mesesDisp = [...new Set(agendamentos.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
-  const filtrado = agendamentos.filter(a=>{
-    const statusOk = filter==="Todos"||a.status===filter;
-    const mesOk = mesFiltro==="todos"||(a.data&&a.data.startsWith(mesFiltro));
-    status de retorno Ok&&mesOk;
-  });
+  const agendamento=selected?agendamentos.find(a=>a.id===selected):null;
+  const cliente=selectedCliente?clientes.find(c=>c.id===selectedCliente):null;
+  const mesesDisp=[...new Set(agendamentos.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
+  const filtered=agendamentos.filter(a=>{ const statusOk=filter==="Todos"||a.status===filter; const mesOk=mesFiltro==="todos"||(a.data&&a.data.startsWith(mesFiltro)); return statusOk&&mesOk; });
 
-  // ── Resumo Financeiro ───────────────────── ─────────────────────
-  se (!carregando && tab==="stats") {
+  // ── Resumo Financeiro ──────────────────────────────────────────
+  if(!loading&&tab==="stats"){
     const porMes={};
     agendamentos.filter(a=>a.status!=="Cancelado").forEach(a=>{
-      se(!a.dados)retorne;
-      const m=a.data.substring(0,7);
+      if(!a.data)return; const m=a.data.substring(0,7);
       if(!porMes[m])porMes[m]={recebido:0,pendente:0,total:0,qtd:0};
-      const val=Number(a.valor||0);
-      porMes[m].total+=val; porMes[m].qtd+=1;
-      if(a.pagamento_status==="Pago") porMes[m].recebido+=val;
-      senão porMes[m].pendente+=val;
+      const val=Number(a.valor||0); porMes[m].total+=val; porMes[m].qtd+=1;
+      if(a.pagamento_status==="Pago")porMes[m].recebido+=val; else porMes[m].pendente+=val;
     });
     const mesesOrd=Object.keys(porMes).sort().reverse();
     const totalRecebido=agendamentos.reduce((acc,a)=>a.pagamento_status==="Pago"?acc+Number(a.valor||0):acc,0);
     const totalPendente=agendamentos.filter(a=>a.status!=="Cancelado").reduce((acc,a)=>a.pagamento_status!=="Pago"?acc+Number(a.valor||0):acc,0);
-    retornar (
+    return(
       <div>
         <div style={{display:"flex",gap:6,marginBottom:16}}>
           {[["agendamentos","📅 Agenda"],["clientes","👥 Clientes"],["stats","📊 Resumo"]].map(([t,l])=>(
@@ -613,9 +769,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
         </div>
         <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Receita por mês</p>
         {mesesOrd.map(m=>{
-          const d=porMes[m];
-          const pct=d.total>0?Math.round((d.recebido/d.total)*100):0;
-          retornar(
+          const d=porMes[m]; const pct=d.total>0?Math.round((d.recebido/d.total)*100):0;
+          return(
             <div key={m} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <span style={{fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{mesAno(m+"-01")}</span>
@@ -625,9 +780,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
                 <div><p style={{fontSize:10,color:"#2e7d32",fontWeight:700,margin:"0 0 2px"}}>✅ Recebido</p><p style={{fontSize:14,fontWeight:700,color:"#2e7d32",margin:0}}>R$ {d.recebido.toFixed(2).replace(".",",")}</p></div>
                 <div><p style={{fontSize:10,color:"#f57c00",fontWeight:700,margin:"0 0 2px"}}>⏳ A receber</p><p style={{fontSize:14,fontWeight:700,color:"#f57c00",margin:0}}>R$ {d.pendente.toFixed(2).replace(".",",")}</p></div>
               </div>
-              <div style={{height:6,background:"#f0e8e0",borderRadius:4,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${pct}%`,background:"#2e7d32",borderRadius:4}}/>
-              </div>
+              <div style={{height:6,background:"#f0e8e0",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"#2e7d32",borderRadius:4}}/></div>
               <p style={{fontSize:10,color:"#999",margin:"4px 0 0",textAlign:"right"}}>{pct}% recebido</p>
             </div>
           );
@@ -637,7 +790,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           const lista=agendamentos.filter(a=>(a.pagamento_status||"Pendente")===s);
           const total=lista.reduce((acc,a)=>acc+Number(a.valor||0),0);
           const pc=PAG_COLORS[s];
-          retornar(
+          return(
             <div key={s} style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:6,alignItems:"center"}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
                 <span style={{padding:"3px 10px",borderRadius:12,fontSize:11,fontWeight:700,background:pc.bg,color:pc.color}}>{s}</span>
@@ -651,34 +804,37 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  if (showContrato && agendamento) return (
+  if(showContract&&agendamento) return(
     <ContractView
-      contrato={{...agendamento,nome_mae:agendamento.clientes?.nome_mae,nome_crianca:agendamento.clientes?.nome_crianca,email:agendamento.clientes?.email,serviço:agendamento.servico,data:agendamento.data,hora:agendamento.hora}}
+      contract={{...agendamento,nome_mae:agendamento.clientes?.nome_mae,nome_crianca:agendamento.clientes?.nome_crianca,email:agendamento.clientes?.email,service:agendamento.servico,modality:agendamento.modalidade,date:agendamento.data,time:agendamento.hora}}
       onSigned={async(sc)=>{ await update(agendamento.id,{signature:sc.signature,signed_at:sc.signedAt,status:"Contrato"}); setShowContract(false); }}
     />
   );
 
   // ── Detalhe do agendamento ──
-  se (agenda) {
+  if(agendamento){
     const st=STATUS_COLORS[agendamento.status]||STATUS_COLORS["Pendente"];
     const pc=PAG_COLORS[agendamento.pagamento_status]||PAG_COLORS["Pendente"];
     const cl=agendamento.clientes||{};
     const camposAnamnese=Object.entries(cl.anamnese||{}).filter(([k,v])=>v&&v!==""&&!["nome_mae","email","phone","nome_crianca","idade","atipico"].includes(k));
-    retornar (
+    return(
       <div>
         <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-            <div><h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 2px"}}>{cl.nome_mae}</h3><p style={{fontSize:12,color:"#999",margin:0}}>👶 {cl.nome_crianca} · {cl.atipico?"🧡 Atípico":"🌿 Típico"}</p></div>
+            <div>
+              <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 2px"}}>{cl.nome_mae}</h3>
+              <p style={{fontSize:12,color:"#999",margin:0}}>👶 {cl.nome_crianca} · {cl.atipico?"🧡 Atípico":"🌿 Típico"}</p>
+            </div>
             <span style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{agendamento.status}</span>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[["Serviço",agendamento.servico],["Data",formatDateBR(agendamento.data)],["Horário",agendamento.hora],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",")}`],["E-mail",cl.email],["WhatsApp",cl.telefone]].map(([k,v])=>(
+            {[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["Data",formatDateBR(agendamento.data)],["Horário",agendamento.hora],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",",")}`],["WhatsApp",cl.telefone]].map(([k,v])=>(
               <div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>
             ))}
           </div>
         </div>
-        {camposAnamnese.length>0 ? (
+        {camposAnamnese.length>0?(
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese — {cl.atipico?"🧡 Atípica":"🌿 Típica"}</p>
             {camposAnamnese.map(([k,v])=>(
@@ -688,8 +844,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
               </div>
             ))}
           </div>
-        ) : (
-          <div style={{background:"#faf8f5",border:"1.5px dashed #e8e0d8",borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><p style={{fontSize:13,color:"#bbb",margin:0}}>Anamnese não preenchido</p></div>
+        ):(
+          <div style={{background:"#faf8f5",border:"1.5px dashed #e8e0d8",borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><p style={{fontSize:13,color:"#bbb",margin:0}}>Anamnese não preenchida</p></div>
         )}
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Status do agendamento</p>
@@ -701,31 +857,31 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
         </div>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>💳 Pagamento InfinityPay</p>
-          <Field label="Status do ">
+          <Field label="Status do pagamento">
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
               {Object.keys(PAG_COLORS).map(s=>(
-                <button key={s} onClick={()=>update(agendamento.id,{pagamento_status:s})} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,border:"2px solid "+((agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#e8e0d8"),background:(agendamento.pagamento_status||"Pendente ")===s?"#1a1a1a":"#fff",color:(agendamento.pagamento_status||"Pendente")===s?"#fff":"#666",cursor:"pointer"}}>{s}</button>
+                <button key={s} onClick={()=>update(agendamento.id,{pagamento_status:s})} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,border:"2px solid "+((agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#e8e0d8"),background:(agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#fff",color:(agendamento.pagamento_status||"Pendente")===s?"#fff":"#666",cursor:"pointer"}}>{s}</button>
               ))}
             </div>
-          </Campo>
+          </Field>
           <Field label="Link de pagamento (InfinityPay)">
-            <input style={inp} type="url" placeholder="Cole aqui o link gerado no app InfinityPay" value={agendamento.pagamento_link||""} onChange={e=>update(agendamento.id,{pagamento_link:e.target.value})} />
-          </Campo>
-          {agendamento.pagamento_link && (
+            <input style={inp} type="url" placeholder="Cole aqui o link gerado no app InfinityPay" value={agendamento.pagamento_link||""} onChange={e=>update(agendamento.id,{pagamento_link:e.target.value})}/>
+          </Field>
+          {agendamento.pagamento_link&&(
             <a href={agendamento.pagamento_link} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px",borderRadius:8,background:"#e3f2fd",color:"#1565C0",textDecoration:"none",fontSize:13,fontWeight:600}}>🔗 Abrir link de pagamento</a>
           )}
         </div>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Contrato</p>
-          {agendamento.assinatura}
-            ? <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:13,color:"#2e7d32"}}>✅ Assinado em {agendamento.signed_at}</span></div>
-            : <div>
-                <p style={{fontSize:12,color:"#888",margin:"0 0 10px"}}>Contrato ainda não assinado.</p>
-                <Field label="CPF do cliente"><input style={inp} placeholder="000.000.000-00" value={agendamento.cpf_mae||""} onChange={e=>update(agendamento.id,{cpf_mae:e.target.value})} /></Field>
-                <Field label="Valor do ensaio (R$)"><input style={inp} type="number" value={agendamento.valor||""} onChange={e=>update(agendamento.id,{valor:e.target.value})} /></Field>
-                <Field label="Observações"><textarea style={{...inp,resize:"vertical"}} rows={2} value={agendamento.obs||""} onChange={e=>update(agendamento.id,{obs:e.target.value})} /></Field>
-                <button onClick={()=>setShowContract(true)} style={{width:"100%",padding:12,borderRadius:10,background:"#7b1fa2",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:"pointer"}}>📄 Gerar e assinar contrato</button>
-              </div>
+          {agendamento.signature
+            ?<div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:13,color:"#2e7d32"}}>✅ Assinado em {agendamento.signed_at}</span></div>
+            :<div>
+              <p style={{fontSize:12,color:"#888",margin:"0 0 10px"}}>Contrato ainda não assinado.</p>
+              <Field label="CPF da cliente"><input style={inp} placeholder="000.000.000-00" value={agendamento.cpf_mae||""} onChange={e=>update(agendamento.id,{cpf_mae:e.target.value})}/></Field>
+              <Field label="Valor do ensaio (R$)"><input style={inp} type="number" value={agendamento.valor||""} onChange={e=>update(agendamento.id,{valor:e.target.value})}/></Field>
+              <Field label="Observações"><textarea style={{...inp,resize:"vertical"}} rows={2} value={agendamento.obs||""} onChange={e=>update(agendamento.id,{obs:e.target.value})}/></Field>
+              <button onClick={()=>setShowContract(true)} style={{width:"100%",padding:12,borderRadius:10,background:"#7b1fa2",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:"pointer"}}>📄 Gerar e assinar contrato</button>
+            </div>
           }
         </div>
         <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
@@ -734,10 +890,10 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   }
 
   // ── Detalhe do cliente ──
-  se (cliente) {
+  if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
     const camposAnamnese=Object.entries(cliente.anamnese||{}).filter(([k,v])=>v&&v!==""&&!["nome_mae","email","phone","nome_crianca","idade","atipico"].includes(k));
-    retornar (
+    return(
       <div>
         <button onClick={()=>setSelectedCliente(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
@@ -749,7 +905,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             ))}
           </div>
         </div>
-        {camposAnamnese.length>0 ? (
+        {camposAnamnese.length>0?(
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese — {cliente.atipico?"🧡 Atípica":"🌿 Típica"}</p>
             {camposAnamnese.map(([k,v])=>(
@@ -759,19 +915,19 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
               </div>
             ))}
           </div>
-        ) : (
-          <div style={{background:"#faf8f5",border:"1.5px dashed #e8e0d8",borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><p style={{fontSize:13,color:"#bbb",margin:0}}>Anamnese não preenchido</p></div>
+        ):(
+          <div style={{background:"#faf8f5",border:"1.5px dashed #e8e0d8",borderRadius:12,padding:14,marginBottom:12,textAlign:"center"}}><p style={{fontSize:13,color:"#bbb",margin:0}}>Anamnese não preenchida</p></div>
         )}
         <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"16px 0 10px"}}>Histórico de ensaios</p>
         {ensaiosCliente.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>Nenhum ensaio registrado</p>}
         {ensaiosCliente.map(a=>{
           const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
           const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
-          retornar(
+          return(
             <div key={a.id} onClick={()=>{ setSelectedCliente(null); setSelected(a.id); }} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:8,cursor:"pointer",background:"#fff"}}>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <div>
-                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{a.servico}</p>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
                   <p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p>
                   <div style={{display:"flex",gap:5,marginTop:4}}>
                     <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span>
@@ -788,42 +944,55 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  retornar (
+  // ── Lista agendamentos / clientes ──
+  return(
     <div>
-      {showNew && (
+      {showNew&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,overflowY:"auto",padding:16}}>
           <div style={{background:"#fff",borderRadius:16,padding:20,maxWidth:480,margin:"0 auto",paddingBottom:40}}>
             <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,margin:"0 0 4px"}}>Novo agendamento</h3>
             <p style={{fontSize:12,color:"#999",margin:"0 0 16px"}}>Dados do ensaio + anamnese da criança</p>
             <p style={sec}>📅 Dados do agendamento</p>
-            {[["nome_mae","Nome da mãe","text"],["nome_crianca","Nome da criança","text"],["cpf_mae","CPF da mãe","text"],["email","E-mail","email"],["telefone","WhatsApp","tel"],["dados","Dados do ensaio","data"],["hora","Horário","hora"],["valor","Valor (R$)","número"]].map(([k,l,t])=>(
-              <Field key={k} label={l}><input style={inp} type={t} value={newClient[k]||""} onChange={e=>setNewClient(n=>({...n,[k]:e.target.value}))} /></Field>
+            {[["nome_mae","Nome da mãe","text"],["nome_crianca","Nome da criança","text"],["cpf_mae","CPF da mãe","text"],["email","E-mail","email"],["telefone","WhatsApp","tel"],["data","Data do ensaio","date"],["hora","Horário","time"],["valor","Valor (R$)","number"]].map(([k,l,t])=>(
+              <Field key={k} label={l}><input style={inp} type={t} value={newClient[k]||""} onChange={e=>setNewClient(n=>({...n,[k]:e.target.value}))}/></Field>
             ))}
             <Field label="Serviço">
-              <select style={inp} value={newClient.servico} onChange={e=>setNewClient(n=>({...n,servico:e.target.value}))}>
+              <select style={inp} value={newClient.servico} onChange={e=>setNewClient(n=>({...n,servico:e.target.value,modalidade:""}))}>
                 <option value="">Selecione...</option>
                 {SERVICES.map(s=><option key={s.id} value={s.label}>{s.label}</option>)}
               </select>
-            </Campo>
-            <Field label="Observações"><textarea style={{...inp,resize:"vertical"}} rows={2} value={newClient.obs||""} onChange={e=>setNewClient(n=>({...n,obs:e.target.value}))} /></Field>
-            <Field label="Link de despach InfinityPay">
-              <input style={inp} type="url" placeholder="Cole o link gerado no app InfinityPay" value={newClient.pagamento_link||""} onChange={e=>setNewClient(n=>({...n,pagamento_link:e.target.value}))} />
-            </Campo>
+            </Field>
+            {newClient.servico && (() => {
+              const svc = SERVICES.find(s=>s.label===newClient.servico);
+              if(!svc||svc.modalities.length<=1) return null;
+              return(
+                <Field label="Modalidade">
+                  <select style={inp} value={newClient.modalidade} onChange={e=>setNewClient(n=>({...n,modalidade:e.target.value}))}>
+                    <option value="">Selecione...</option>
+                    {svc.modalities.map(m=><option key={m.id} value={m.label}>{m.label}</option>)}
+                  </select>
+                </Field>
+              );
+            })()}
+            <Field label="Observações"><textarea style={{...inp,resize:"vertical"}} rows={2} value={newClient.obs||""} onChange={e=>setNewClient(n=>({...n,obs:e.target.value}))}/></Field>
+            <Field label="Link InfinityPay"><input style={inp} type="url" placeholder="Cole o link do InfinityPay" value={newClient.pagamento_link||""} onChange={e=>setNewClient(n=>({...n,pagamento_link:e.target.value}))}/></Field>
             <p style={sec}>📋 Anamnese da criança</p>
-            <AnamneseForm data={newAnamnese} onChange={setNewAnamnese} />
+            <AnamneseForm data={newAnamnese} onChange={setNewAnamnese}/>
             <div style={{display:"flex",gap:10,marginTop:24}}>
-              <botão onClick={()=>{ setShowNew(false); setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""}); setNewAnamnese({}); }} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px sólido #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
+              <button onClick={()=>{ setShowNew(false); setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""}); setNewAnamnese({}); }} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
               <button disabled={salvando} onClick={async()=>{
-                definirSalvando(verdadeiro);
-                tentar{
+                setSalvando(true);
+                try{
                   const ex=await getClienteByTelefone(newClient.telefone);
-                  deixe cid;
+                  let cid;
                   if(ex&&ex.length>0){ cid=ex[0].id; await atualizarCliente(cid,{nome_mae:newClient.nome_mae,nome_crianca:newClient.nome_crianca,email:newClient.email,atipico:newAnamnese.atipico==="sim",anamnese:newAnamnese,updated_at:new Date().toISOString()}); }
                   else{ const nc=await criarCliente({nome_mae:newClient.nome_mae,nome_crianca:newClient.nome_crianca,email:newClient.email,telefone:newClient.telefone,atipico:newAnamnese.atipico==="sim",anamnese:newAnamnese}); cid=nc[0].id; }
-                  await criarAgendamento({cliente_id:cid,servico:newClient.servico,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});
-                  setShowNew(falso); setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""}); setNewAnamnese({}); carregar();
+                  const svc=SERVICES.find(s=>s.label===newClient.servico);
+                  const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";
+                  await criarAgendamento({cliente_id:cid,servico:newClient.servico,modalidade:modLabel,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});
+                  setShowNew(false); setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""}); setNewAnamnese({}); carregar();
                 }catch(e){ alert("Erro: "+e.message); }
-                finalmente{ definirSalvando(falso); }
+                finally{ setSalvando(false); }
               }} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:salvando?"default":"pointer"}}>
                 {salvando?"Salvando...":"Salvar agendamento"}
               </button>
@@ -858,12 +1027,13 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
             const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
             const cl=a.clientes||{};
-            retornar(
+            return(
               <div key={a.id} onClick={()=>setSelected(a.id)} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,cursor:"pointer",background:"#fff"}}>
-                <div style={ {display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div style={{flex:1}}>
                     <p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p>
-                    <p style={{margin:"3px 0 0",fontSize:12,color:"#999"}}>{a.servico} · {formatDateBR(a.data)} {a.hora}</p>
+                    <p style={{margin:"3px 0 0",fontSize:12,color:"#555"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p>
                     <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
                       <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span>
                       <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
@@ -885,8 +1055,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           {clientes.length===0&&<p style={{textAlign:"center",color:"#bbb",fontSize:14,marginTop:40}}>Nenhuma cliente ainda</p>}
           {clientes.map(c=>{
             const dias=diasDesdeUltimoEnsaio(c.ultimo_ensaio);
-            const badge=dias<90?{label:"Frequente 🌟",bg:"#e6f4ea",color:"#2e7d32"}:dias<180?{label:"Regular",bg:"#e3f2fd",color:"#1565C0"}:c.ultimo_ ensaio?{label:"Retorno",bg:"#fff8e1",color:"#f57c00"}:{label:"Nova",bg:"#f3e5f5",color:"#7b1fa2"};
-            retornar(
+            const badge=dias<90?{label:"Frequente 🌟",bg:"#e6f4ea",color:"#2e7d32"}:dias<180?{label:"Regular",bg:"#e3f2fd",color:"#1565C0"}:c.ultimo_ensaio?{label:"Retorno",bg:"#fff8e1",color:"#f57c00"}:{label:"Nova",bg:"#f3e5f5",color:"#7b1fa2"};
+            return(
               <div key={c.id} onClick={()=>setSelectedCliente(c.id)} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,cursor:"pointer",background:"#fff"}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                   <div>
@@ -905,170 +1075,161 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   );
 }
 
-// ─── FLUXO DE AGENDAMENTO DE CLIENTES ───────────────────────────────────────────
-função ClientView() {
+// ─── CLIENT BOOKING FLOW ──────────────────────────────────────────
+function ClientView() {
   const [step,setStep]=useState(1);
-  const [serviceId,setServiceId]=useState(null);
+  const [service,setService]=useState(null);     // objeto completo do serviço
+  const [modality,setModality]=useState(null);   // objeto da modalidade escolhida
   const [date,setDate]=useState(null);
-  const [hora,setTime]=useState(null);
+  const [time,setTime]=useState(null);
   const [anamnese,setAnamnese]=useState({});
   const [submitted,setSubmitted]=useState(false);
-  const [carregando,setLoading]=useState(false);
+  const [loading,setLoading]=useState(false);
   const [clienteExistente,setClienteExistente]=useState(null);
   const [verificandoCliente,setVerificandoCliente]=useState(false);
-  const service=SERVICES.find(s=>s.id===serviceId);
 
   const verificarCliente=async(telefone)=>{
     const tel=telefone.replace(/\D/g,"");
-    se (tel.length < 10) retorne;
+    if(tel.length<10)return;
     setVerificandoCliente(true);
-    tentar{
+    try{
       const r=await getClienteByTelefone(tel);
       if(r&&r.length>0){ const cl=r[0]; setClienteExistente(cl); setAnamnese(p=>({...p,nome_mae:cl.nome_mae,nome_crianca:cl.nome_crianca,email:cl.email,idade:cl.idade,atipico:cl.atipico?"sim":"Não",...(cl.anamnese||{})})); }
-      senão setClienteExistente(null);
+      else setClienteExistente(null);
     }catch(e){}
-    finalmente{setVerificandoCliente(false);}
+    finally{setVerificandoCliente(false);}
   };
   const precisaAnamnese=()=>!clienteExistente||diasDesdeUltimoEnsaio(clienteExistente.ultimo_ensaio)>180;
 
   const handleSubmit=async()=>{
-    definirCarregando(verdadeiro);
-    tentar{
+    setLoading(true);
+    try{
       const telefone=(anamnese.phone||"").replace(/\D/g,"");
-      deixe cid;
-      const ex=aguardar getClienteByTelefone(telefone);
+      let cid;
+      const ex=await getClienteByTelefone(telefone);
       if(ex&&ex.length>0){ cid=ex[0].id; await atualizarCliente(cid,{anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()}); }
       else{ const nc=await criarCliente({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_crianca,email:anamnese.email,telefone,idade:anamnese.idade,atipico:anamnese.atipico==="sim",anamnese,ultimo_ensaio:date,total_ensaios:1}); cid=nc[0].id; }
-      await criarAgendamento({cliente_id:cid,servico:service?.label,data:date,hora:time,status:"Pendente",pagamento_status:"Pendente"});
-      espere fetch(WEBHOOK_URL,{método:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_cr ianca,email:anamnese.email,phone:anamnese.phone,servico:service?.label,data:date,hora:time,atipico:anamnese.atipico,idade:anamnese.idade})}).catch(()=>{});
+      await criarAgendamento({cliente_id:cid,servico:service?.label,modalidade:modality?.label,data:date,hora:time,status:"Pendente",pagamento_status:"Pendente"});
+      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:anamnese.nome_mae,nome_crianca:anamnese.nome_crianca,email:anamnese.email,phone:anamnese.phone,servico:service?.label,modalidade:modality?.label,data:date,hora:time,atipico:anamnese.atipico,idade:anamnese.idade})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false); setSubmitted(true);
   };
 
-  se(enviado) retornar(
+  if(submitted) return(
     <div style={{textAlign:"center",padding:"48px 16px"}}>
       <div style={{fontSize:52,marginBottom:16}}>🌸</div>
       <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Solicitação enviada!</h2>
       <p style={{color:"#888",fontSize:14,lineHeight:1.7,marginBottom:20}}>Em breve a <strong>Crescidinhos</strong> confirmará seu horário pelo WhatsApp. 🤍</p>
       <div style={{padding:16,background:"#faf8f5",borderRadius:12,textAlign:"left"}}>
-        {[["Serviço",service?.label],["Data",formatDateBR(date)],["Horário",time],["Mãe",anamnese.nome_mae],["Criança",anamnese.nome_crianca]].map(([k,v])=>(
-          <p key={k} style={{fontSize:13,color:"#666",margin:"0 0 5px"}}><strong>{k}:</strong> {v||"—"}</p>
+        {[["Serviço",service?.label],["Modalidade",modality?.label],["Data",formatDateBR(date)],["Horário",time],["Mãe",anamnese.nome_mae],["Criança",anamnese.nome_crianca]].map(([k,v])=>(
+          v && <p key={k} style={{fontSize:13,color:"#666",margin:"0 0 5px"}}><strong>{k}:</strong> {v}</p>
         ))}
       </div>
     </div>
   );
 
   const Btn=({disabled,onClick,label})=><button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>;
-  const Voltar=({onClick})=><button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>;
+  const Back=({onClick})=><button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>;
 
-  retornar(
+  return(
     <div>
       <StepBar step={step}/>
-      {passo===1&&(
-        <div>
-          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha o tipo de ensaio</h3>
-          <p style={{fontSize:12,color:"#999",marginBottom:16}}>Toque no serviço para ver os pacotes</p>
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
-            {SERVICES.map(s=>{
-              const isOpen=serviceId===s.id;
-              retornar(
-                <div key={s.id} style={{borderRadius:12,border:isOpen?"2px solid #1a1a1a":"2px solid #e8e0d8",background:isOpen?"#faf8f5":"#fff",overflow:"hidden"}}>
-                  <div onClick={()=>setServiceId(isOpen?null:s.id)} style={{padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{fontSize:22}}>{s.icon}</span>
-                      <div>
-                        <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600,color:"#1a1a1a",margin:0}}>{s.label}</p>
-                        <p style={{fontSize:11,color:"#999",margin:"2px 0 0"}}>{s.duration} · a partir de R$ {s.price.toLocaleString("pt-BR")}</p>
-                      </div>
-                    </div>
-                    <span style={{fontSize:14,color:"#b8967e",fontWeight:700}}>{isOpen?"▲":"▼"}</span>
-                  </div>
-                  {isOpen&&(
-                    <div style={{padding:"0 16px 16px",borderTop:"1px solid #f0e8e0"}}>
-                      <p style={{fontSize:12,color:"#666",margin:"10px 0 10px",lineHeight:1.5}}>{s.desc}</p>
-                      {s.highlight&&<p style={{fontSize:11,color:"#b8967e",margin:"0 0 12px"}}>✨ {s.highlight}</p>}
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        {s.packages.map((pk,i)=>(
-                          <div key={i} style={{padding:"10px 12px",borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8"}}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                              <span style={{fontSize:13,fontWeight:700}}>{pk.name}</span>
-                              <span style={{fontSize:14,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>R$ {pk.price.toLocaleString("pt-BR")}</span>
-                            </div>
-                            <p style={{fontSize:11,color:"#888",margin:0,lineHeight:1.5}}>{pk.desc}</p>
-                          </div>
-                        ))}
-                      </div>
-                      {s.obs&&<p style={{fontSize:11,color:"#aaa",margin:"10px 0 0",lineHeight:1.5,fontStyle:"italic"}}>* {s.obs}</p>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <button disabled={!serviceId} onClick={()=>setStep(2)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:10,background:serviceId?"#1a1a1a":"#e8e0d8",color:serviceId?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:serviceId?"pointer":"default"}}>
-            {serviceId?`Continuar com ${SERVICES.find(s=>s.id===serviceId)?.label} →`:"Selecione um serviço"}
-          </button>
-        </div>
+
+      {/* ── Step 1: Seleção de serviço + modalidade ── */}
+      {step===1&&(
+        <ServiceSelector onConfirm={(s,m)=>{ setService(s); setModality(m); setStep(2); }}/>
       )}
-      {passo===2&&(
+
+      {/* ── Step 2: Data e hora ── */}
+      {step===2&&(
         <div>
-          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha dados e horário</h3>
+          <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>{service?.icon}</span>
+            <div>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{service?.label}</p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{modality?.label} · {modality?.detail}</p>
+            </div>
+          </div>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
           <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}}/>
-          {data&&(
+          {date&&(
             <div style={{marginTop:14}}>
-              <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários em <strong>{formatDateBR(date)}</strong>:</p>
+              <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(date)}</strong>:</p>
               <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                 {TIMES.map(t=><button key={t} onClick={()=>setTime(t)} style={{padding:"8px 14px",borderRadius:8,fontSize:13,border:time===t?"2px solid #1a1a1a":"2px solid #e8e0d8",background:time===t?"#1a1a1a":"#fff",color:time===t?"#fff":"#1a1a1a",cursor:"pointer"}}>{t}</button>)}
               </div>
             </div>
           )}
-          <div style={{display:"flex",gap:10,marginTop:20}}><Voltar onClick={()=>setStep(1)}/><Btn disabled={!date||!time} onClick={()=>setStep(3)} label="Continuar →"/></div>
+          <div style={{display:"flex",gap:10,marginTop:20}}><Back onClick={()=>setStep(1)}/><Btn disabled={!date||!time} onClick={()=>setStep(3)} label="Continuar →"/></div>
         </div>
       )}
-      {passo===3&&(
+
+      {/* ── Step 3: Anamnese ── */}
+      {step===3&&(
         <div>
+          <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
+            <span style={{fontSize:20}}>{service?.icon}</span>
+            <div>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{service?.label} — {modality?.label}</p>
+              <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{formatDateBR(date)} às {time}</p>
+            </div>
+          </div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>{precisaAnamnese()?"Ficha de anamnese":"Confirme seus dados"}</h3>
           <div style={{marginBottom:16}}>
             <Field label="WhatsApp" required>
               <input style={inp} type="tel" value={anamnese.phone||""} onChange={e=>{ setAnamnese(a=>({...a,phone:e.target.value})); verificarCliente(e.target.value); }} placeholder="(00) 00000-0000"/>
-            </Campo>
+            </Field>
             {verificandoCliente&&<p style={{fontSize:11,color:"#b8967e",margin:"-8px 0 8px"}}>Verificando cadastro...</p>}
             {clienteExistente&&(
               <div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginTop:-8,marginBottom:8}}>
-                <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae}! Descubra seu cadastro.</p>
+                <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae}! Encontramos seu cadastro.</p>
                 {!precisaAnamnese()&&<p style={{fontSize:11,color:"#555",margin:"4px 0 0"}}>Como você veio recentemente, não precisa preencher a anamnese novamente! 🌸</p>}
                 {precisaAnamnese()&&<p style={{fontSize:11,color:"#555",margin:"4px 0 0"}}>Faz um tempo que não nos vemos! Por favor, atualize seus dados. 🌸</p>}
               </div>
             )}
           </div>
           {precisaAnamnese()
-            ? <AnamneseForm data={anamnese} onChange={setAnamnese}/>
-            : (
+            ?<AnamneseForm data={anamnese} onChange={setAnamnese}/>
+            :(
               <div>
                 <p style={{fontSize:12,color:"#999",marginBottom:16}}>Confirme seus dados para o agendamento 🤍</p>
-                <Field label="Nome da mãe" obrigatório><input style={inp} value={anamnese.nome_mae||""} onChange={e=>setAnamnese(a=>({...a,nome_mae:e.target.value}))}/></Field>
-                <Field label="Nome da criança" obrigatório><input style={inp} value={anamnese.nome_crianca||""} onChange={e=>setAnamnese(a=>({...a,nome_crianca:e.target.value}))}/></Field>
+                <Field label="Nome da mãe" required><input style={inp} value={anamnese.nome_mae||""} onChange={e=>setAnamnese(a=>({...a,nome_mae:e.target.value}))}/></Field>
+                <Field label="Nome da criança" required><input style={inp} value={anamnese.nome_crianca||""} onChange={e=>setAnamnese(a=>({...a,nome_crianca:e.target.value}))}/></Field>
                 <Field label="E-mail" required><input style={inp} value={anamnese.email||""} onChange={e=>setAnamnese(a=>({...a,email:e.target.value}))}/></Field>
-                <Field label="Idade atual da criança" obrigatório><input style={inp} value={anamnese.idade||""} onChange={e=>setAnamnese(a=>({...a,idade:e.target.value}))} placeholder="Ex: 8 meses"/></Field>
+                <Field label="Idade atual da criança" required><input style={inp} value={anamnese.idade||""} onChange={e=>setAnamnese(a=>({...a,idade:e.target.value}))} placeholder="Ex: 8 meses"/></Field>
               </div>
             )
           }
-          <div style={{display:"flex",gap:10,marginTop:24}}><Voltar onClick={()=>setStep(2)}/><Btn disabled={false} onClick={()=>setStep(4)} label="Revisar →"/></div>
+          <div style={{display:"flex",gap:10,marginTop:24}}><Back onClick={()=>setStep(2)}/><Btn disabled={false} onClick={()=>setStep(4)} label="Revisar →"/></div>
         </div>
       )}
-      {passo===4&&(
+
+      {/* ── Step 4: Confirmação ── */}
+      {step===4&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:16}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 10px",letterSpacing:"1px",textTransform:"uppercase"}}>Resumo</p>
-            {[["Serviço",service?.label],["Data",formatDateBR(date)],["Horário",time],["Mãe / responsável",anamnese.nome_mae],["Criança",anamnese.nome_crianca],["E-mail",anamnese.email],["Perfil",anamnese.atipico==="sim"?"🧡 Criança atípica":anamnese.atipico==="Não"?"🌿 Criança típica":"—"]].map(([k,v])=>(
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 10px",letterSpacing:"1px",textTransform:"uppercase"}}>Resumo do agendamento</p>
+            {[
+              ["Serviço", `${service?.icon} ${service?.label}`],
+              ["Modalidade", modality?.label],
+              ["Data", formatDateBR(date)],
+              ["Horário", time],
+              ["Mãe / responsável", anamnese.nome_mae],
+              ["Criança", anamnese.nome_crianca],
+              ["E-mail", anamnese.email],
+              ["Perfil", anamnese.atipico==="sim"?"🧡 Criança atípica":anamnese.atipico==="Não"?"🌿 Criança típica":"—"],
+            ].map(([k,v])=>v&&(
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{fontSize:12,color:"#999"}}>{k}</span>
-                <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600,textAlign:"right",maxWidth:"58%"}}>{v||"—"}</span>
+                <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
               </div>
             ))}
+          </div>
+          <div style={{padding:12,background:"#fdf8f5",border:"1.5px solid #f0ddd0",borderRadius:10,marginBottom:16}}>
+            <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 Em breve a <strong>Crescidinhos</strong> entrará em contato pelo WhatsApp para confirmar seu horário e passar as informações de pagamento.</p>
           </div>
           <div style={{display:"flex",gap:10}}><Back onClick={()=>setStep(3)}/><Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/></div>
         </div>
@@ -1077,20 +1238,20 @@ função ClientView() {
   );
 }
 
-// ─── LOGIN DO FOTÓGRAFO ────────────────────────────────────────────
-função PhotographerLogin({ onLogin }) {
+// ─── PHOTOGRAPHER LOGIN ───────────────────────────────────────────
+function PhotographerLogin({ onLogin }) {
   const login=useGoogleLogin({
     onSuccess:async(t)=>{
-      tentar{
+      try{
         const r=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:`Bearer ${t.access_token}`}});
         const info=await r.json();
         onLogin({token:t,email:info.email});
       }catch{ alert("Não foi possível verificar o usuário."); }
     },
     onError:()=>alert("Erro ao fazer login."),
-    escopo:"https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
+    scope:"https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
   });
-  retornar(
+  return(
     <div style={{textAlign:"center",padding:"48px 24px"}}>
       <div style={{fontSize:40,marginBottom:16}}>📷</div>
       <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Área Restrita</h2>
@@ -1098,22 +1259,21 @@ função PhotographerLogin({ onLogin }) {
       <button onClick={()=>login()} style={{display:"inline-flex",alignItems:"center",gap:12,padding:"14px 28px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
         <svg width="20" height="20" viewBox="0 0 48 48">
           <path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.5 29.5 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/>
-          <path fill="#FF3D00" d="M6,3 14,7l6,6 4,8C14,7 16,1 19 13 24 13c3,1 0 5,8 1,1 7,9 3l5,7-5,7C34,5 6,5 29,5 4 24 4 16,3 4 9,7 8,3 6,3 14,7z"/>
-          <path fill="#4CAF50" d="M24 44c5,2 0 9,9-2 13,4-5,2l-6,2-5,2C29,3 35,5 26,8 36 24 36c-5,2 0-9,6-3,3-11,3-8H6.1C9,5 35,7 16,3 44 24 44z"/>
+          <path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 16.1 19 13 24 13c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.5 29.5 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+          <path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 35.5 26.8 36 24 36c-5.2 0-9.6-3.3-11.3-8H6.1C9.5 35.7 16.3 44 24 44z"/>
           <path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.3-4.3 5.7l6.2 5.2C43 35 44 30 44 24c0-1.3-.1-2.6-.4-3.9z"/>
         </svg>
-        Entrar com o Google
+        Entrar com Google
       </button>
     </div>
   );
 }
 
-// ─── PAINEL DO FOTÓGRAFO ────────────────────────────────────────────
+// ─── PHOTOGRAPHER PANEL ───────────────────────────────────────────
 function PhotographerPanel({ auth, onLogout }) {
   const [tab,setTab]=useState("agenda");
   const [abrirAgId,setAbrirAgId]=useState(null);
-
-  retornar(
+  return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18,padding:"10px 14px",background:"#fff",borderRadius:12,border:"1.5px solid #e8e0d8"}}>
         <div><p style={{margin:0,fontSize:13,fontWeight:600,color:"#1a1a1a"}}>Painel da fotógrafa 📷</p><p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{auth.email}</p></div>
@@ -1121,7 +1281,7 @@ function PhotographerPanel({ auth, onLogout }) {
       </div>
       {auth.email!==PHOTOGRAPHER.email&&(
         <div style={{padding:16,background:"#fde8e8",borderRadius:12,marginBottom:16,textAlign:"center"}}>
-          <p style={{fontSize:13,color:"#c62828",margin:0}}>🚫 Acesso restrito à fotografia.</p>
+          <p style={{fontSize:13,color:"#c62828",margin:0}}>🚫 Acesso restrito à fotógrafa.</p>
         </div>
       )}
       {auth.email===PHOTOGRAPHER.email&&(
@@ -1139,11 +1299,11 @@ function PhotographerPanel({ auth, onLogout }) {
   );
 }
 
-// ─── RAIZ DO APLICATIVO ──────────────────────────────────────────────────────
+// ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   const [view,setView]=useState("client");
   const [auth,setAuth]=useState(null);
-  retornar(
+  return(
     <div style={{fontFamily:"'Lato',sans-serif",background:"#f5f0eb",minHeight:"100vh",paddingBottom:48}}>
       <div style={{background:"#fff",padding:"20px 24px 14px",borderBottom:"1px solid #e8e0d8",marginBottom:24,textAlign:"center"}}>
         <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,margin:0,color:"#1a1a1a"}}>crescidinhos</h1>
