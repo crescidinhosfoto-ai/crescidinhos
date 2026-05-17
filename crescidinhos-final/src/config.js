@@ -8,7 +8,8 @@ export const PHOTOGRAPHER = {
   email: "crescidinhosfoto@gmail.com",
   name: "Crescidinhos Fotografia",
   owner: "Thais de Sa Nascimento Dutra",
-  cpf: "000.000.000-00", // ⚠️ Preencha seu CPF
+  cpf: "410.593.908-41", 
+  cnpj: "64.189.121/0001-06",
   phone: "(14) 99684-5521",
   whatsapp: "5514996845521",
   instagram: "@crescidinhosfotografia",
