@@ -34,7 +34,24 @@ const getAgendamentos      = () => sb("agendamentos?select=*,clientes(*)&order=d
 const getClientes          = () => sb("clientes?select=*,agendamentos(*)&order=created_at.desc");
 const getAgendamentosByCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}&order=data.desc`);
 const atualizarAgendamento = (id, data) => sb(`agendamentos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
+const deletarCliente = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
+const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
+
+// ─── EVOLUTION API WhatsApp ───────────────────────────────────────
+const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
+const EVOLUTION_KEY = "gNnhqK2sv964EPigBYm1WJkBc91gu1t4";
+const enviarWhatsApp = async (numero, mensagem) => {
+  const tel = numero.replace(/\D/g,"");
+  if(!tel||tel.length<10) return;
+  try {
+    await fetch(EVOLUTION_URL, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","apikey":EVOLUTION_KEY},
+      body:JSON.stringify({number:`55${tel}`,text:mensagem})
+    });
+  } catch(e){ console.error("WA error:",e); }
+};
 
 // ─── HELPERS ─────────────────────────────────────────────────────
 const MONTHS   = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -519,6 +536,11 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [newClient,setNewClient]=useState({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
   const [newAnamnese,setNewAnamnese]=useState({});
   const [salvando,setSalvando]=useState(false);
+  // Estados edição de cliente (item 7)
+  const [editandoCliente,setEditandoCliente]=useState(false);
+  const [editClienteForm,setEditClienteForm]=useState({});
+  const [confirmDeleteCliente,setConfirmDeleteCliente]=useState(false);
+  const [salvandoEditCliente,setSalvandoEditCliente]=useState(false);
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
@@ -601,13 +623,64 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   // ── Detalhe do cliente ─────────────────────────────────────────
   if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
+
+    const salvarEdicaoCliente = async () => {
+      setSalvandoEditCliente(true);
+      try {
+        await atualizarCliente(cliente.id, editClienteForm);
+        setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm}:c));
+        setEditandoCliente(false);
+      } catch(e){ alert("Erro: "+e.message); }
+      setSalvandoEditCliente(false);
+    };
+
+    const excluirClienteFn = async () => {
+      try {
+        await deletarAgendamentosCliente(cliente.id);
+        await deletarCliente(cliente.id);
+        setSelectedCliente(null);
+        setConfirmDeleteCliente(false);
+        carregar();
+      } catch(e){ alert("Erro ao excluir: "+e.message); }
+    };
+
     return(
       <div>
-        <button onClick={()=>setSelectedCliente(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
+        <button onClick={()=>{setSelectedCliente(null);setEditandoCliente(false);setConfirmDeleteCliente(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
-          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 4px"}}>{cliente.nome_mae}</h3>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>{[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+            <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:0}}>{cliente.nome_mae}</h3>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setEditandoCliente(!editandoCliente);setEditClienteForm({nome_mae:cliente.nome_mae||"",email:cliente.email||"",telefone:cliente.telefone||"",cpf_mae:cliente.cpf_mae||""});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Editar</button>
+              <button onClick={()=>setConfirmDeleteCliente(true)} style={{padding:"5px 10px",borderRadius:7,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:12,color:"#c62828",fontWeight:600}}>🗑 Excluir</button>
+            </div>
+          </div>
+          {editandoCliente ? (
+            <div>
+              {[["nome_mae","Nome"],["email","E-mail"],["telefone","WhatsApp"],["cpf_mae","CPF"]].map(([k,l])=>(
+                <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={editClienteForm[k]||""} onChange={e=>setEditClienteForm(f=>({...f,[k]:e.target.value}))}/></Field>
+              ))}
+              <div style={{display:"flex",gap:8,marginTop:8}}>
+                <button onClick={()=>setEditandoCliente(false)} style={{flex:1,padding:10,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
+                <button disabled={salvandoEditCliente} onClick={salvarEdicaoCliente} style={{flex:2,padding:10,borderRadius:8,background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>{salvandoEditCliente?"Salvando...":"Salvar"}</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          )}
         </div>
+        {confirmDeleteCliente&&(
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:"#fff",borderRadius:14,padding:24,maxWidth:360,width:"100%"}}>
+              <p style={{fontSize:16,fontWeight:700,color:"#c62828",margin:"0 0 8px"}}>⚠️ Excluir cliente</p>
+              <p style={{fontSize:13,color:"#555",margin:"0 0 20px",lineHeight:1.6}}>Isso excluirá <strong>{cliente.nome_mae}</strong> e todos os seus {ensaiosCliente.length} agendamento(s). Esta ação não pode ser desfeita.</p>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setConfirmDeleteCliente(false)} style={{flex:1,padding:11,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13}}>Cancelar</button>
+                <button onClick={excluirClienteFn} style={{flex:2,padding:11,borderRadius:8,background:"#c62828",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>Confirmar exclusão</button>
+              </div>
+            </div>
+          </div>
+        )}
         {cliente.filhos&&cliente.filhos.length>0&&(
           <div style={{marginBottom:12}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 8px"}}>👶 Filhos cadastrados</p>
@@ -693,6 +766,7 @@ function ClientePanel() {
       if(r&&r.length>0){
         const cl = r[0];
         setLogado(cl);
+        // Sempre recarrega agendamentos frescos do Supabase
         const ags = await getAgendamentosByCliente(cl.id);
         setAgendamentos(ags||[]);
       } else {
@@ -700,6 +774,18 @@ function ClientePanel() {
       }
     } catch(e){ console.error(e); }
     setLoading(false);
+  };
+
+  // Recarregar dados ao entrar na aba para garantir dados atualizados
+  const recarregarDados = async (clienteId) => {
+    try {
+      const [cl, ags] = await Promise.all([
+        sb(`clientes?id=eq.${clienteId}&limit=1`),
+        getAgendamentosByCliente(clienteId)
+      ]);
+      if(cl&&cl.length>0) setLogado(cl[0]);
+      setAgendamentos(ags||[]);
+    } catch(e){ console.error(e); }
   };
 
   if(!logado) return (
@@ -731,7 +817,13 @@ function ClientePanel() {
         <button onClick={()=>{setLogado(null);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
-        {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],cofrinho?["cofrinho","💰 Cofrinho"]:null,["perfil","👤 Perfil"]].filter(Boolean).map(([t,l])=>
+        {[
+          ["agendamentos","📅 Ensaios"],
+          ["contratos","📄 Contratos"],
+          ["cofrinho","💰 Cofrinho"],
+          ["vale","🎁 Vale Presente"],
+          ["perfil","👤 Perfil"]
+        ].map(([t,l])=>
           <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
         )}
       </div>
@@ -768,23 +860,64 @@ function ClientePanel() {
           ))}
         </div>
       )}
-      {tab==="cofrinho"&&cofrinho&&(
+      {tab==="cofrinho"&&(
         <div>
-          <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,marginBottom:16,color:"#fff"}}>
-            <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>Cofrinho de Recordações</p>
-            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
-            <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
-            <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
-            <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
-          </div>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Regras</p>
-            {[["Resgate mínimo","3 meses"],["Elegível em","Ensaios e fotos extras"],["Não elegível em","Eventos"],["Cancelamento","Sem reembolso do saldo"]].map(([k,v])=>(
-              <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
-                <span style={{color:"#888"}}>{k}</span><span style={{fontWeight:600,color:"#1a1a1a"}}>{v}</span>
+          {cofrinho ? (
+            <div>
+              <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,marginBottom:16,color:"#fff"}}>
+                <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>Cofrinho de Recordações</p>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
+                <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
+                <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
+                <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
               </div>
-            ))}
-          </div>
+              <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14}}>
+                <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Regras</p>
+                {[["Resgate mínimo","3 meses"],["Elegível em","Ensaios e fotos extras"],["Não elegível em","Eventos"],["Cancelamento","Sem reembolso do saldo"]].map(([k,v])=>(
+                  <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
+                    <span style={{color:"#888"}}>{k}</span><span style={{fontWeight:600,color:"#1a1a1a"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div style={{textAlign:"center",padding:"40px 16px"}}>
+              <div style={{fontSize:40,marginBottom:12}}>💰</div>
+              <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",marginBottom:8}}>Cofrinho de Recordações</p>
+              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Acumule saldo mensalmente e resgate em ensaios fotográficos. Economize para eternizar cada fase do seu filho! 🌸</p>
+              <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:16,textAlign:"left"}}>
+                {[["🌱 Sementinha","R$ 50/mês"],["🌿 Broto","R$ 100/mês"],["🌸 Florido","R$ 150/mês"],["🌳 Crescido","R$ 200/mês"]].map(([p,v])=>(
+                  <div key={p} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f0e8e0",fontSize:13}}><span>{p}</span><span style={{fontWeight:600,color:"#b8967e"}}>{v}</span></div>
+                ))}
+              </div>
+              <a href="https://wa.me/5514996845521?text=Olá! Quero assinar o Cofrinho de Recordações 💰" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>💬 Quero assinar</a>
+            </div>
+          )}
+        </div>
+      )}
+      {tab==="vale"&&(
+        <div>
+          {agendamentos.filter(a=>a.servico_id==="vale-presente").length>0 ? (
+            <div>
+              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Seus vales presente</p>
+              {agendamentos.filter(a=>a.servico_id==="vale-presente").map(a=>(
+                <div key={a.id} style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:14,padding:18,marginBottom:12,color:"#fff"}}>
+                  <p style={{fontSize:10,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",margin:"0 0 8px",opacity:.8}}>CRESCIDINHOS FOTOGRAFIA</p>
+                  <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:700,margin:"0 0 4px"}}>Vale Presente</p>
+                  <p style={{fontSize:24,fontWeight:700,margin:"0 0 8px"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
+                  <p style={{fontSize:12,opacity:.8,margin:"0 0 4px"}}>Para: {a.obs||"—"}</p>
+                  <p style={{fontSize:11,opacity:.7}}>Válido por 12 meses · {a.status==="Concluído"?"✅ Utilizado":"⏳ Disponível"}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{textAlign:"center",padding:"40px 16px"}}>
+              <div style={{fontSize:40,marginBottom:12}}>🎁</div>
+              <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",marginBottom:8}}>Vale Presente</p>
+              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Presenteie alguém especial com um ensaio na Crescidinhos. Você escolhe o valor!</p>
+              <a href="https://wa.me/5514996845521?text=Olá! Quero comprar um Vale Presente 🎁" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#72243E",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>🎁 Comprar vale presente</a>
+            </div>
+          )}
         </div>
       )}
       {tab==="perfil"&&(
@@ -814,7 +947,10 @@ function ClientePanel() {
 
 // ─── CLIENT BOOKING FLOW ──────────────────────────────────────────
 function ClientView() {
-  const STEPS = ["Cadastro","Serviço","Data","Confirmar"];
+  const STEPS_NORMAL = ["Cadastro","Serviço","Data","Confirmar"];
+  const STEPS_DIRETO = ["Cadastro","Serviço","Confirmar"];
+  const semAgenda = service?.grupo === "cofrinho" || service?.grupo === "vale";
+  const STEPS = semAgenda ? STEPS_DIRETO : STEPS_NORMAL;
   const [step,setStep]=useState(1);
   const [service,setService]=useState(null);
   const [modality,setModality]=useState(null);
@@ -857,6 +993,13 @@ function ClientView() {
       else{const nc=await criarCliente({nome_mae:cadastro.nome_mae,email:cadastro.email,telefone:tel,cpf_mae:cadastro.cpf,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});cid=nc[0].id;}
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({cliente_id:cid,servico:service?.label,servico_id:service?.id||null,modalidade:modality?.label,modalidade_id:modality?.id||null,data:date,hora:time,valor:calc.total||modality?.price||null,status:"Pendente",pagamento_status:"Pendente"});
+      // WhatsApp para a Thais
+      const dataFmt = date ? `${date.split("-").reverse().join("/")}` : "a confirmar";
+      const horaFmt = time || "a confirmar";
+      await enviarWhatsApp(
+        "14996845521",
+        `🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${horaFmt}\nWhatsApp: ${cadastro.telefone}\n\nAcesse o painel para confirmar.`
+      );
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false);
@@ -910,7 +1053,11 @@ function ClientView() {
       )}
       {step===2&&(
         <div>
-          <ServiceSelector onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setStep(3);}}/>
+          <ServiceSelector onConfirm={(s,m,ex)=>{
+          setService(s);setModality(m);setExtras(ex||[]);
+          const skip = s?.grupo==="cofrinho"||s?.grupo==="vale";
+          setStep(skip?4:3);
+        }}/>
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
       )}
