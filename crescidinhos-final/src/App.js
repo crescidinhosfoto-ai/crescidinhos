@@ -947,10 +947,6 @@ function ClientePanel() {
 
 // ─── CLIENT BOOKING FLOW ──────────────────────────────────────────
 function ClientView() {
-  const STEPS_NORMAL = ["Cadastro","Serviço","Data","Confirmar"];
-  const STEPS_DIRETO = ["Cadastro","Serviço","Confirmar"];
-  const semAgenda = service?.grupo === "cofrinho" || service?.grupo === "vale";
-  const STEPS = semAgenda ? STEPS_DIRETO : STEPS_NORMAL;
   const [step,setStep]=useState(1);
   const [service,setService]=useState(null);
   const [modality,setModality]=useState(null);
@@ -964,6 +960,10 @@ function ClientView() {
   const [cadastro,setCadastro]=useState({nome_mae:"",email:"",telefone:"",cpf:"",temFilho:""});
   const [filhos,setFilhos]=useState([{}]);
   const setCad=(k,v)=>setCadastro(p=>({...p,[k]:v}));
+
+  // Cofrinho e Vale pulam etapa de data
+  const semAgenda = service?.grupo === "cofrinho" || service?.grupo === "vale";
+  const STEPS = semAgenda ? ["Cadastro","Serviço","Confirmar"] : ["Cadastro","Serviço","Data","Confirmar"];
 
   const verificarCliente=async(telefone)=>{
     const tel=telefone.replace(/\D/g,"");
@@ -1056,12 +1056,12 @@ function ClientView() {
           <ServiceSelector onConfirm={(s,m,ex)=>{
           setService(s);setModality(m);setExtras(ex||[]);
           const skip = s?.grupo==="cofrinho"||s?.grupo==="vale";
-          setStep(skip?4:3);
+          setStep(skip?3:3);
         }}/>
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
       )}
-      {step===3&&(
+      {step===3&&!semAgenda&&(
         <div>
           <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:20}}>{service?.icon}</span>
@@ -1087,7 +1087,7 @@ function ClientView() {
           </div>
         </div>
       )}
-      {step===4&&(
+      {(step===4||(step===3&&semAgenda))&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
@@ -1111,7 +1111,7 @@ function ClientView() {
             <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 Em breve a <strong>Crescidinhos</strong> entrará em contato pelo WhatsApp para confirmar seu horário.</p>
           </div>
           <div style={{display:"flex",gap:10}}>
-            <Back onClick={()=>setStep(3)}/>
+            <Back onClick={()=>setStep(semAgenda?2:3)}/>
             <Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
           </div>
         </div>
