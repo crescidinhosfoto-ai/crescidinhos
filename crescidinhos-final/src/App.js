@@ -957,9 +957,39 @@ function ClientView() {
   const [loading,setLoading]=useState(false);
   const [clienteExistente,setClienteExistente]=useState(null);
   const [verificando,setVerificando]=useState(false);
-  const [cadastro,setCadastro]=useState({nome_mae:"",email:"",telefone:"",cpf:"",temFilho:""});
-  const [filhos,setFilhos]=useState([{}]);
+
+  // Recupera cadastro salvo da sessão (persiste ao trocar de aba e voltar)
+  const cadastroSalvo = (() => {
+    try { return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}"); } catch { return {}; }
+  })();
+  const [cadastro,setCadastroRaw]=useState({
+    nome_mae:"", email:"", telefone:"", cpf:"", temFilho:"",
+    ...cadastroSalvo
+  });
+  const [filhos,setFilhosRaw]=useState(()=>{
+    try { return JSON.parse(sessionStorage.getItem("cres_filhos")||"[{}]"); } catch { return [{}]; }
+  });
+
+  const setCadastro = (fn) => {
+    setCadastroRaw(prev => {
+      const next = typeof fn === "function" ? fn(prev) : fn;
+      try { sessionStorage.setItem("cres_cadastro", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+  const setFilhos = (fn) => {
+    setFilhosRaw(prev => {
+      const next = typeof fn === "function" ? fn(prev) : fn;
+      try { sessionStorage.setItem("cres_filhos", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
   const setCad=(k,v)=>setCadastro(p=>({...p,[k]:v}));
+
+  // Limpa sessão ao submeter com sucesso
+  const limparSessao = () => {
+    try { sessionStorage.removeItem("cres_cadastro"); sessionStorage.removeItem("cres_filhos"); } catch {}
+  };
 
   // Cofrinho e Vale pulam etapa de data
   const semAgenda = service?.grupo === "cofrinho" || service?.grupo === "vale";
@@ -971,8 +1001,26 @@ function ClientView() {
     setVerificando(true);
     try{
       const r=await getClienteByTelefone(tel);
-      if(r&&r.length>0){const cl=r[0];setClienteExistente(cl);setCadastro(p=>({...p,nome_mae:cl.nome_mae,email:cl.email,cpf:cl.cpf_mae||""}));if(cl.filhos?.length>0){setCadastro(p=>({...p,temFilho:"Sim"}));setFilhos(cl.filhos);}}
-      else setClienteExistente(null);
+      if(r&&r.length>0){
+        const cl=r[0];
+        setClienteExistente(cl);
+        // Dados do Supabase têm prioridade — sobrescreve sessionStorage
+        const dadosCl = {
+          nome_mae: cl.nome_mae||"",
+          email: cl.email||"",
+          cpf: cl.cpf_mae||"",
+          telefone: tel,
+          temFilho: cl.filhos?.length>0 ? "Sim" : (cl.anamnese?.nome_crianca ? "Sim" : "")
+        };
+        setCadastro(dadosCl);
+        if(cl.filhos?.length>0){
+          setFilhos(cl.filhos);
+        } else if(cl.anamnese?.nome_crianca){
+          setFilhos([cl.anamnese]);
+        }
+      } else {
+        setClienteExistente(null);
+      }
     }catch(e){}
     setVerificando(false);
   };
@@ -1003,6 +1051,7 @@ function ClientView() {
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false);
+    limparSessao();
     setSubmitted(true);
   };
 
