@@ -2,6 +2,8 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularTotal } from "./config";
 import { fetchCalendarEvents } from "./googleCalendar";
+import ContractPanel from "./ContractPanel";
+import ContractPage from "./ContractPage";
 
 // ─── SUPABASE ────────────────────────────────────────────────────
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
@@ -138,7 +140,7 @@ function StepBar({ step, steps }) {
   );
 }
 
-// ─── ANAMNESE (criança individual) ───────────────────────────────
+// ─── ANAMNESE ────────────────────────────────────────────────────
 const ECA = `Em conformidade com o ECA Digital (Lei nº 15.211/2025) e a LGPD: (1) As imagens do menor serão utilizadas apenas para as finalidades autorizadas, zelando pela dignidade da criança. (2) Fica vedada a publicação de fotos que exponham rotina ou localização escolar. (3) Você pode solicitar a remoção de qualquer imagem em até 24 horas.`;
 
 const ANAMNESE_LABELS = {
@@ -294,7 +296,6 @@ function ServiceSelector({ onConfirm }) {
   };
 
   const handleModality = (s,m) => { setSelService(s); setSelModality(m); setSelExtras([]); };
-
   const canContinue = selService && selModality;
   const calc = selModality?.price ? calcularTotal(selModality.price, selExtras, selService?.descontoExtras) : null;
 
@@ -302,7 +303,6 @@ function ServiceSelector({ onConfirm }) {
     <div>
       <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#1a1a1a",marginBottom:4}}>Que tipo de ensaio você deseja?</h3>
       <p style={{fontSize:13,color:"#999",marginBottom:20,lineHeight:1.6}}>Escolha o serviço e depois selecione o que melhor combina com você 🌸</p>
-
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
         {SERVICES.map(s=>{
           const isOpen=openId===s.id;
@@ -317,7 +317,6 @@ function ServiceSelector({ onConfirm }) {
                 </div>
                 <span style={{fontSize:13,color:"#b8967e",flexShrink:0,fontWeight:700,marginLeft:8}}>{isOpen?"▲":"▼"}</span>
               </div>
-
               {isOpen&&(
                 <div style={{borderTop:"1px solid #f0e8e0",padding:"12px 16px 16px"}}>
                   {s.tipo==="vale"?(
@@ -360,16 +359,8 @@ function ServiceSelector({ onConfirm }) {
                       </div>
                     </div>
                   )}
-
-                  {/* Extras após seleção de modalidade */}
                   {s.extras&&selService?.id===s.id&&selModality&&(
-                    <ExtrasPanel
-                      extras={s.extras}
-                      selected={selExtras}
-                      onChange={setSelExtras}
-                      temDesconto={!!s.descontoExtras}
-                      basePrice={selModality.price||0}
-                    />
+                    <ExtrasPanel extras={s.extras} selected={selExtras} onChange={setSelExtras} temDesconto={!!s.descontoExtras} basePrice={selModality.price||0}/>
                   )}
                 </div>
               )}
@@ -377,7 +368,6 @@ function ServiceSelector({ onConfirm }) {
           );
         })}
       </div>
-
       {canContinue&&(
         <div style={{padding:"14px 16px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
           <div>
@@ -390,77 +380,9 @@ function ServiceSelector({ onConfirm }) {
           <button style={{padding:"6px 10px",borderRadius:8,background:"#f0e8e0",border:"none",cursor:"pointer",fontSize:18,color:"#b8967e",lineHeight:1}} onClick={()=>{setSelService(null);setSelModality(null);setOpenId(null);setSelExtras([])}}>✕</button>
         </div>
       )}
-
       <button disabled={!canContinue} onClick={()=>onConfirm(selService,selModality,selExtras)} style={{width:"100%",padding:"14px",borderRadius:12,background:canContinue?"#1a1a1a":"#e8e0d8",color:canContinue?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:canContinue?"pointer":"default",transition:"background .2s"}}>
         {canContinue?`Continuar com ${selService.label} — ${selModality.label} →`:"Selecione um serviço para continuar"}
       </button>
-    </div>
-  );
-}
-
-// ─── SIGNATURE PAD ────────────────────────────────────────────────
-function SignaturePad({ onSave, onCancel }) {
-  const canvasRef = useRef(null);
-  const drawing = useRef(false);
-  const [hasDrawn, setHasDrawn] = useState(false);
-  const getPos=(e,c)=>{const r=c.getBoundingClientRect();return{x:(e.touches?e.touches[0].clientX:e.clientX)-r.left,y:(e.touches?e.touches[0].clientY:e.clientY)-r.top};};
-  const start=(e)=>{e.preventDefault();drawing.current=true;const c=canvasRef.current;const ctx=c.getContext("2d");const p=getPos(e,c);ctx.beginPath();ctx.moveTo(p.x,p.y);};
-  const draw=(e)=>{e.preventDefault();if(!drawing.current)return;const c=canvasRef.current;const ctx=c.getContext("2d");const p=getPos(e,c);ctx.lineWidth=2;ctx.lineCap="round";ctx.strokeStyle="#1a1a1a";ctx.lineTo(p.x,p.y);ctx.stroke();setHasDrawn(true);};
-  const stop=()=>{drawing.current=false;};
-  const clear=()=>{canvasRef.current.getContext("2d").clearRect(0,0,380,160);setHasDrawn(false);};
-  const save=()=>onSave(canvasRef.current.toDataURL("image/png"));
-  return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
-      <div style={{background:"#fff",borderRadius:16,padding:20,width:"100%",maxWidth:420}}>
-        <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 4px"}}>Assinar contrato</h3>
-        <p style={{fontSize:12,color:"#999",margin:"0 0 16px"}}>Assine com o dedo no espaço abaixo</p>
-        <canvas ref={canvasRef} width={380} height={160} style={{width:"100%",height:160,border:"1.5px solid #e0d8d0",borderRadius:8,touchAction:"none",cursor:"crosshair",background:"#fafaf8"}} onMouseDown={start} onMouseMove={draw} onMouseUp={stop} onMouseLeave={stop} onTouchStart={start} onTouchMove={draw} onTouchEnd={stop}/>
-        <div style={{display:"flex",gap:8,marginTop:12}}>
-          <button onClick={clear} style={{flex:1,padding:"10px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:13,color:"#666"}}>Limpar</button>
-          <button onClick={onCancel} style={{flex:1,padding:"10px",borderRadius:8,background:"#fff",border:"1.5px solid #e0d8d0",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
-          <button onClick={save} disabled={!hasDrawn} style={{flex:2,padding:"10px",borderRadius:8,background:hasDrawn?"#1a1a1a":"#e8e0d8",color:hasDrawn?"#fff":"#aaa",border:"none",cursor:hasDrawn?"pointer":"default",fontFamily:"'Cormorant Garamond',serif",fontSize:15}}>Assinar ✍️</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── CONTRACT VIEW ────────────────────────────────────────────────
-function ContractView({ contract, onSigned }) {
-  const [showPad, setShowPad] = useState(false);
-  const [agreed, setAgreed] = useState(false);
-  return (
-    <div>
-      {showPad&&<SignaturePad onSave={(sig)=>{setShowPad(false);onSigned({...contract,signature:sig,signedAt:new Date().toLocaleString("pt-BR")});}} onCancel={()=>setShowPad(false)}/>}
-      <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:20,marginBottom:16}}>
-        <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Contrato de Prestação de Serviços Fotográficos</p>
-        <p style={sec}>Partes</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7,margin:"0 0 8px"}}><strong>CONTRATADA:</strong> {PHOTOGRAPHER.name}, {PHOTOGRAPHER.owner}, CPF {PHOTOGRAPHER.cpf}, {PHOTOGRAPHER.email}</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7,margin:0}}><strong>CONTRATANTE:</strong> {contract.nome_mae}, CPF {contract.cpf_mae||"___.___.___-__"}, {contract.email}</p>
-        <p style={sec}>Objeto</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Prestação de serviços fotográficos — <strong>{contract.service}</strong>{contract.modality?` · ${contract.modality}`:""}{contract.nome_crianca?` · criança: ${contract.nome_crianca}`:""} · data: <strong>{formatDateBR(contract.date)}</strong> às <strong>{contract.time}</strong>.</p>
-        <p style={sec}>Valor e Pagamento</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Valor total: <strong>R$ {Number(contract.valor||0).toFixed(2).replace(".",",")}</strong>, conforme combinado.</p>
-        {contract.pagamento_link&&<p style={{fontSize:13,color:"#444",lineHeight:1.7}}>Link de pagamento: <a href={contract.pagamento_link} target="_blank" rel="noreferrer" style={{color:"#b8967e"}}>{contract.pagamento_link}</a></p>}
-        <p style={sec}>Cancelamento e Reagendamento</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7,whiteSpace:"pre-line"}}>{"• Cancelamento com mais de 7 dias: reembolso integral do sinal.\n• Cancelamento entre 3 e 7 dias: sinal não reembolsável, pode ser usado para reagendamento.\n• Cancelamento com menos de 48h: sinal perdido, nova data sujeita à disponibilidade.\n• Imprevisto da CONTRATADA: nova data sem custos adicionais."}</p>
-        <p style={sec}>Direitos de Imagem</p>
-        <p style={{fontSize:13,color:"#444",lineHeight:1.7}}>A CONTRATANTE autoriza o uso das imagens para portfólio e redes sociais. A remoção pode ser solicitada a qualquer momento, atendida em até 24 horas.</p>
-        <p style={sec}>🔒 ECA Digital — Lei nº 15.211/2025 e LGPD</p>
-        <p style={{fontSize:12,color:"#555",lineHeight:1.7}}>{ECA}</p>
-        {contract.obs&&<><p style={sec}>Observações</p><p style={{fontSize:13,color:"#444",lineHeight:1.7}}>{contract.obs}</p></>}
-        <p style={{fontSize:11,color:"#bbb",marginTop:20}}>Gerado em {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.</p>
-      </div>
-      <label style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:20,cursor:"pointer"}}>
-        <div onClick={()=>setAgreed(!agreed)} style={{width:20,height:20,borderRadius:4,border:"2px solid "+(agreed?"#1a1a1a":"#ccc"),background:agreed?"#1a1a1a":"#fff",flexShrink:0,marginTop:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {agreed&&<span style={{color:"#fff",fontSize:12}}>✓</span>}
-        </div>
-        <span style={{fontSize:13,color:"#444",lineHeight:1.6}}>Li e concordo com todos os termos deste contrato.</span>
-      </label>
-      {contract.signature
-        ?<div style={{padding:16,background:"#e6f4ea",borderRadius:12,textAlign:"center"}}><p style={{fontSize:14,color:"#2e7d32",fontWeight:600,margin:"0 0 4px"}}>✅ Contrato assinado!</p><p style={{fontSize:12,color:"#555",margin:0}}>Assinado em {contract.signedAt}</p><img src={contract.signature} alt="assinatura" style={{marginTop:8,maxWidth:200,opacity:0.7}}/></div>
-        :<button onClick={()=>setShowPad(true)} disabled={!agreed} style={{width:"100%",padding:14,borderRadius:10,background:agreed?"#1a1a1a":"#e8e0d8",color:agreed?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:agreed?"pointer":"default"}}>✍️ Assinar contrato</button>
-      }
     </div>
   );
 }
@@ -565,7 +487,7 @@ function AgendaView({ auth, onVerCliente }) {
                         {hora&&<span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{hora}</span>}
                         <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{evento.summary?.replace("📸 ","")}</span>
                       </div>
-                      {ag&&(<div><p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico")+"("+cl.idade+")":cl.nome_mae}</p>{ag.modalidade&&<p style={{margin:"0 0 4px",fontSize:11,color:"#b8967e"}}>📌 {ag.modalidade}</p>}<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>{cl.anamnese&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}</div></div>)}
+                      {ag&&(<div><p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico")+" ("+cl.idade+")":cl.nome_mae}</p>{ag.modalidade&&<p style={{margin:"0 0 4px",fontSize:11,color:"#b8967e"}}>📌 {ag.modalidade}</p>}<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>{cl.anamnese&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}</div></div>)}
                       {!ag&&evento.description&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa",lineHeight:1.5}}>{evento.description.substring(0,80)}</p>}
                     </div>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
@@ -593,9 +515,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [tab,setTab]=useState("agendamentos");
   const [filter,setFilter]=useState("Todos");
   const [mesFiltro,setMesFiltro]=useState("todos");
-  const [showContract,setShowContract]=useState(false);
   const [showNew,setShowNew]=useState(false);
-  const [newClient,setNewClient]=useState({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
+  const [newClient,setNewClient]=useState({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
   const [newAnamnese,setNewAnamnese]=useState({});
   const [salvando,setSalvando]=useState(false);
 
@@ -629,10 +550,10 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  if(showContract&&agendamento) return(<ContractView contract={{...agendamento,nome_mae:agendamento.clientes?.nome_mae,nome_crianca:agendamento.clientes?.nome_crianca,email:agendamento.clientes?.email,service:agendamento.servico,modality:agendamento.modalidade,date:agendamento.data,time:agendamento.hora}} onSigned={async(sc)=>{await update(agendamento.id,{signature:sc.signature,signed_at:sc.signedAt,status:"Contrato"});setShowContract(false);}}/>);
-
+  // ── Detalhe do agendamento ─────────────────────────────────────
   if(agendamento){
-    const st=STATUS_COLORS[agendamento.status]||STATUS_COLORS["Pendente"];const cl=agendamento.clientes||{};
+    const st=STATUS_COLORS[agendamento.status]||STATUS_COLORS["Pendente"];
+    const cl=agendamento.clientes||{};
     const camposAnamnese=Object.entries(cl.anamnese||{}).filter(([k,v])=>v&&v!==""&&!["nome_mae","email","phone","nome_crianca","idade","atipico"].includes(k));
     return(
       <div>
@@ -662,21 +583,22 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           <Field label="Link de pagamento (InfinityPay)"><input style={inp} type="url" placeholder="Cole aqui o link" value={agendamento.pagamento_link||""} onChange={e=>update(agendamento.id,{pagamento_link:e.target.value})}/></Field>
           {agendamento.pagamento_link&&<a href={agendamento.pagamento_link} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px",borderRadius:8,background:"#e3f2fd",color:"#1565C0",textDecoration:"none",fontSize:13,fontWeight:600}}>🔗 Abrir link de pagamento</a>}
         </div>
+
+        {/* ── BLOCO CONTRATO — usa ContractPanel ── */}
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
-          <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Contrato</p>
-          {agendamento.signature?<div style={{display:"flex",alignItems:"center",gap:10}}><span style={{fontSize:13,color:"#2e7d32"}}>✅ Assinado em {agendamento.signed_at}</span></div>:<div>
-            <p style={{fontSize:12,color:"#888",margin:"0 0 10px"}}>Contrato ainda não assinado.</p>
-            <Field label="CPF da cliente"><input style={inp} placeholder="000.000.000-00" value={agendamento.cpf_mae||""} onChange={e=>update(agendamento.id,{cpf_mae:e.target.value})}/></Field>
-            <Field label="Valor do ensaio (R$)"><input style={inp} type="number" value={agendamento.valor||""} onChange={e=>update(agendamento.id,{valor:e.target.value})}/></Field>
-            <Field label="Observações"><textarea style={{...inp,resize:"vertical"}} rows={2} value={agendamento.obs||""} onChange={e=>update(agendamento.id,{obs:e.target.value})}/></Field>
-            <button onClick={()=>setShowContract(true)} style={{width:"100%",padding:12,borderRadius:10,background:"#7b1fa2",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:"pointer"}}>📄 Gerar e assinar contrato</button>
-          </div>}
+          <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📄 Contrato</p>
+          <ContractPanel
+            agendamento={agendamento}
+            onUpdate={(patch) => update(agendamento.id, patch)}
+          />
         </div>
+
         <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
       </div>
     );
   }
 
+  // ── Detalhe do cliente ─────────────────────────────────────────
   if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
     return(
@@ -686,7 +608,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 4px"}}>{cliente.nome_mae}</h3>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>{[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
         </div>
-        {/* Filhos */}
         {cliente.filhos&&cliente.filhos.length>0&&(
           <div style={{marginBottom:12}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 8px"}}>👶 Filhos cadastrados</p>
@@ -706,6 +627,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
+  // ── Lista principal ────────────────────────────────────────────
   return(
     <div>
       {showNew&&(
@@ -725,8 +647,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             <p style={sec}>👶 Dados da criança (opcional)</p>
             <AnamneseForm data={newAnamnese} onChange={setNewAnamnese} titulo={null}/>
             <div style={{display:"flex",gap:10,marginTop:24}}>
-              <button onClick={()=>{setShowNew(false);setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});}} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
-              <button disabled={salvando} onClick={async()=>{setSalvando(true);try{const ex=await getClienteByTelefone(newClient.telefone);let cid;const filhos=newAnamnese.nome_crianca?[newAnamnese]:[];if(ex&&ex.length>0){cid=ex[0].id;await atualizarCliente(cid,{nome_mae:newClient.nome_mae,email:newClient.email,cpf_mae:newClient.cpf_mae,filhos,anamnese:newAnamnese,updated_at:new Date().toISOString()});}else{const nc=await criarCliente({nome_mae:newClient.nome_mae,email:newClient.email,telefone:newClient.telefone,cpf_mae:newClient.cpf_mae,atipico:newAnamnese.atipico==="Sim",filhos,anamnese:newAnamnese});cid=nc[0].id;}const svc=SERVICES.find(s=>s.label===newClient.servico);const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";await criarAgendamento({cliente_id:cid,servico:newClient.servico,servico_id:svc?.id||null,modalidade:modLabel,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});setShowNew(false);setNewClient({nome_mae:"",nome_crianca:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});carregar();}catch(e){alert("Erro: "+e.message);}finally{setSalvando(false);}}} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:salvando?"default":"pointer"}}>{salvando?"Salvando...":"Salvar agendamento"}</button>
+              <button onClick={()=>{setShowNew(false);setNewClient({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});}} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
+              <button disabled={salvando} onClick={async()=>{setSalvando(true);try{const ex=await getClienteByTelefone(newClient.telefone);let cid;const filhos=newAnamnese.nome_crianca?[newAnamnese]:[];if(ex&&ex.length>0){cid=ex[0].id;await atualizarCliente(cid,{nome_mae:newClient.nome_mae,email:newClient.email,cpf_mae:newClient.cpf_mae,filhos,anamnese:newAnamnese,updated_at:new Date().toISOString()});}else{const nc=await criarCliente({nome_mae:newClient.nome_mae,email:newClient.email,telefone:newClient.telefone,cpf_mae:newClient.cpf_mae,atipico:newAnamnese.atipico==="Sim",filhos,anamnese:newAnamnese});cid=nc[0].id;}const svc=SERVICES.find(s=>s.label===newClient.servico);const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";await criarAgendamento({cliente_id:cid,servico:newClient.servico,servico_id:svc?.id||null,modalidade:modLabel,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente"});setShowNew(false);setNewClient({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});carregar();}catch(e){alert("Erro: "+e.message);}finally{setSalvando(false);}}} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:salvando?"default":"pointer"}}>{salvando?"Salvando...":"Salvar agendamento"}</button>
             </div>
           </div>
         </div>
@@ -758,22 +680,17 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
 // ─── PAINEL DO CLIENTE ────────────────────────────────────────────
 function ClientePanel() {
   const [email,setEmail]=useState("");
-  const [enviado,setEnviado]=useState(false);
   const [logado,setLogado]=useState(null);
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("agendamentos");
 
-  // Simula magic link — em produção, usar Supabase Auth
-  const enviarLink = async () => {
+  const entrar = async () => {
     if(!email) return;
     setLoading(true);
     try {
-      // Verifica se cliente existe
       const r = await getClienteByEmail(email);
       if(r&&r.length>0){
-        // Em produção: Supabase Auth envia magic link
-        // Por enquanto, simula login direto
         const cl = r[0];
         setLogado(cl);
         const ags = await getAgendamentosByCliente(cl.id);
@@ -783,7 +700,6 @@ function ClientePanel() {
       }
     } catch(e){ console.error(e); }
     setLoading(false);
-    setEnviado(true);
   };
 
   if(!logado) return (
@@ -793,13 +709,13 @@ function ClientePanel() {
       <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Acesse seus agendamentos, contratos e Cofrinho 🌸</p>
       <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:16}}>
         <Field label="Seu e-mail cadastrado">
-          <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>setEmail(e.target.value)}/>
+          <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&entrar()}/>
         </Field>
-        <button onClick={enviarLink} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
+        <button onClick={entrar} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
           {loading?"Verificando...":"Acessar minha área →"}
         </button>
       </div>
-      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? <br/>Faça um agendamento e a Crescidinhos cria seu perfil 🤍</p>
+      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro?<br/>Faça um agendamento e a Crescidinhos cria seu perfil 🤍</p>
     </div>
   );
 
@@ -812,15 +728,13 @@ function ClientePanel() {
           <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,color:"#1a1a1a"}}>Olá, {logado.nome_mae?.split(" ")[0]}! 🌸</p>
           <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{logado.email}</p>
         </div>
-        <button onClick={()=>{setLogado(null);setEnviado(false);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
+        <button onClick={()=>{setLogado(null);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
-
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
         {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],cofrinho?["cofrinho","💰 Cofrinho"]:null,["perfil","👤 Perfil"]].filter(Boolean).map(([t,l])=>
           <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
         )}
       </div>
-
       {tab==="agendamentos"&&(
         <div>
           {agendamentos.length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum ensaio ainda</p><p style={{fontSize:12,color:"#bbb"}}>Que tal agendar o primeiro? 🌸</p></div>}
@@ -839,20 +753,21 @@ function ClientePanel() {
           );})}
         </div>
       )}
-
       {tab==="contratos"&&(
         <div>
-          {agendamentos.filter(a=>a.signature||a.status==="Contrato").length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📄</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum contrato assinado ainda</p></div>}
+          {agendamentos.filter(a=>a.signature||a.status==="Contrato").length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📄</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum contrato ainda</p></div>}
           {agendamentos.filter(a=>a.signature||a.status==="Contrato").map(a=>(
             <div key={a.id} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:10}}>
               <p style={{margin:0,fontSize:14,fontWeight:700}}>{a.servico} — {a.modalidade}</p>
-              <p style={{margin:"4px 0 8px",fontSize:12,color:"#888"}}>{formatDateBR(a.data)}</p>
-              {a.signature?<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#2e7d32",fontWeight:600}}>✅ Assinado em {a.signed_at}</span></div>:<span style={{fontSize:12,color:"#f57c00"}}>⏳ Aguardando assinatura</span>}
+              <p style={{margin:"4px 0 8px",fontSize:12,color:"#888"}}>{formatDateBR(a.data)} · Nº {a.contrato_numero||"—"}</p>
+              {a.signature
+                ?<span style={{fontSize:12,color:"#2e7d32",fontWeight:600}}>✅ Assinado em {a.signed_at}</span>
+                :<a href={`https://app.crescidinhosfoto.com.br/contrato/${a.id}`} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#72243E",fontWeight:600}}>✍️ Assinar contrato →</a>
+              }
             </div>
           ))}
         </div>
       )}
-
       {tab==="cofrinho"&&cofrinho&&(
         <div>
           <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,marginBottom:16,color:"#fff"}}>
@@ -860,10 +775,10 @@ function ClientePanel() {
             <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
             <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
-            <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate disponível após 3 meses</p>
+            <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
           </div>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Regras do Cofrinho</p>
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Regras</p>
             {[["Resgate mínimo","3 meses"],["Elegível em","Ensaios e fotos extras"],["Não elegível em","Eventos"],["Cancelamento","Sem reembolso do saldo"]].map(([k,v])=>(
               <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{color:"#888"}}>{k}</span><span style={{fontWeight:600,color:"#1a1a1a"}}>{v}</span>
@@ -872,7 +787,6 @@ function ClientePanel() {
           </div>
         </div>
       )}
-
       {tab==="perfil"&&(
         <div>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
@@ -911,52 +825,40 @@ function ClientView() {
   const [loading,setLoading]=useState(false);
   const [clienteExistente,setClienteExistente]=useState(null);
   const [verificando,setVerificando]=useState(false);
+  const [cadastro,setCadastro]=useState({nome_mae:"",email:"",telefone:"",cpf:"",temFilho:""});
+  const [filhos,setFilhos]=useState([{}]);
+  const setCad=(k,v)=>setCadastro(p=>({...p,[k]:v}));
 
-  // STEP 1 — Cadastro
-  const [cadastro,setCadastro]=useState({ nome_mae:"", email:"", telefone:"", cpf:"", temFilho:"" });
-  const [filhos,setFilhos]=useState([{}]); // array de anamneses
-
-  const setCad = (k,v) => setCadastro(p=>({...p,[k]:v}));
-
-  const verificarCliente = async (telefone) => {
-    const tel = telefone.replace(/\D/g,"");
-    if(tel.length<10) return;
+  const verificarCliente=async(telefone)=>{
+    const tel=telefone.replace(/\D/g,"");
+    if(tel.length<10)return;
     setVerificando(true);
-    try {
-      const r = await getClienteByTelefone(tel);
-      if(r&&r.length>0){
-        const cl=r[0];
-        setClienteExistente(cl);
-        setCadastro(p=>({...p,nome_mae:cl.nome_mae,email:cl.email,cpf:cl.cpf_mae||""}));
-        if(cl.filhos?.length>0){ setCadastro(p=>({...p,temFilho:"Sim"})); setFilhos(cl.filhos); }
-      } else { setClienteExistente(null); }
-    } catch(e){}
+    try{
+      const r=await getClienteByTelefone(tel);
+      if(r&&r.length>0){const cl=r[0];setClienteExistente(cl);setCadastro(p=>({...p,nome_mae:cl.nome_mae,email:cl.email,cpf:cl.cpf_mae||""}));if(cl.filhos?.length>0){setCadastro(p=>({...p,temFilho:"Sim"}));setFilhos(cl.filhos);}}
+      else setClienteExistente(null);
+    }catch(e){}
     setVerificando(false);
   };
 
-  const addFilho = () => setFilhos(f=>[...f,{}]);
-  const removeFilho = (i) => setFilhos(f=>f.filter((_,idx)=>idx!==i));
-  const updateFilho = (i,data) => setFilhos(f=>f.map((x,idx)=>idx===i?data:x));
+  const addFilho=()=>setFilhos(f=>[...f,{}]);
+  const removeFilho=(i)=>setFilhos(f=>f.filter((_,idx)=>idx!==i));
+  const updateFilho=(i,data)=>setFilhos(f=>f.map((x,idx)=>idx===i?data:x));
 
-  const handleSubmit = async () => {
+  const handleSubmit=async()=>{
     setLoading(true);
-    try {
-      const tel = cadastro.telefone.replace(/\D/g,"");
+    try{
+      const tel=cadastro.telefone.replace(/\D/g,"");
       let cid;
-      const ex = await getClienteByTelefone(tel);
-      const filhosData = cadastro.temFilho==="Sim" ? filhos : [];
-      const anamnese = filhosData[0]||{};
-      if(ex&&ex.length>0){
-        cid=ex[0].id;
-        await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()});
-      } else {
-        const nc=await criarCliente({nome_mae:cadastro.nome_mae,email:cadastro.email,telefone:tel,cpf_mae:cadastro.cpf,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
-        cid=nc[0].id;
-      }
-      const calc = service?.descontoExtras ? calcularTotal(modality?.price||0,extras,true) : {total:modality?.price||0};
+      const ex=await getClienteByTelefone(tel);
+      const filhosData=cadastro.temFilho==="Sim"?filhos:[];
+      const anamnese=filhosData[0]||{};
+      if(ex&&ex.length>0){cid=ex[0].id;await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()});}
+      else{const nc=await criarCliente({nome_mae:cadastro.nome_mae,email:cadastro.email,telefone:tel,cpf_mae:cadastro.cpf,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});cid=nc[0].id;}
+      const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({cliente_id:cid,servico:service?.label,servico_id:service?.id||null,modalidade:modality?.label,modalidade_id:modality?.id||null,data:date,hora:time,valor:calc.total||modality?.price||null,status:"Pendente",pagamento_status:"Pendente"});
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total})}).catch(()=>{});
-    } catch(e){ console.error(e); }
+    }catch(e){console.error(e);}
     setLoading(false);
     setSubmitted(true);
   };
@@ -964,7 +866,7 @@ function ClientView() {
   const Btn=({disabled,onClick,label})=><button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>;
   const Back=({onClick})=><button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>;
 
-  if(submitted) return(
+  if(submitted)return(
     <div style={{textAlign:"center",padding:"48px 16px"}}>
       <div style={{fontSize:52,marginBottom:16}}>🌸</div>
       <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Solicitação enviada!</h2>
@@ -975,71 +877,43 @@ function ClientView() {
     </div>
   );
 
-  const cadastroOk = cadastro.nome_mae&&cadastro.email&&cadastro.telefone&&cadastro.temFilho;
-
+  const cadastroOk=cadastro.nome_mae&&cadastro.email&&cadastro.telefone&&cadastro.temFilho;
   return(
     <div>
       <StepBar step={step} steps={STEPS}/>
-
-      {/* STEP 1 — Cadastro */}
       {step===1&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#1a1a1a",marginBottom:4}}>Seus dados</h3>
           <p style={{fontSize:13,color:"#999",marginBottom:20,lineHeight:1.6}}>Preenchido uma vez, salvo para sempre 🌸</p>
-
-          <Field label="WhatsApp" required>
-            <input style={inp} type="tel" value={cadastro.telefone} onChange={e=>{setCad("telefone",e.target.value);verificarCliente(e.target.value);}} placeholder="(00) 00000-0000"/>
-          </Field>
+          <Field label="WhatsApp" required><input style={inp} type="tel" value={cadastro.telefone} onChange={e=>{setCad("telefone",e.target.value);verificarCliente(e.target.value);}} placeholder="(00) 00000-0000"/></Field>
           {verificando&&<p style={{fontSize:11,color:"#b8967e",margin:"-8px 0 8px"}}>Verificando cadastro...</p>}
-          {clienteExistente&&(
-            <div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginTop:-8,marginBottom:12}}>
-              <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro. Confirme seus dados abaixo.</p>
-            </div>
-          )}
-
+          {clienteExistente&&<div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginTop:-8,marginBottom:12}}><p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro.</p></div>}
           <Field label="Nome completo" required><input style={inp} value={cadastro.nome_mae} onChange={e=>setCad("nome_mae",e.target.value)} placeholder="Seu nome completo"/></Field>
           <Field label="E-mail" required><input style={inp} type="email" value={cadastro.email} onChange={e=>setCad("email",e.target.value)} placeholder="seu@email.com"/></Field>
           <Field label="CPF"><input style={inp} value={cadastro.cpf} onChange={e=>setCad("cpf",e.target.value)} placeholder="000.000.000-00"/></Field>
-
           <Field label="Este ensaio é para uma criança?" required>
             <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>{setCad("temFilho",v);if(v==="Não")setFilhos([{}]);}}/>
           </Field>
-
           {cadastro.temFilho==="Sim"&&(
             <div>
               {filhos.map((f,i)=>(
                 <div key={i} style={{position:"relative"}}>
-                  {filhos.length>1&&(
-                    <button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>
-                  )}
-                  <AnamneseForm
-                    data={f}
-                    onChange={data=>updateFilho(i,data)}
-                    titulo={filhos.length>1?`👶 Filho ${i+1}`:null}
-                  />
+                  {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>}
+                  <AnamneseForm data={f} onChange={data=>updateFilho(i,data)} titulo={filhos.length>1?`👶 Filho ${i+1}`:null}/>
                 </div>
               ))}
-              <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>
-                + Adicionar outro filho
-              </button>
+              <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>+ Adicionar outro filho</button>
             </div>
           )}
-
-          <button disabled={!cadastroOk} onClick={()=>setStep(2)} style={{width:"100%",padding:"14px",borderRadius:12,background:cadastroOk?"#1a1a1a":"#e8e0d8",color:cadastroOk?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?"pointer":"default"}}>
-            Continuar →
-          </button>
+          <button disabled={!cadastroOk} onClick={()=>setStep(2)} style={{width:"100%",padding:"14px",borderRadius:12,background:cadastroOk?"#1a1a1a":"#e8e0d8",color:cadastroOk?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?"pointer":"default"}}>Continuar →</button>
         </div>
       )}
-
-      {/* STEP 2 — Serviço */}
       {step===2&&(
         <div>
           <ServiceSelector onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setStep(3);}}/>
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
       )}
-
-      {/* STEP 3 — Data e hora */}
       {step===3&&(
         <div>
           <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
@@ -1066,23 +940,13 @@ function ClientView() {
           </div>
         </div>
       )}
-
-      {/* STEP 4 — Confirmar */}
       {step===4&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:16}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 10px",letterSpacing:"1px",textTransform:"uppercase"}}>Resumo</p>
-            {[
-              ["Serviço",`${service?.icon} ${service?.label}`],
-              ["Modalidade",modality?.label],
-              ["Data",`${formatDateBR(date)} às ${time}`],
-              ["Nome",cadastro.nome_mae],
-              ["E-mail",cadastro.email],
-              extras.length>0?["Adicionais",extras.map(e=>e.label).join(", ")]:null,
-              modality?.price?["Valor estimado",`R$ ${calcularTotal(modality.price,extras,!!service?.descontoExtras).total.toLocaleString("pt-BR")}`]:null,
-            ].filter(Boolean).map(([k,v])=>v&&(
+            {[["Serviço",`${service?.icon} ${service?.label}`],["Modalidade",modality?.label],["Data",`${formatDateBR(date)} às ${time}`],["Nome",cadastro.nome_mae],["E-mail",cadastro.email],extras.length>0?["Adicionais",extras.map(e=>e.label).join(", ")]:null,modality?.price?["Valor estimado",`R$ ${calcularTotal(modality.price,extras,!!service?.descontoExtras).total.toLocaleString("pt-BR")}`]:null].filter(Boolean).map(([k,v])=>v&&(
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{fontSize:12,color:"#999"}}>{k}</span>
                 <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
@@ -1095,11 +959,7 @@ function ClientView() {
               </div>
             ))}
           </div>
-          {extras.length>0&&service?.descontoExtras&&(
-            <div style={{padding:10,background:"#e6f4ea",border:"1px solid #C0DD97",borderRadius:10,marginBottom:12,fontSize:12,color:"#27500A",fontWeight:500}}>
-              🎉 Desconto de 10% aplicado por incluir adicionais!
-            </div>
-          )}
+          {extras.length>0&&service?.descontoExtras&&<div style={{padding:10,background:"#e6f4ea",border:"1px solid #C0DD97",borderRadius:10,marginBottom:12,fontSize:12,color:"#27500A",fontWeight:500}}>🎉 Desconto de 10% aplicado!</div>}
           <div style={{padding:12,background:"#fdf8f5",border:"1.5px solid #f0ddd0",borderRadius:10,marginBottom:16}}>
             <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 Em breve a <strong>Crescidinhos</strong> entrará em contato pelo WhatsApp para confirmar seu horário.</p>
           </div>
@@ -1159,6 +1019,11 @@ function PhotographerPanel({ auth, onLogout }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
+  // ── ROTA DE CONTRATO — detecta /contrato/:id na URL ──────────
+  if (window.location.pathname.startsWith("/contrato/")) {
+    return <ContractPage />;
+  }
+
   const [view,setView]=useState("client");
   const [auth,setAuth]=useState(null);
   return(
