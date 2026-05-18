@@ -802,7 +802,6 @@ function confirmSigResp() {
 }` : ""}
 </script>`;
 }
-}
 
 // ══════════════════════════════════════════════════════════════════
 // GERADOR PRINCIPAL — monta o HTML completo
