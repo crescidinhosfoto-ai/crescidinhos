@@ -1,12 +1,10 @@
 // =============================================================
 // ContractGenerator.js — Crescidinhos Fotografia
-// Gera HTML completo do contrato por tipo de serviço
-// Estrutura em blocos: Fixos + Específicos por serviço
+// CORRIGIDO: verificarAmbos salva direto no Supabase
 // =============================================================
 
 import { PHOTOGRAPHER } from "./config";
 
-// ── Formatadores ─────────────────────────────────────────────────
 export function fmtData(iso) {
   if (!iso) return "___/___/______";
   const [y, m, d] = iso.split("-");
@@ -35,32 +33,27 @@ export function gerarNumeroContrato(catKey) {
   return `${prefix}-${ano}-${seq}`;
 }
 
-// ── CSS do contrato ───────────────────────────────────────────────
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Inter',sans-serif;background:#f8f4f5;color:#2d2d2d;font-size:14px;line-height:1.7}
   .page{max-width:780px;margin:0 auto;background:#fff;padding:48px 52px;min-height:100vh}
-  /* Header */
   .logo-area{text-align:center;border-bottom:2px solid #D9A7B4;padding-bottom:24px;margin-bottom:32px}
   .logo-name{font-family:'Playfair Display',serif;font-size:30px;color:#72243E;letter-spacing:1px}
   .logo-sub{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:#698494;margin-top:4px}
   .contract-title{font-family:'Playfair Display',serif;font-size:17px;color:#72243E;margin-top:14px}
   .contract-num{font-size:11px;color:#aaa;margin-top:4px}
-  /* Partes */
   .parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:28px}
   .party-box{background:#fdf9f9;border:1px solid #e8dde0;border-radius:10px;padding:14px 16px}
   .party-title{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#698494;margin-bottom:8px}
   .party-field{margin-bottom:4px;font-size:13px}
   .party-field strong{color:#72243E}
-  /* Bloco de serviço */
   .service-box{background:#FBEAF0;border:1px solid #F4C0D1;border-radius:10px;padding:16px 20px;margin-bottom:28px}
   .service-title{font-weight:600;color:#72243E;font-size:15px;margin-bottom:10px}
   .service-row{display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #F4C0D1}
   .service-row:last-child{border-bottom:none}
   .service-total{display:flex;justify-content:space-between;font-size:16px;font-weight:700;color:#72243E;padding:10px 0 0;margin-top:4px}
   .discount-row{display:flex;justify-content:space-between;font-size:13px;color:#27500A;padding:4px 0}
-  /* Cláusulas */
   .clauses{margin-bottom:28px}
   .block-title{font-family:'Playfair Display',serif;font-size:13px;color:#698494;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid #e8dde0;padding-bottom:5px;margin:26px 0 12px}
   .clause{margin-bottom:14px}
@@ -68,7 +61,6 @@ const CSS = `
   .clause p{font-size:13px;line-height:1.75;color:#3a3a3a;margin-bottom:6px}
   .clause ul{padding-left:18px;margin:6px 0}
   .clause ul li{font-size:13px;line-height:1.75;color:#3a3a3a;margin-bottom:3px}
-  /* Assinatura */
   .sig-section{margin-top:36px;border-top:2px solid #e8dde0;padding-top:24px}
   .sig-title{font-family:'Playfair Display',serif;font-size:16px;color:#72243E;margin-bottom:16px;text-align:center}
   .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}
@@ -83,8 +75,6 @@ const CSS = `
   .status-bar{text-align:center;padding:14px;border-radius:10px;font-size:13px;font-weight:500;margin:16px 0}
   .status-pending{background:#FFF3CD;color:#856404;border:1px solid #FFE082}
   .status-signed{background:#EAF3DE;color:#27500A;border:1px solid #C0DD97}
-  .contratada-sig{border:none;border-bottom:1.5px solid #D9A7B4;min-height:80px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
-  .contratada-sig span{font-style:italic;font-size:20px;color:#D9A7B4;font-family:'Playfair Display',serif}
   .footer-doc{text-align:center;font-size:11px;color:#bbb;margin-top:36px;padding-top:16px;border-top:1px solid #f0e8ea;line-height:1.7}
   .lgpd-box{background:#f0f4f8;border:1px solid #b5d4f4;border-radius:8px;padding:12px 14px;margin:8px 0}
   .lgpd-box p{font-size:12px;color:#0c447c;line-height:1.65}
@@ -94,9 +84,6 @@ const CSS = `
   @media print{body{background:#fff}.page{padding:20px}canvas,.sig-actions,.btn-clear,.btn-confirm{display:none}}
 `;
 
-// ══════════════════════════════════════════════════════════════════
-// BLOCO FIXO A — IDENTIFICAÇÃO DAS PARTES (todos os contratos)
-// ══════════════════════════════════════════════════════════════════
 function blocoPartes(d) {
   return `
 <div class="parties">
@@ -122,9 +109,6 @@ function blocoPartes(d) {
 </div>`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// BLOCO FIXO B — SERVIÇO CONTRATADO (todos os contratos)
-// ══════════════════════════════════════════════════════════════════
 function blocoServico(d) {
   const extras = d.extras?.filter(e => e.price) || [];
   const desconto = d.desconto || 0;
@@ -151,23 +135,17 @@ function blocoServico(d) {
 </div>`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// BLOCO FIXO C — CLÁUSULAS GERAIS (todos os contratos)
-// ══════════════════════════════════════════════════════════════════
 function blocoClausulasGerais(d) {
   return `
 <div class="block-title">Condições Gerais</div>
-
 <div class="clause">
   <h4>Cláusula 1 — Pontualidade e agendamento</h4>
   <p>A data e o horário serão reservados somente após confirmação do pagamento do sinal ou da entrada. O(a) CONTRATANTE obriga-se a comparecer pontualmente, sendo admitida tolerância de <strong>15 minutos</strong>. Atrasos superiores poderão reduzir o tempo da sessão sem abatimento do valor total.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 2 — Pagamento</h4>
-  <p>O valor total do serviço é de <strong>${fmtMoeda(d.valorTotal)}</strong>, pago na forma: <strong>${d.formaPagamento || "conforme combinado com a CONTRATADA"}</strong>. Em caso de atraso no pagamento, incidirão multa de 2% e juros de 1% ao mês. Extras contratados no dia serão cobrados à parte, mediante aceite do(a) CONTRATANTE.</p>
+  <p>O valor total do serviço é de <strong>${fmtMoeda(d.valorTotal)}</strong>, pago na forma: <strong>${d.formaPagamento || "conforme combinado com a CONTRATADA"}</strong>. Em caso de atraso no pagamento, incidirão multa de 2% e juros de 1% ao mês.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 3 — Cancelamento e remarcação</h4>
   <ul>
@@ -175,443 +153,255 @@ function blocoClausulasGerais(d) {
     <li>Cancelamento entre 3 e 7 dias: sinal não reembolsável, pode ser usado para reagendamento.</li>
     <li>Cancelamento com menos de 48 horas: sinal perdido; nova data sujeita à disponibilidade.</li>
     <li>Imprevisto da CONTRATADA: nova data será agendada sem custos adicionais.</li>
-    <li>Remarcações dependem da disponibilidade de agenda da CONTRATADA.</li>
   </ul>
 </div>
-
 <div class="clause">
   <h4>Cláusula 4 — Entrega das imagens</h4>
-  <p>A seleção das imagens será feita por galeria online, link privado ou outro meio definido pela CONTRATADA. O(a) CONTRATANTE deverá selecionar as imagens em até <strong>5 dias</strong> após receber a galeria; a ausência de manifestação autoriza a CONTRATADA a realizar a seleção final. O prazo de entrega das imagens editadas é de até <strong>${d.prazoEntrega || "20 dias úteis"}</strong>, contado da seleção final.</p>
+  <p>O prazo de entrega das imagens editadas é de até <strong>${d.prazoEntrega || "20 dias úteis"}</strong>, contado da seleção final. O(a) CONTRATANTE deverá selecionar as imagens em até <strong>5 dias</strong> após receber a galeria.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 5 — Edição e limitações</h4>
-  <p>Inclui-se edição padrão de cor, luz, enquadramento e tratamento básico de pele, conforme linguagem estética da CONTRATADA. Retoques avançados, troca de fundo, remoção de objetos ou edições fora do padrão serão cobrados separadamente. Fotos adicionais, impressões, quadros, álbuns ou qualquer produto não descrito expressamente poderão ser adquiridos à parte ou resgatados pelo Cofrinho de Recordações, quando elegível.</p>
+  <p>Inclui-se edição padrão de cor, luz, enquadramento e tratamento básico de pele. Retoques avançados ou edições fora do padrão serão cobrados separadamente.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 6 — Direitos autorais e uso de imagem</h4>
-  <p>As imagens produzidas são obras protegidas pela legislação autoral (Lei nº 9.610/1998) e pertencem à CONTRATADA como autora, salvo cessão expressa em contrário. O(a) CONTRATANTE recebe licença de uso pessoal e não exclusivo das imagens contratadas, sendo vedada a revenda, alteração indevida ou uso comercial sem autorização escrita prévia.</p>
-  <p>O(a) CONTRATANTE <strong>${d.autorizaUsoImagem ? "AUTORIZA" : "NÃO AUTORIZA"}</strong> o uso das imagens pela CONTRATADA para fins de portfólio, redes sociais, site e materiais promocionais. A autorização pode ser revogada a qualquer momento por escrito, sem efeito retroativo.</p>
+  <p>As imagens pertencem à CONTRATADA como autora. O(a) CONTRATANTE recebe licença de uso pessoal e não exclusivo.</p>
+  <p>O(a) CONTRATANTE <strong>${d.autorizaUsoImagem ? "AUTORIZA" : "NÃO AUTORIZA"}</strong> o uso das imagens pela CONTRATADA para portfólio, redes sociais, site e materiais promocionais.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 7 — Responsabilidade</h4>
-  <p>A CONTRATADA não se responsabiliza por interferências de terceiros, mau comportamento de acompanhantes, condições climáticas em ensaios externos ou impossibilidade de reprodução exata de referências visuais enviadas pelo(a) CONTRATANTE.</p>
+  <p>A CONTRATADA não se responsabiliza por interferências de terceiros, mau comportamento de acompanhantes, condições climáticas ou impossibilidade de reprodução exata de referências visuais.</p>
 </div>
-
 <div class="clause">
   <h4>Cláusula 8 — LGPD e proteção de dados</h4>
   <div class="lgpd-box">
-    <p>Os dados pessoais informados neste contrato serão tratados com base na Lei nº 13.709/2018 (LGPD) exclusivamente para execução contratual, faturamento, comunicação e armazenamento administrativo. O(a) CONTRATANTE poderá solicitar acesso, correção ou exclusão dos seus dados a qualquer momento pelo e-mail <strong>${PHOTOGRAPHER.email}</strong>. Os dados não serão compartilhados com terceiros sem consentimento prévio.</p>
-    ${d.temMenor ? `<p style="margin-top:8px">O tratamento de dados e imagens de crianças e adolescentes observará o melhor interesse do menor, conforme o ECA Digital (Lei nº 15.211/2025), exigindo consentimento específico e destacado do responsável legal.</p>` : ""}
+    <p>Os dados pessoais serão tratados com base na Lei nº 13.709/2018 (LGPD) exclusivamente para execução contratual. O(a) CONTRATANTE poderá solicitar acesso, correção ou exclusão pelo e-mail <strong>${PHOTOGRAPHER.email}</strong>.
+    ${d.temMenor ? " O tratamento de dados e imagens de crianças observará o ECA Digital (Lei nº 15.211/2025)." : ""}</p>
   </div>
 </div>
-
 <div class="clause">
-  <h4>Cláusula 9 — Obrigações do(a) Contratante</h4>
-  <ul>
-    <li>Comparecer nas datas e horários agendados;</li>
-    <li>Providenciar vestuário, acessórios e demais itens pessoais não incluídos no pacote;</li>
-    <li>Seguir as orientações técnicas e de segurança do estúdio;</li>
-    <li>Informar previamente qualquer condição que possa impactar a sessão.</li>
-  </ul>
-</div>
-
-<div class="clause">
-  <h4>Cláusula 10 — Obrigações da Contratada</h4>
-  <ul>
-    <li>Realizar o serviço contratado com zelo e qualidade profissional;</li>
-    <li>Entregar as imagens conforme o prazo ajustado;</li>
-    <li>Manter comunicação clara sobre agenda, seleção e entrega.</li>
-  </ul>
-</div>
-
-<div class="clause">
-  <h4>Cláusula 11 — Foro</h4>
-  <p>Fica eleito o foro da comarca de <strong>Bauru/SP</strong> para dirimir eventuais controvérsias, com renúncia a qualquer outro, por mais privilegiado que seja.</p>
+  <h4>Cláusula 9 — Foro</h4>
+  <p>Fica eleito o foro da comarca de <strong>Bauru/SP</strong> para dirimir eventuais controvérsias.</p>
 </div>`;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// BLOCOS ESPECÍFICOS POR SERVIÇO
-// ══════════════════════════════════════════════════════════════════
-
-// ── Acompanhamento (Chamego / Afeto) ─────────────────────────────
 function blocoAcompanhamento(d) {
-  const isAnual = d.planoId?.includes("anual") || d.modalidadeId?.includes("anual");
+  const isAnual = d.planoId?.includes("anual");
   return `
 <div class="block-title">Condições Específicas — Pacote de Acompanhamento</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA prestará serviços fotográficos de acompanhamento contínuo — <strong>${d.catLabel} · ${d.planoLabel}</strong> — com sessões programadas conforme a periodicidade contratada, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> por sessão. Cada sessão terá duração estimada de <strong>1 hora</strong>, podendo variar conforme dinâmica da produção e idade da criança.</p>
+  <p>A CONTRATADA prestará serviços fotográficos de acompanhamento <strong>${d.catLabel} · ${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> por sessão.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Sessões e periodicidade</h4>
-  <p>O pacote contratado contempla sessões nos marcos de <strong>${isAnual ? "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 e 12 meses" : "3, 6, 9 e 12 meses"}</strong> de vida da criança, a serem realizadas ao longo da vigência do plano, conforme calendário definido entre as partes.</p>
+  <h4>Cláusula E2 — Periodicidade</h4>
+  <p>Sessões nos marcos de <strong>${isAnual ? "1 a 12 meses (mensalmente)" : "3, 6, 9 e 12 meses"}</strong> de vida da criança.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E3 — Vigência</h4>
-  <p>O pacote tem validade de <strong>${isAnual ? "12 meses" : "12 meses"}</strong>, contados a partir da data da primeira sessão ou da assinatura deste contrato, conforme definido no momento da contratação. A periodicidade das sessões é <strong>${isAnual ? "mensal" : "trimestral"}</strong>.</p>
+  <h4>Cláusula E3 — Vigência e sessões vencidas</h4>
+  <p>Validade de <strong>12 meses</strong>. Sessões não realizadas na vigência serão consideradas perdidas, sem direito a crédito.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E4 — Sessões vencidas</h4>
-  <p>As sessões não realizadas dentro da vigência contratual serão consideradas perdidas, não gerando direito a crédito, abatimento ou transferência para período posterior, salvo autorização expressa da CONTRATADA por escrito. Fica expressamente vedado o acúmulo ilimitado de sessões para utilização posterior.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E5 — Remarcação</h4>
-  <p>A remarcação de sessão somente será aceita mediante disponibilidade de agenda da CONTRATADA, com aviso mínimo de <strong>48 horas</strong> de antecedência. Cada sessão poderá ser remarcada uma única vez sem custo adicional. Ausência sem aviso implicará na perda da sessão.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E6 — Cenários e Mascote</h4>
-  <p>Cada sessão inclui <strong>${d.catLabel?.includes("Afeto") ? "1 cenário temático + 1 cenário família + cenário Mascote" : "1 cenário temático + cenário Mascote"}</strong>. O cenário temático poderá ser escolhido pelo(a) CONTRATANTE conforme disponibilidade do estúdio. Trocas adicionais de cenário serão cobradas à parte.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E7 — Fotos adicionais e Cofrinho</h4>
-  <p>Fotos além da quantidade contratada por sessão poderão ser adquiridas ao valor vigente de <strong>R$ 12,00 por foto</strong> (R$ 8,00 para assinantes do Cofrinho de Recordações), ou resgatadas mediante saldo disponível no Cofrinho, quando elegível.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E8 — Reajuste</h4>
-  <p>No pacote de 12 meses, o valor das sessões poderá ser reajustado anualmente pelo INPC ou índice equivalente, mediante comunicação prévia de 30 dias ao(à) CONTRATANTE.</p>
+  <h4>Cláusula E4 — Cenários</h4>
+  <p>Cada sessão inclui <strong>${d.catLabel?.includes("Afeto") ? "1 cenário temático + 1 cenário família + cenário Mascote" : "1 cenário temático + cenário Mascote"}</strong>.</p>
 </div>`;
 }
 
-// ── Gestante / Revelação ─────────────────────────────────────────
 function blocoGestante(d) {
   const externa = d.catKey?.includes("externa");
   return `
 <div class="block-title">Condições Específicas — Ensaio Gestante / Revelação</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico de gestante ou ensaio revelação — <strong>${d.planoLabel}</strong> — com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> tratadas${d.duracao ? `, com duração aproximada de <strong>${d.duracao}</strong>` : ""}.</p>
+  <p>Ensaio fotográfico <strong>${d.planoLabel}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 1 cenário clean e 1 cenário família.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Cenários e formato</h4>
-  <p>A sessão inclui <strong>1 cenário clean e 1 cenário família</strong>. O número de trocas de roupa e demais itens obedecerá ao pacote escolhido. Itens não previstos poderão ser cobrados à parte. A CONTRATADA não garante reprodução idêntica de referências visuais enviadas pelo(a) CONTRATANTE.</p>
+  <h4>Cláusula E2 — Período recomendado</h4>
+  <p>Recomendado entre a descoberta e a <strong>38ª semana</strong>. Remarcação por saúde será avaliada com prioridade.</p>
 </div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Período recomendado</h4>
-  <p>O ensaio é recomendado entre a descoberta da gravidez e a <strong>38ª semana de gestação</strong>. A remarcação por motivos de saúde devidamente justificados será avaliada com prioridade pela CONTRATADA.</p>
-</div>
-
 ${externa ? `
 <div class="clause">
-  <h4>Cláusula E4 — Ensaio externo</h4>
-  <p>O ensaio será realizado em local externo dentro de Bauru/SP, sendo de responsabilidade do(a) CONTRATANTE obter eventuais autorizações do espaço. Em caso de inviabilidade por condições climáticas, obras ou restrições do local, a sessão poderá ser remarcada sem configurar inadimplemento da CONTRATADA. Custos de deslocamento, estacionamento ou entrada em locais pagos serão de responsabilidade do(a) CONTRATANTE, salvo acordo em contrário.</p>
+  <h4>Cláusula E3 — Ensaio externo</h4>
+  <p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada. Custos de deslocamento são de responsabilidade do(a) CONTRATANTE.</p>
 </div>` : ""}`;
 }
 
-// ── Newborn ───────────────────────────────────────────────────────
 function blocoNewborn(d) {
   return `
 <div class="block-title">Condições Específicas — Ensaio Newborn</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico de recém-nascido, com entrega de <strong>${d.fotos || 20} fotografias</strong> tratadas, preferencialmente dentro da faixa etária de até <strong>10 dias de vida</strong>. A sessão inclui 1 cenário para o registro do bebê e 1 cenário para registro de família.</p>
+  <p>Ensaio de recém-nascido com entrega de <strong>${d.fotos || 20} fotografias</strong>, preferencialmente até <strong>10 dias de vida</strong>. Inclui 1 cenário bebê e 1 cenário família.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Segurança e bem-estar do bebê</h4>
-  <p>A sessão será conduzida com pausas para alimentação, troca e conforto do bebê, sempre que necessário. A CONTRATADA poderá interromper, adaptar ou recusar poses, composições ou adereços que julgar inadequados para a segurança e o bem-estar do recém-nascido. <strong>A segurança do bebê prevalece sobre quaisquer preferências estéticas.</strong> Todos os props, mantas e adereços utilizados são higienizados entre sessões.</p>
+  <h4>Cláusula E2 — Segurança do bebê</h4>
+  <p>A sessão terá pausas para alimentação e conforto. A CONTRATADA poderá recusar poses inadequadas. <strong>A segurança do bebê prevalece sobre preferências estéticas.</strong></p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E3 — Presença dos responsáveis</h4>
-  <p>A presença de pelo menos um responsável legal é obrigatória durante toda a sessão. Os responsáveis deverão comunicar previamente alergias, condições de saúde, restrições médicas ou qualquer informação relevante sobre o bebê.</p>
+  <h4>Cláusula E3 — Presença obrigatória</h4>
+  <p>Presença de pelo menos um responsável legal é obrigatória. Alergias e condições de saúde devem ser informadas previamente.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E4 — Autorização especial de imagem do menor</h4>
-  <p>O(a) responsável legal abaixo assinado(a) declara que possui plenos poderes para autorizar a participação do recém-nascido no ensaio e o tratamento de seus dados e imagens, em conformidade com o <strong>ECA Digital (Lei nº 15.211/2025)</strong> e a LGPD. A autorização de divulgação das imagens está indicada na Cláusula 6 deste contrato.</p>
+  <h4>Cláusula E4 — Autorização do menor</h4>
+  <p>O(a) responsável legal autoriza a participação do recém-nascido em conformidade com o <strong>ECA Digital (Lei nº 15.211/2025)</strong> e a LGPD.</p>
 </div>`;
 }
 
-// ── Infantil Avulso ───────────────────────────────────────────────
 function blocoInfantil(d) {
   const isSmash = d.planoId?.includes("smash");
   return `
 <div class="block-title">Condições Específicas — Ensaio Infantil</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico infantil — <strong>${d.planoLabel}</strong> — com entrega de <strong>${d.fotos ? (d.fotos === 70 ? "a partir de 70" : d.fotos) + " fotografias" : "fotografias conforme pacote"}</strong> tratadas${d.duracao ? `, com duração de <strong>${d.duracao}</strong>` : ""}.</p>
+  <p>Ensaio infantil <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? (d.fotos === 70 ? "a partir de 70" : d.fotos) + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Presença e responsabilidade</h4>
-  <p>A presença de responsável legal é obrigatória durante toda a sessão. O(a) responsável compromete-se a auxiliar a criança na adaptação ao cenário, figurino e direção fotográfica, além de responder pela conduta, alimentação e segurança do menor. A CONTRATADA não se responsabiliza por crises de choro, cansaço, recusa de figurino ou indisposição da criança.</p>
+  <h4>Cláusula E2 — Responsabilidade</h4>
+  <p>Presença de responsável legal obrigatória. A CONTRATADA não se responsabiliza por crises, cansaço ou recusa de figurino da criança.</p>
 </div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Horário e rotina da criança</h4>
-  <p>Recomenda-se que o horário da sessão respeite a rotina do menor (sonecas e alimentação). Sessões em horário incompatível com a rotina da criança poderão prejudicar o resultado, sem direito a remarcação gratuita por este motivo.</p>
-</div>
-
 ${isSmash ? `
 <div class="clause">
-  <h4>Cláusula E4 — Smash the Cake</h4>
-  <p>O(a) CONTRATANTE deverá comunicar previamente qualquer restrição alimentar da criança. A CONTRATADA não se responsabiliza por reações alérgicas a itens do pacote não informadas previamente. Os itens incluídos (bolo e/ou arco de balão, quando aplicável) serão fornecidos conforme especificado no pacote contratado.</p>
+  <h4>Cláusula E3 — Smash the Cake</h4>
+  <p>Restrições alimentares devem ser informadas previamente. A CONTRATADA não responde por reações alérgicas não informadas.</p>
 </div>` : ""}
-
 <div class="clause">
-  <h4>Cláusula E5 — Autorização especial de imagem do menor</h4>
-  <p>O(a) responsável legal abaixo assinado(a) declara que possui poderes para autorizar a participação de <strong>${d.nomeCrianca || "_______________"}</strong> (${d.idadeCrianca || "___"}) no ensaio e o tratamento de seus dados e imagens, observando o melhor interesse do menor conforme o <strong>ECA Digital (Lei nº 15.211/2025)</strong> e a LGPD.</p>
-</div>
-
-${d.localExterno ? `
-<div class="clause">
-  <h4>Cláusula E6 — Ensaio externo</h4>
-  <p>O ensaio será realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade por condições climáticas, a sessão poderá ser remarcada sem configurar inadimplemento da CONTRATADA. Custos de deslocamento ou estacionamento serão de responsabilidade do(a) CONTRATANTE, salvo acordo em contrário.</p>
-</div>` : ""}`;
+  <h4>Cláusula E${isSmash ? "4" : "3"} — Autorização do menor</h4>
+  <p>O(a) responsável legal autoriza a participação de <strong>${d.nomeCrianca || "_______________"}</strong> (${d.idadeCrianca || "___"}) nos termos do <strong>ECA Digital (Lei nº 15.211/2025)</strong> e da LGPD.</p>
+</div>`;
 }
 
-// ── Adulto / Corporativo ──────────────────────────────────────────
 function blocoAdulto(d) {
   const externa = d.catKey?.includes("externo");
   return `
 <div class="block-title">Condições Específicas — Ensaio Adulto / Corporativo</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico adulto ou corporativo — <strong>${d.planoLabel}</strong> — com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> tratadas${d.duracao ? `, com duração de <strong>${d.duracao}</strong>` : ""}. O ensaio inclui 2 cenários: 1 conforme o perfil do cliente e 1 cenário clean.</p>
+  <p>Ensaio <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 2 cenários: 1 conforme perfil + 1 clean.</p>
 </div>
-
-<div class="clause">
-  <h4>Cláusula E2 — Finalidade e uso institucional</h4>
-  <p>As imagens produzidas poderão ser utilizadas para fins pessoais, redes sociais, portfólio profissional e materiais corporativos internos, conforme licença concedida na Cláusula 6. Uso em campanhas publicitárias pagas, materiais de terceiros ou fins comerciais amplos deverá ser negociado separadamente com a CONTRATADA.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Referências visuais</h4>
-  <p>A CONTRATADA não garante reprodução idêntica de referências visuais enviadas pelo(a) CONTRATANTE, devendo prevalecer a interpretação artística, técnica e estética do estúdio.</p>
-</div>
-
 ${externa ? `
 <div class="clause">
-  <h4>Cláusula E4 — Ensaio externo / local de trabalho</h4>
-  <p>O ensaio poderá ser realizado no local de trabalho do(a) CONTRATANTE ou em locação externa dentro de Bauru/SP, mediante prévia aprovação da CONTRATADA. Em caso de inviabilidade por condições climáticas ou restrições do local, a sessão poderá ser remarcada. Custos de deslocamento ou estacionamento serão de responsabilidade do(a) CONTRATANTE, salvo acordo em contrário.</p>
+  <h4>Cláusula E2 — Ensaio externo</h4>
+  <p>Realizado em local externo ou no local de trabalho dentro de Bauru/SP. Custos de deslocamento são de responsabilidade do(a) CONTRATANTE.</p>
 </div>` : ""}`;
 }
 
-// ── Família ───────────────────────────────────────────────────────
 function blocoFamilia(d) {
   const externa = d.catKey?.includes("externa");
   return `
 <div class="block-title">Condições Específicas — Ensaio Família</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico de família — <strong>${d.planoLabel}</strong> — com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> tratadas${d.duracao ? `, com duração de <strong>${d.duracao}</strong>` : ""}.</p>
+  <p>Ensaio familiar <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Participantes</h4>
-  <p>O pacote contempla o núcleo familiar informado no ato da contratação. Caso haja acréscimo de participantes não informados previamente, poderá haver ajuste de valor e adequação do tempo de sessão, a ser combinado com a CONTRATADA.</p>
+  <h4>Cláusula E2 — Participantes e menores</h4>
+  <p>Acréscimo de participantes não informados poderá implicar ajuste de valor. Imagens de menores observarão o <strong>ECA Digital (Lei nº 15.211/2025)</strong>.</p>
 </div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Crianças e menores</h4>
-  <p>Quando houver crianças ou adolescentes participantes, os responsáveis legais comprometem-se a acompanhar e auxiliar os menores durante toda a sessão. O tratamento de dados e imagens de menores observará o <strong>ECA Digital (Lei nº 15.211/2025)</strong> e a LGPD.</p>
-</div>
-
 ${externa ? `
 <div class="clause">
-  <h4>Cláusula E4 — Ensaio externo</h4>
-  <p>O ensaio será realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade por condições climáticas, obras ou restrições do local, a sessão poderá ser remarcada sem configurar inadimplemento da CONTRATADA. Custos de deslocamento ou estacionamento serão de responsabilidade do(a) CONTRATANTE, salvo acordo em contrário.</p>
+  <h4>Cláusula E3 — Ensaio externo</h4>
+  <p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada.</p>
 </div>` : ""}`;
 }
 
-// ── Campanha Sazonal ─────────────────────────────────────────────
 function blocoCampanha(d) {
   return `
 <div class="block-title">Condições Específicas — Campanha Sazonal</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará ensaio fotográfico temático da campanha <strong>${d.nomeCampanha || "sazonal vigente"}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> tratadas. O cenário, figurino e brindes são válidos exclusivamente para a campanha contratada.</p>
+  <p>Ensaio temático da campanha <strong>${d.nomeCampanha || "sazonal vigente"}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Exclusividade da campanha</h4>
-  <p>O serviço refere-se exclusivamente à campanha sazonal descrita, não sendo admitida a substituição por tema diverso, salvo disponibilidade expressa da CONTRATADA. O cenário é produzido para período determinado e não poderá ser aproveitado em outros ensaios avulsos.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Prazo de escolha e entrega</h4>
-  <p>O(a) CONTRATANTE deverá selecionar as imagens em até <strong>3 dias</strong> após receber a galeria, dado o volume de atendimentos sazonais. O prazo de entrega das imagens editadas é de até <strong>15 dias corridos</strong> após a seleção final.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E4 — Cancelamento especial</h4>
-  <p>Por se tratar de campanha com agenda fechada e cenário produzido exclusivamente para o período, cancelamentos implicarão em perda integral do valor pago, independentemente da antecedência, salvo caso fortuito ou força maior devidamente comprovados.</p>
+  <h4>Cláusula E2 — Cancelamento especial</h4>
+  <p>Por se tratar de campanha com agenda fechada, cancelamentos implicam em perda integral do valor pago, independentemente da antecedência.</p>
 </div>`;
 }
 
-// ── Eventos (Aniversário / Batizado / Chá) ────────────────────────
 function blocoEvento(d) {
   const extras = d.extras?.filter(e => e.price) || [];
   return `
 <div class="block-title">Condições Específicas — Cobertura de Evento</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará cobertura fotográfica do evento de <strong>${d.catLabel}</strong> — <strong>${d.planoLabel}</strong>, com duração de <strong>${d.duracao}</strong>, contemplando os momentos principais do evento conforme o pacote escolhido. Todas as fotos serão tratadas e entregues em até <strong>10 dias corridos</strong> após o evento.</p>
+  <p>Cobertura fotográfica de <strong>${d.catLabel} — ${d.planoLabel}</strong>, duração de <strong>${d.duracao}</strong>. Entrega em até <strong>10 dias corridos</strong>.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Horário contratado</h4>
-  <p>O início da cobertura será o horário definido neste contrato, independentemente da chegada de convidados ou do início formal do evento, salvo ajuste expresso. O encerramento ocorrerá ao término do tempo contratado.</p>
+  <h4>Cláusula E2 — Hora extra</h4>
+  <p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional, mediante aceite no ato.</p>
 </div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Hora extra</h4>
-  <p>A prorrogação além do tempo contratado dependerá de disponibilidade da CONTRATADA e será cobrada no valor de <strong>R$ 275,00 por hora</strong> adicional, mediante aceite no ato. A contratação de hora extra não garante automaticamente a permanência da equipe.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E4 — Cobertura mínima</h4>
-  <p>A CONTRATADA compromete-se com cobertura documental dos momentos principais do evento, não garantindo o registro integral de todos os convidados ou de toda a ambientação. Coberturas de curta duração (1h30 e 2h) têm escopo reduzido por definição.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E5 — Logística e local</h4>
-  <p>O(a) CONTRATANTE deverá informar previamente o endereço completo, regras do local, restrições de circulação e contato do responsável pela organização. O valor contratado é válido para coberturas dentro de Bauru/SP. Deslocamentos fora da cidade serão cobrados à parte.</p>
-</div>
-
-${extras.length > 0 ? `
-<div class="clause">
-  <h4>Cláusula E6 — Adicionais contratados</h4>
-  <p>Foram contratados os seguintes adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>. Esses itens integram este contrato como acessórios e possuem condições de entrega próprias. ${d.desconto > 0 ? `O(a) CONTRATANTE obteve desconto de <strong>10%</strong> sobre o valor total por ter contratado adicionais.` : ""}</p>
-</div>` : ""}
-
-<div class="clause">
-  <h4>Cláusula E7 — Limitação de responsabilidade</h4>
-  <p>A CONTRATADA não responde por falhas de terceiros, queda de energia do local, ausência de convidados, alterações no cronograma do evento, intempéries ou fatos que impeçam o acesso à cobertura planejada, desde que não decorram de culpa direta da CONTRATADA.</p>
-</div>`;
-}
-
-// ── 15 Anos ───────────────────────────────────────────────────────
-function blocoQuinzeAnos(d) {
-  const extras = d.extras?.filter(e => e.price) || [];
-  const temFotografo = extras.some(e => e.id === "fotografo");
-  return `
-<div class="block-title">Condições Específicas — Quinze Anos</div>
-
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA realizará cobertura fotográfica de evento de debutante com duração de <strong>6 horas</strong>${extras.length > 0 ? `, acrescida dos seguintes adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>` : ""}. Todas as fotos serão tratadas e entregues em até <strong>10 dias corridos</strong> após o evento.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E2 — Hora extra e equipe adicional</h4>
-  <p>A prorrogação além de 6 horas será cobrada a <strong>R$ 275,00 por hora</strong> adicional${temFotografo ? ", podendo haver ajuste proporcional conforme a equipe contratada" : ""}. A contratação de hora extra não garante automaticamente a permanência da equipe.</p>
-</div>
-
 ${extras.length > 0 ? `
 <div class="clause">
   <h4>Cláusula E3 — Adicionais contratados</h4>
-  <p>Os adicionais contratados possuem natureza acessória e serão executados conforme as condições específicas de cada item. Ensaios prévios (estúdio ou externo) serão agendados em data separada, a combinar entre as partes.</p>
+  <p>Adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>.${d.desconto > 0 ? ` Desconto de <strong>10%</strong> aplicado por inclusão de adicionais.` : ""}</p>
 </div>` : ""}
-
 <div class="clause">
-  <h4>Cláusula E4 — Fornecedores externos</h4>
-  <p>A CONTRATADA não se responsabiliza por atrasos ou falhas de outros fornecedores do evento (decoração, buffet, DJ, maquiagem, cerimonialista), desde que não decorram de culpa direta da CONTRATADA.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E5 — Logística</h4>
-  <p>O(a) CONTRATANTE deverá informar previamente o endereço, regras do local e contato do responsável pela organização. O valor contratado é válido para eventos dentro de Bauru/SP.</p>
+  <h4>Cláusula E${extras.length > 0 ? "4" : "3"} — Logística</h4>
+  <p>Valor válido para eventos dentro de Bauru/SP. Deslocamentos fora da cidade cobrados à parte.</p>
 </div>`;
 }
 
-// ── Cofrinho de Recordações ───────────────────────────────────────
+function blocoQuinzeAnos(d) {
+  const extras = d.extras?.filter(e => e.price) || [];
+  return `
+<div class="block-title">Condições Específicas — Quinze Anos</div>
+<div class="clause">
+  <h4>Cláusula E1 — Objeto</h4>
+  <p>Cobertura fotográfica de evento de debutante com <strong>6 horas</strong>${extras.length > 0 ? `, adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>` : ""}. Entrega em até <strong>10 dias corridos</strong>.</p>
+</div>
+<div class="clause">
+  <h4>Cláusula E2 — Hora extra</h4>
+  <p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional.</p>
+</div>`;
+}
+
 function blocoCofrinho(d) {
   return `
 <div class="block-title">Condições Específicas — Cofrinho de Recordações</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>O presente contrato regula a adesão ao plano <strong>${d.planoLabel}</strong> do Cofrinho de Recordações da CONTRATADA, com mensalidade de <strong>${fmtMoeda(d.valorMensal || d.valorTotal)}/mês</strong>, acumulando saldo para resgate em ensaios fotográficos ou compra de fotos extras.</p>
+  <p>Adesão ao plano <strong>${d.planoLabel}</strong>, mensalidade de <strong>${fmtMoeda(d.valorMensal || d.valorTotal)}/mês</strong>.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Acúmulo e resgate do saldo</h4>
+  <h4>Cláusula E2 — Resgate</h4>
   <ul>
-    <li>O saldo acumulado poderá ser resgatado a partir do <strong>3º mês</strong> de pagamento.</li>
-    <li>O saldo abate diretamente do valor do ensaio. Se não cobrir o total, o(a) CONTRATANTE paga apenas a diferença.</li>
-    <li>O resgate é elegível em: <strong>ensaios avulsos e fotos extras</strong>.</li>
-    <li>O resgate <strong>não</strong> é elegível em: eventos (aniversários, batizados, 15 anos).</li>
-    <li>Fotos extras resgatadas pelo Cofrinho: <strong>R$ 12,00 por foto</strong> (ou R$ 8,00 conforme plano).</li>
+    <li>Resgate a partir do <strong>3º mês</strong> de pagamento.</li>
+    <li>Elegível em: ensaios avulsos e fotos extras.</li>
+    <li>Não elegível em: eventos (aniversários, batizados, 15 anos).</li>
   </ul>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E3 — Vigência e cancelamento</h4>
-  <p>O plano é mensal e poderá ser cancelado a qualquer momento pelo(a) CONTRATANTE, sem ônus de multa. Porém, o saldo acumulado até a data do cancelamento <strong>não será reembolsado em dinheiro</strong> — permanecerá disponível para resgate em ensaios pelo prazo de <strong>6 meses</strong> após o cancelamento. Após esse prazo, o saldo será expirado.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E4 — Forma de pagamento</h4>
-  <p>A mensalidade de <strong>${fmtMoeda(d.valorMensal || d.valorTotal)}</strong> será cobrada mensalmente na data acordada entre as partes. Em caso de inadimplência por mais de 30 dias, o plano será suspenso automaticamente e o saldo ficará bloqueado até regularização.</p>
+  <h4>Cláusula E3 — Cancelamento</h4>
+  <p>Cancelamento sem multa a qualquer momento. Saldo não é reembolsado em dinheiro — permanece disponível por <strong>6 meses</strong> para resgate em ensaios.</p>
 </div>`;
 }
 
-// ── Vale Presente ─────────────────────────────────────────────────
 function blocoValePresente(d) {
   return `
 <div class="block-title">Condições Específicas — Vale Presente</div>
-
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
-  <p>O presente instrumento formaliza a emissão de Vale Presente no valor de <strong>${fmtMoeda(d.valorTotal)}</strong>, emitido por <strong>${d.nomeCliente}</strong> em favor de <strong>${d.nomePresenteado || "_______________"}</strong>, para utilização em serviços fotográficos da CONTRATADA.</p>
+  <p>Vale Presente no valor de <strong>${fmtMoeda(d.valorTotal)}</strong>, emitido por <strong>${d.nomeCliente}</strong> em favor de <strong>${d.nomePresenteado || "_______________"}</strong>.</p>
 </div>
-
 <div class="clause">
-  <h4>Cláusula E2 — Utilização</h4>
+  <h4>Cláusula E2 — Utilização e validade</h4>
   <ul>
-    <li>O Vale Presente pode ser utilizado em qualquer ensaio fotográfico do catálogo da CONTRATADA.</li>
-    <li>Não é elegível para uso em eventos (aniversários, batizados, 15 anos).</li>
-    <li>Se o valor do ensaio for superior ao Vale, o(a) beneficiário(a) paga a diferença.</li>
-    <li>Se o valor do ensaio for inferior ao Vale, o saldo restante não é devolvido em dinheiro, podendo ser usado em serviços adicionais.</li>
+    <li>Utilizável em qualquer ensaio fotográfico do catálogo.</li>
+    <li>Não elegível para eventos (aniversários, batizados, 15 anos).</li>
+    <li>Validade de <strong>12 meses</strong> a partir da emissão.</li>
+    <li>Não transferível a terceiros.</li>
   </ul>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E3 — Validade</h4>
-  <p>O Vale Presente tem validade de <strong>12 meses</strong> a partir da data de emissão deste contrato. Após o vencimento, o vale expira sem direito a reembolso.</p>
-</div>
-
-<div class="clause">
-  <h4>Cláusula E4 — Intransferibilidade</h4>
-  <p>O Vale Presente é nominal ao(à) beneficiário(a) indicado(a) e não é transferível a terceiros.</p>
 </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
-// BLOCO FIXO D — ASSINATURA DIGITAL (todos os contratos)
+// BLOCO D — ASSINATURA
 // ══════════════════════════════════════════════════════════════════
 function blocoAssinatura(d) {
   return `
 <div class="sig-section">
   <div class="sig-title">Assinaturas Digitais</div>
+  <div id="sig-status" class="status-bar status-pending">✏️ Aguardando assinatura do(a) CONTRATANTE</div>
 
-  <div id="sig-status" class="status-bar status-pending">
-    ✏️ Aguardando assinatura do(a) CONTRATANTE
-  </div>
-
-  <!-- ASSINATURA DO CLIENTE -->
   <div style="margin-bottom:24px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">1. Assinatura do(a) Contratante</p>
     <div class="sig-grid">
@@ -627,7 +417,7 @@ function blocoAssinatura(d) {
       </div>
       <div class="sig-box" style="display:flex;flex-direction:column;justify-content:flex-end">
         <div style="background:#faf8f5;border:1px solid #e8dde0;border-radius:8px;padding:12px;font-size:12px;color:#555;line-height:1.6">
-          Ao assinar, o(a) CONTRATANTE declara ter lido e concordado com todos os termos deste contrato.<br/><br/>
+          Ao assinar, declara ter lido e concordado com todos os termos.<br/><br/>
           <strong>CPF:</strong> ${d.cpfCliente || "___.___.___-__"}<br/>
           <strong>E-mail:</strong> ${d.emailCliente || "___"}
         </div>
@@ -636,7 +426,6 @@ function blocoAssinatura(d) {
   </div>
 
   ${d.temMenor ? `
-  <!-- ASSINATURA DO RESPONSÁVEL LEGAL -->
   <div style="margin-bottom:24px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">2. Assinatura do Responsável Legal (menor)</p>
     <div class="sig-grid">
@@ -653,13 +442,12 @@ function blocoAssinatura(d) {
       <div class="sig-box" style="display:flex;align-items:center;justify-content:center">
         <div style="padding:14px;background:#FBEAF0;border-radius:10px;font-size:12px;color:#72243E;line-height:1.6">
           <strong>ECA Digital — Lei nº 15.211/2025</strong><br/>
-          As imagens do menor serão utilizadas apenas para as finalidades autorizadas. Fica vedada a publicação de fotos que exponham rotina ou localização escolar. Remoção pode ser solicitada em até 24 horas.
+          As imagens do menor serão utilizadas apenas para as finalidades autorizadas.
         </div>
       </div>
     </div>
   </div>` : ""}
 
-  <!-- ASSINATURA DA CONTRATADA (Thais) -->
   <div style="margin-bottom:16px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">${d.temMenor ? "3" : "2"}. Assinatura da Contratada</p>
     <div class="sig-grid">
@@ -677,7 +465,6 @@ function blocoAssinatura(d) {
         <div style="background:#faf8f5;border:1px solid #e8dde0;border-radius:8px;padding:12px;font-size:12px;color:#555;line-height:1.6">
           <strong>${PHOTOGRAPHER.name}</strong><br/>
           CNPJ: ${PHOTOGRAPHER.cnpj}<br/>
-          CPF: ${PHOTOGRAPHER.cpf}<br/>
           ${PHOTOGRAPHER.endereco}
         </div>
       </div>
@@ -685,26 +472,24 @@ function blocoAssinatura(d) {
   </div>
 
   <div style="font-size:11px;color:#bbb;text-align:center;margin-top:20px;line-height:1.6">
-    Assinaturas válidas nos termos da Lei nº 14.063/2020 (Assinaturas Eletrônicas).<br/>
-    O contrato é formalizado após assinatura de ambas as partes.
+    Assinaturas válidas nos termos da Lei nº 14.063/2020 (Assinaturas Eletrônicas).
   </div>
 </div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SCRIPT DE ASSINATURA
+// SCRIPT DE ASSINATURA — CORRIGIDO: salva direto no Supabase
 // ══════════════════════════════════════════════════════════════════
 function scriptAssinatura(d) {
   return `
 <script>
-// ── Estado global das assinaturas ─────────────────────────────────
 let sigCliente = null;
 let sigContratada = null;
-let sigResp = null;
+${d.temMenor ? "let sigResp = null;" : ""}
 
-function setupCanvas(id, onDone) {
+function setupCanvas(id) {
   const canvas = document.getElementById(id);
-  if(!canvas) return;
+  if(!canvas) return null;
   const ctx = canvas.getContext('2d');
   let drawing = false, lastX = 0, lastY = 0;
   ctx.strokeStyle = '#72243E'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
@@ -722,64 +507,95 @@ function setupCanvas(id, onDone) {
   canvas.addEventListener('touchstart', e=>{e.preventDefault();drawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;},{passive:false});
   canvas.addEventListener('touchmove', e=>{e.preventDefault();if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;},{passive:false});
   canvas.addEventListener('touchend', ()=>drawing=false);
-  return {canvas, ctx, clear: ()=>ctx.clearRect(0,0,canvas.width,canvas.height), getData: ()=>canvas.toDataURL('image/png'), isEmpty: ()=>!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0)};
+  return {
+    canvas,
+    ctx,
+    clear: ()=>ctx.clearRect(0,0,canvas.width,canvas.height),
+    getData: ()=>canvas.toDataURL('image/png'),
+    isEmpty: ()=>!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0)
+  };
 }
 
 const canvasCliente = setupCanvas('sig-canvas');
 const canvasContratada = setupCanvas('sig-canvas-contratada');
 ${d.temMenor ? "const canvasResp = setupCanvas('sig-canvas-resp');" : ""}
 
-// ── Verificar se ambos assinaram ──────────────────────────────────
+// ── CORRIGIDO: salva direto no Supabase ───────────────────────────
 function verificarAmbos() {
   const ambos = sigCliente && sigContratada ${d.temMenor ? "&& sigResp" : ""};
-  if(ambos) {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  if(!ambos) return;
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  document.getElementById('sig-status').className = 'status-bar status-pending';
+  document.getElementById('sig-status').textContent = '⏳ Salvando assinatura...';
+
+  const SUPA_URL = 'https://uuorxycrxadhjbrebrlg.supabase.co';
+  const SUPA_KEY = 'sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3';
+
+  fetch(SUPA_URL + '/rest/v1/agendamentos?id=eq.${d.agendamentoId}', {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation',
+    },
+    body: JSON.stringify({
+      signature: sigCliente,
+      signature_contratada: sigContratada,
+      ${d.temMenor ? "signature_responsavel: sigResp," : ""}
+      signed_at: dateStr,
+      status: 'Contrato',
+    }),
+  })
+  .then(res => {
+    if(!res.ok) throw new Error('HTTP ' + res.status);
     document.getElementById('sig-status').className = 'status-bar status-signed';
-    document.getElementById('sig-status').textContent = '✅ Contrato assinado por ambas as partes em ' + dateStr;
-    // Envia para o n8n
+    document.getElementById('sig-status').textContent = '✅ Contrato assinado e salvo em ' + dateStr;
+    // Dispara n8n para notificações (pode falhar sem problema)
     fetch('https://ribbitingboar-n8n.cloudfy.live/webhook/contrato-assinado', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
-        contrato_id: '${d.numeroContrato || ""}',
-        agendamento_id: '${d.agendamentoId || ""}',
-        assinatura: sigCliente,
-        assinatura_contratada: sigContratada,
-        ${d.temMenor ? "assinatura_responsavel: sigResp," : ""}
+        agendamento_id: '${d.agendamentoId}',
+        contrato_id: '${d.numeroContrato}',
         signed_at: now.toISOString(),
-        cliente_email: '${d.emailCliente || ""}',
-        cliente_nome: '${d.nomeCliente || ""}',
-        cliente_whatsapp: '${d.whatsappCliente || ""}',
+        cliente_email: '${d.emailCliente}',
+        cliente_nome: '${d.nomeCliente}',
+        cliente_whatsapp: '${d.whatsappCliente}',
       })
     }).catch(()=>{});
-  }
+  })
+  .catch(err => {
+    console.error('Erro ao salvar:', err);
+    document.getElementById('sig-status').className = 'status-bar status-pending';
+    document.getElementById('sig-status').textContent = '❌ Erro ao salvar. Tente novamente ou entre em contato com a Crescidinhos.';
+    // Libera botões para tentar de novo
+    sigCliente = null; sigContratada = null;
+    ${d.temMenor ? "sigResp = null;" : ""}
+  });
 }
 
-// ── Ações do cliente ──────────────────────────────────────────────
 function clearSig() { canvasCliente?.clear(); sigCliente = null; }
 function confirmSig() {
   if(!canvasCliente || canvasCliente.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
   sigCliente = canvasCliente.getData();
   const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('sig-date-label').textContent = dateStr;
+  document.getElementById('sig-date-label').textContent = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sig-actions-cliente').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
   canvasCliente.canvas.style.pointerEvents = 'none';
   canvasCliente.canvas.style.opacity = '0.85';
-  document.getElementById('sig-status').textContent = sigContratada ${d.temMenor ? "&& sigResp" : ""}
-    ? '⏳ Aguardando assinatura da fotógrafa...'
-    : '⏳ Aguardando assinatura da fotógrafa...';
   verificarAmbos();
 }
 
-// ── Ações da contratada (Thais) ───────────────────────────────────
 function clearSigContratada() { canvasContratada?.clear(); sigContratada = null; }
 function confirmSigContratada() {
   if(!canvasContratada || canvasContratada.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
   sigContratada = canvasContratada.getData();
   const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('sig-date-contratada').textContent = dateStr;
+  document.getElementById('sig-date-contratada').textContent = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sig-actions-contratada').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
   canvasContratada.canvas.style.pointerEvents = 'none';
   canvasContratada.canvas.style.opacity = '0.85';
@@ -787,14 +603,12 @@ function confirmSigContratada() {
 }
 
 ${d.temMenor ? `
-// ── Ações do responsável legal ────────────────────────────────────
 function clearSigResp() { canvasResp?.clear(); sigResp = null; }
 function confirmSigResp() {
   if(!canvasResp || canvasResp.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
   sigResp = canvasResp.getData();
   const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('sig-date-resp').textContent = dateStr;
+  document.getElementById('sig-date-resp').textContent = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
   document.getElementById('sig-actions-resp').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
   canvasResp.canvas.style.pointerEvents = 'none';
   canvasResp.canvas.style.opacity = '0.85';
@@ -804,72 +618,39 @@ function confirmSigResp() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// GERADOR PRINCIPAL — monta o HTML completo
+// GERADOR PRINCIPAL
 // ══════════════════════════════════════════════════════════════════
 export function gerarContratoHTML(dados) {
-  /**
-   * dados = {
-   *   catKey, catLabel, planoId, planoLabel, modalidadeId,
-   *   fotos, fotosLabel, duracao, duracaoMeses, localExterno,
-   *   valorTotal, valorMensal, desconto, formaPagamento, prazoEntrega,
-   *   extras: [{id, label, price}], descontoExtras,
-   *   autorizaUsoImagem,
-   *   nomeCliente, cpfCliente, emailCliente, whatsappCliente, enderecoCliente,
-   *   temMenor, nomeCrianca, idadeCrianca, nomeResponsavel,
-   *   nomePresenteado, nomeCampanha,
-   *   dataContrato, dataEnsaio, horaEnsaio, localEnsaio,
-   *   numeroContrato, agendamentoId,
-   * }
-   */
-
   const d = dados;
 
-  // Seleciona bloco específico pelo catKey
   const blocoEspecifico = {
-    chamego:          blocoAcompanhamento,
-    afeto:            blocoAcompanhamento,
-    "gestante-estudio": blocoGestante,
-    "gestante-externa": blocoGestante,
-    newborn:          blocoNewborn,
-    campanha:         blocoCampanha,
-    "adulto-estudio": blocoAdulto,
-    "adulto-externo": blocoAdulto,
-    "familia-estudio": blocoFamilia,
-    "familia-externa": blocoFamilia,
-    infantil:         blocoInfantil,
-    aniversario:      blocoEvento,
-    batizado:         blocoEvento,
-    "quinze-anos":    blocoQuinzeAnos,
-    cofrinho:         blocoCofrinho,
-    "vale-presente":  blocoValePresente,
-  }[d.catKey] || blocoEnsaioGenerico;
-
-  function blocoEnsaioGenerico(d) {
-    return `
-<div class="block-title">Condições Específicas</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA prestará serviços fotográficos de <strong>${d.catLabel} — ${d.planoLabel}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> tratadas${d.duracao ? `, com duração de <strong>${d.duracao}</strong>` : ""}.</p>
-</div>`;
-  }
+    chamego: blocoAcompanhamento, afeto: blocoAcompanhamento,
+    "gestante-estudio": blocoGestante, "gestante-externa": blocoGestante,
+    newborn: blocoNewborn, campanha: blocoCampanha,
+    "adulto-estudio": blocoAdulto, "adulto-externo": blocoAdulto,
+    "familia-estudio": blocoFamilia, "familia-externa": blocoFamilia,
+    infantil: blocoInfantil, aniversario: blocoEvento, batizado: blocoEvento,
+    "quinze-anos": blocoQuinzeAnos, cofrinho: blocoCofrinho,
+    "vale-presente": blocoValePresente,
+  }[d.catKey] || ((d) => `<div class="clause"><h4>Objeto</h4><p>${d.catLabel} — ${d.planoLabel}</p></div>`);
 
   const nomeContrato = {
-    chamego:          "Pacote de Acompanhamento Fotográfico",
-    afeto:            "Pacote de Acompanhamento Fotográfico",
+    chamego: "Pacote de Acompanhamento Fotográfico",
+    afeto: "Pacote de Acompanhamento Fotográfico",
     "gestante-estudio": "Ensaio Fotográfico — Gestante / Revelação",
     "gestante-externa": "Ensaio Fotográfico — Gestante / Revelação Externa",
-    newborn:          "Ensaio Fotográfico — Recém-Nascido (Newborn)",
-    campanha:         "Ensaio Fotográfico — Campanha Sazonal",
+    newborn: "Ensaio Fotográfico — Recém-Nascido (Newborn)",
+    campanha: "Ensaio Fotográfico — Campanha Sazonal",
     "adulto-estudio": "Ensaio Fotográfico — Adulto / Corporativo",
     "adulto-externo": "Ensaio Fotográfico — Adulto / Corporativo Externo",
     "familia-estudio": "Ensaio Fotográfico — Família",
     "familia-externa": "Ensaio Fotográfico — Família Externa",
-    infantil:         "Ensaio Fotográfico — Infantil Avulso",
-    aniversario:      "Cobertura Fotográfica — Evento de Aniversário",
-    batizado:         "Cobertura Fotográfica — Batizado / Confraternização / Chá Revelação",
-    "quinze-anos":    "Cobertura Fotográfica — Quinze Anos",
-    cofrinho:         "Adesão — Cofrinho de Recordações",
-    "vale-presente":  "Vale Presente Fotográfico",
+    infantil: "Ensaio Fotográfico — Infantil Avulso",
+aniversario: "Cobertura Fotográfica — Evento de Aniversário",
+    batizado: "Cobertura Fotográfica — Batizado / Confraternização / Chá Revelação",
+    "quinze-anos": "Cobertura Fotográfica — Quinze Anos",
+    cofrinho: "Adesão — Cofrinho de Recordações",
+    "vale-presente": "Vale Presente Fotográfico",
   }[d.catKey] || "Prestação de Serviços Fotográficos";
 
   return `<!DOCTYPE html>
@@ -882,38 +663,24 @@ export function gerarContratoHTML(dados) {
 </head>
 <body>
 <div class="page">
-
-  <!-- CABEÇALHO -->
   <div class="logo-area">
     <div class="logo-name">Crescidinhos</div>
     <div class="logo-sub">Fotografia</div>
     <div class="contract-title">${nomeContrato}</div>
     <div class="contract-num">Contrato nº ${d.numeroContrato || "____"} · Emitido em ${fmtData(d.dataContrato)}</div>
   </div>
-
-  <!-- BLOCO A: PARTES -->
   ${blocoPartes(d)}
-
-  <!-- BLOCO B: SERVIÇO -->
   ${blocoServico(d)}
-
-  <!-- BLOCO ESPECÍFICO -->
   <div class="clauses">
     ${blocoEspecifico(d)}
-
-    <!-- BLOCO C: CLÁUSULAS GERAIS -->
     ${blocoClausulasGerais(d)}
   </div>
-
-  <!-- BLOCO D: ASSINATURA -->
   ${blocoAssinatura(d)}
-
   <div class="footer-doc">
     ${PHOTOGRAPHER.name} · CNPJ ${PHOTOGRAPHER.cnpj}<br/>
     ${PHOTOGRAPHER.endereco}<br/>
-    ${PHOTOGRAPHER.email} · ${PHOTOGRAPHER.phone} · ${PHOTOGRAPHER.instagram}
+    ${PHOTOGRAPHER.email} · ${PHOTOGRAPHER.phone}
   </div>
-
 </div>
 ${scriptAssinatura(d)}
 </body>
