@@ -605,55 +605,88 @@ function blocoValePresente(d) {
 function blocoAssinatura(d) {
   return `
 <div class="sig-section">
-  <div class="sig-title">Assinatura Digital</div>
+  <div class="sig-title">Assinaturas Digitais</div>
 
   <div id="sig-status" class="status-bar status-pending">
     ✏️ Aguardando assinatura do(a) CONTRATANTE
   </div>
 
-  <div class="sig-grid">
-    <div class="sig-box">
-      <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATANTE</div>
-      <canvas id="sig-canvas" width="300" height="110"></canvas>
-      <div class="sig-actions">
-        <button class="btn-clear" onclick="clearSig()">Limpar</button>
-        <button class="btn-confirm" onclick="confirmSig()">Assinar e confirmar ✍️</button>
+  <!-- ASSINATURA DO CLIENTE -->
+  <div style="margin-bottom:24px">
+    <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">1. Assinatura do(a) Contratante</p>
+    <div class="sig-grid">
+      <div class="sig-box">
+        <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATANTE</div>
+        <canvas id="sig-canvas" width="300" height="110"></canvas>
+        <div class="sig-actions" id="sig-actions-cliente">
+          <button class="btn-clear" onclick="clearSig()">Limpar</button>
+          <button class="btn-confirm" onclick="confirmSig()">Assinar ✍️</button>
+        </div>
+        <div class="sig-label" id="sig-name-label">${d.nomeCliente || "Cliente"}</div>
+        <div class="sig-date" id="sig-date-label"></div>
       </div>
-      <div class="sig-label" id="sig-name-label">${d.nomeCliente || "Cliente"}</div>
-      <div class="sig-date" id="sig-date-label"></div>
-    </div>
-    <div class="sig-box">
-      <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATADA</div>
-      <div class="contratada-sig"><span>Crescidinhos</span></div>
-      <div class="sig-label">${PHOTOGRAPHER.name}</div>
-      <div class="sig-date">Bauru/SP</div>
+      <div class="sig-box" style="display:flex;flex-direction:column;justify-content:flex-end">
+        <div style="background:#faf8f5;border:1px solid #e8dde0;border-radius:8px;padding:12px;font-size:12px;color:#555;line-height:1.6">
+          Ao assinar, o(a) CONTRATANTE declara ter lido e concordado com todos os termos deste contrato.<br/><br/>
+          <strong>CPF:</strong> ${d.cpfCliente || "___.___.___-__"}<br/>
+          <strong>E-mail:</strong> ${d.emailCliente || "___"}
+        </div>
+      </div>
     </div>
   </div>
 
   ${d.temMenor ? `
-  <div style="margin-top:20px">
+  <!-- ASSINATURA DO RESPONSÁVEL LEGAL -->
+  <div style="margin-bottom:24px">
+    <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">2. Assinatura do Responsável Legal (menor)</p>
     <div class="sig-grid">
       <div class="sig-box">
         <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">RESPONSÁVEL LEGAL</div>
         <canvas id="sig-canvas-resp" width="300" height="110"></canvas>
-        <div class="sig-actions">
+        <div class="sig-actions" id="sig-actions-resp">
           <button class="btn-clear" onclick="clearSigResp()">Limpar</button>
           <button class="btn-confirm" onclick="confirmSigResp()">Assinar ✍️</button>
         </div>
         <div class="sig-label">${d.nomeResponsavel || d.nomeCliente || "Responsável legal"}</div>
+        <div class="sig-date" id="sig-date-resp"></div>
       </div>
       <div class="sig-box" style="display:flex;align-items:center;justify-content:center">
-        <div style="padding:16px;background:#FBEAF0;border-radius:10px;font-size:12px;color:#72243E;line-height:1.6;text-align:left">
+        <div style="padding:14px;background:#FBEAF0;border-radius:10px;font-size:12px;color:#72243E;line-height:1.6">
           <strong>ECA Digital — Lei nº 15.211/2025</strong><br/>
-          As imagens do menor serão utilizadas apenas para as finalidades autorizadas, zelando pela dignidade da criança. Fica vedada a publicação de fotos que exponham rotina ou localização escolar. Você pode solicitar a remoção de qualquer imagem em até 24 horas.
+          As imagens do menor serão utilizadas apenas para as finalidades autorizadas. Fica vedada a publicação de fotos que exponham rotina ou localização escolar. Remoção pode ser solicitada em até 24 horas.
         </div>
       </div>
     </div>
   </div>` : ""}
 
+  <!-- ASSINATURA DA CONTRATADA (Thais) -->
+  <div style="margin-bottom:16px">
+    <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">${d.temMenor ? "3" : "2"}. Assinatura da Contratada</p>
+    <div class="sig-grid">
+      <div class="sig-box">
+        <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATADA</div>
+        <canvas id="sig-canvas-contratada" width="300" height="110"></canvas>
+        <div class="sig-actions" id="sig-actions-contratada">
+          <button class="btn-clear" onclick="clearSigContratada()">Limpar</button>
+          <button class="btn-confirm" onclick="confirmSigContratada()">Assinar ✍️</button>
+        </div>
+        <div class="sig-label">${PHOTOGRAPHER.owner}</div>
+        <div class="sig-date" id="sig-date-contratada"></div>
+      </div>
+      <div class="sig-box" style="display:flex;flex-direction:column;justify-content:flex-end">
+        <div style="background:#faf8f5;border:1px solid #e8dde0;border-radius:8px;padding:12px;font-size:12px;color:#555;line-height:1.6">
+          <strong>${PHOTOGRAPHER.name}</strong><br/>
+          CNPJ: ${PHOTOGRAPHER.cnpj}<br/>
+          CPF: ${PHOTOGRAPHER.cpf}<br/>
+          ${PHOTOGRAPHER.endereco}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div style="font-size:11px;color:#bbb;text-align:center;margin-top:20px;line-height:1.6">
-    Ao assinar digitalmente, o(a) CONTRATANTE declara ter lido e concordado integralmente com todos os termos e cláusulas deste contrato.<br/>
-    Assinatura válida nos termos da Lei nº 14.063/2020 (Assinaturas Eletrônicas).
+    Assinaturas válidas nos termos da Lei nº 14.063/2020 (Assinaturas Eletrônicas).<br/>
+    O contrato é formalizado após assinatura de ambas as partes.
   </div>
 </div>`;
 }
@@ -664,73 +697,111 @@ function blocoAssinatura(d) {
 function scriptAssinatura(d) {
   return `
 <script>
-const canvas = document.getElementById('sig-canvas');
-const ctx = canvas.getContext('2d');
-let drawing = false, signed = false;
-let lastX = 0, lastY = 0;
-ctx.strokeStyle = '#72243E'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+// ── Estado global das assinaturas ─────────────────────────────────
+let sigCliente = null;
+let sigContratada = null;
+let sigResp = null;
 
-function getPos(e) {
-  const r = canvas.getBoundingClientRect();
-  const sx = canvas.width / r.width, sy = canvas.height / r.height;
-  return e.touches
-    ? {x:(e.touches[0].clientX-r.left)*sx, y:(e.touches[0].clientY-r.top)*sy}
-    : {x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy};
+function setupCanvas(id, onDone) {
+  const canvas = document.getElementById(id);
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  let drawing = false, lastX = 0, lastY = 0;
+  ctx.strokeStyle = '#72243E'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    return e.touches
+      ? {x:(e.touches[0].clientX-r.left)*sx, y:(e.touches[0].clientY-r.top)*sy}
+      : {x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy};
+  }
+  canvas.addEventListener('mousedown', e=>{drawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;});
+  canvas.addEventListener('mousemove', e=>{if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;});
+  canvas.addEventListener('mouseup', ()=>drawing=false);
+  canvas.addEventListener('mouseleave', ()=>drawing=false);
+  canvas.addEventListener('touchstart', e=>{e.preventDefault();drawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;},{passive:false});
+  canvas.addEventListener('touchmove', e=>{e.preventDefault();if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;},{passive:false});
+  canvas.addEventListener('touchend', ()=>drawing=false);
+  return {canvas, ctx, clear: ()=>ctx.clearRect(0,0,canvas.width,canvas.height), getData: ()=>canvas.toDataURL('image/png'), isEmpty: ()=>!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0)};
 }
-canvas.addEventListener('mousedown', e=>{drawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;});
-canvas.addEventListener('mousemove', e=>{if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;});
-canvas.addEventListener('mouseup', ()=>drawing=false);
-canvas.addEventListener('mouseleave', ()=>drawing=false);
-canvas.addEventListener('touchstart', e=>{e.preventDefault();drawing=true;const p=getPos(e);lastX=p.x;lastY=p.y;},{passive:false});
-canvas.addEventListener('touchmove', e=>{e.preventDefault();if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;},{passive:false});
-canvas.addEventListener('touchend', ()=>drawing=false);
 
-function clearSig(){ctx.clearRect(0,0,canvas.width,canvas.height);signed=false;}
+const canvasCliente = setupCanvas('sig-canvas');
+const canvasContratada = setupCanvas('sig-canvas-contratada');
+${d.temMenor ? "const canvasResp = setupCanvas('sig-canvas-resp');" : ""}
 
-function confirmSig(){
-  const blank=!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0);
-  if(blank){alert('Por favor, assine antes de confirmar.');return;}
-  signed=true;
-  const now=new Date();
-  const dateStr=now.toLocaleDateString('pt-BR')+' às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('sig-date-label').textContent=dateStr;
-  document.getElementById('sig-status').className='status-bar status-signed';
-  document.getElementById('sig-status').textContent='✅ Contrato assinado digitalmente em '+dateStr;
-  canvas.style.pointerEvents='none';canvas.style.opacity='0.85';
-  document.querySelector('.sig-actions').innerHTML='<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado com sucesso</span>';
-  const sigData=canvas.toDataURL('image/png');
-  fetch('https://ribbitingboar-n8n.cloudfy.live/webhook/contrato-assinado',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      contrato_id:'${d.numeroContrato || ""}',
-      agendamento_id:'${d.agendamentoId || ""}',
-      assinatura:sigData,
-      signed_at:now.toISOString(),
-      cliente_email:'${d.emailCliente || ""}',
-      cliente_nome:'${d.nomeCliente || ""}',
-      cliente_whatsapp:'${d.whatsappCliente || ""}',
-    })
-  }).catch(()=>{});
+// ── Verificar se ambos assinaram ──────────────────────────────────
+function verificarAmbos() {
+  const ambos = sigCliente && sigContratada ${d.temMenor ? "&& sigResp" : ""};
+  if(ambos) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('sig-status').className = 'status-bar status-signed';
+    document.getElementById('sig-status').textContent = '✅ Contrato assinado por ambas as partes em ' + dateStr;
+    // Envia para o n8n
+    fetch('https://ribbitingboar-n8n.cloudfy.live/webhook/contrato-assinado', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        contrato_id: '${d.numeroContrato || ""}',
+        agendamento_id: '${d.agendamentoId || ""}',
+        assinatura: sigCliente,
+        assinatura_contratada: sigContratada,
+        ${d.temMenor ? "assinatura_responsavel: sigResp," : ""}
+        signed_at: now.toISOString(),
+        cliente_email: '${d.emailCliente || ""}',
+        cliente_nome: '${d.nomeCliente || ""}',
+        cliente_whatsapp: '${d.whatsappCliente || ""}',
+      })
+    }).catch(()=>{});
+  }
+}
+
+// ── Ações do cliente ──────────────────────────────────────────────
+function clearSig() { canvasCliente?.clear(); sigCliente = null; }
+function confirmSig() {
+  if(!canvasCliente || canvasCliente.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
+  sigCliente = canvasCliente.getData();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('sig-date-label').textContent = dateStr;
+  document.getElementById('sig-actions-cliente').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+  canvasCliente.canvas.style.pointerEvents = 'none';
+  canvasCliente.canvas.style.opacity = '0.85';
+  document.getElementById('sig-status').textContent = sigContratada ${d.temMenor ? "&& sigResp" : ""}
+    ? '⏳ Aguardando assinatura da fotógrafa...'
+    : '⏳ Aguardando assinatura da fotógrafa...';
+  verificarAmbos();
+}
+
+// ── Ações da contratada (Thais) ───────────────────────────────────
+function clearSigContratada() { canvasContratada?.clear(); sigContratada = null; }
+function confirmSigContratada() {
+  if(!canvasContratada || canvasContratada.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
+  sigContratada = canvasContratada.getData();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('sig-date-contratada').textContent = dateStr;
+  document.getElementById('sig-actions-contratada').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+  canvasContratada.canvas.style.pointerEvents = 'none';
+  canvasContratada.canvas.style.opacity = '0.85';
+  verificarAmbos();
 }
 
 ${d.temMenor ? `
-const canvasResp = document.getElementById('sig-canvas-resp');
-if(canvasResp){
-  const ctxR=canvasResp.getContext('2d');
-  let drawingR=false,lastXR=0,lastYR=0;
-  ctxR.strokeStyle='#72243E';ctxR.lineWidth=2;ctxR.lineCap='round';
-  function getPosR(e){const r=canvasResp.getBoundingClientRect();const sx=canvasResp.width/r.width,sy=canvasResp.height/r.height;return e.touches?{x:(e.touches[0].clientX-r.left)*sx,y:(e.touches[0].clientY-r.top)*sy}:{x:(e.clientX-r.left)*sx,y:(e.clientY-r.top)*sy};}
-  canvasResp.addEventListener('mousedown',e=>{drawingR=true;const p=getPosR(e);lastXR=p.x;lastYR=p.y;});
-  canvasResp.addEventListener('mousemove',e=>{if(!drawingR)return;const p=getPosR(e);ctxR.beginPath();ctxR.moveTo(lastXR,lastYR);ctxR.lineTo(p.x,p.y);ctxR.stroke();lastXR=p.x;lastYR=p.y;});
-  canvasResp.addEventListener('mouseup',()=>drawingR=false);
-  canvasResp.addEventListener('mouseleave',()=>drawingR=false);
-  canvasResp.addEventListener('touchstart',e=>{e.preventDefault();drawingR=true;const p=getPosR(e);lastXR=p.x;lastYR=p.y;},{passive:false});
-  canvasResp.addEventListener('touchmove',e=>{e.preventDefault();if(!drawingR)return;const p=getPosR(e);ctxR.beginPath();ctxR.moveTo(lastXR,lastYR);ctxR.lineTo(p.x,p.y);ctxR.stroke();lastXR=p.x;lastYR=p.y;},{passive:false});
-  canvasResp.addEventListener('touchend',()=>drawingR=false);
-  window.clearSigResp=()=>ctxR.clearRect(0,0,canvasResp.width,canvasResp.height);
-  window.confirmSigResp=()=>{canvasResp.style.pointerEvents='none';canvasResp.style.opacity='0.85';};
+// ── Ações do responsável legal ────────────────────────────────────
+function clearSigResp() { canvasResp?.clear(); sigResp = null; }
+function confirmSigResp() {
+  if(!canvasResp || canvasResp.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
+  sigResp = canvasResp.getData();
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('sig-date-resp').textContent = dateStr;
+  document.getElementById('sig-actions-resp').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+  canvasResp.canvas.style.pointerEvents = 'none';
+  canvasResp.canvas.style.opacity = '0.85';
+  verificarAmbos();
 }` : ""}
 </script>`;
+}
 }
 
 // ══════════════════════════════════════════════════════════════════
