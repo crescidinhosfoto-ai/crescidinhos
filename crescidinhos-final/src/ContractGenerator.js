@@ -1,6 +1,6 @@
 // =============================================================
 // ContractGenerator.js — Crescidinhos Fotografia
-// CORRIGIDO: verificarAmbos salva direto no Supabase
+// v3: salva no Supabase + bloqueio por perfil + contrato travado
 // =============================================================
 
 import { PHOTOGRAPHER } from "./config";
@@ -65,23 +65,30 @@ const CSS = `
   .sig-title{font-family:'Playfair Display',serif;font-size:16px;color:#72243E;margin-bottom:16px;text-align:center}
   .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px}
   .sig-box{text-align:center}
-  .sig-name{font-size:12px;font-weight:500;color:#2d2d2d;margin-top:4px}
   .sig-date{font-size:11px;color:#aaa}
   .sig-label{font-size:11px;color:#aaa;margin-top:6px}
   canvas{border:1px dashed #D9A7B4;border-radius:8px;cursor:crosshair;display:block;width:100%;touch-action:none;background:#fafaf8}
+  canvas.bloqueado{cursor:not-allowed;opacity:0.5;background:#f5f5f5}
+  canvas.assinado{cursor:default;border-color:#a5d6a7;border-style:solid}
   .sig-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end}
   .btn-clear{font-size:12px;color:#999;background:none;border:1px solid #e8dde0;border-radius:6px;padding:4px 12px;cursor:pointer}
   .btn-confirm{font-size:12px;color:#fff;background:#72243E;border:none;border-radius:6px;padding:5px 14px;cursor:pointer;font-weight:600}
+  .perfil-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;margin-bottom:16px}
+  .perfil-cliente{background:#e3f2fd;color:#1565C0;border:1px solid #90CAF9}
+  .perfil-fotografa{background:#f3e5f5;color:#7b1fa2;border:1px solid #CE93D8}
+  .sig-bloqueado-msg{font-size:11px;color:#aaa;text-align:center;padding:8px;background:#f9f9f9;border-radius:6px;margin-top:6px}
   .status-bar{text-align:center;padding:14px;border-radius:10px;font-size:13px;font-weight:500;margin:16px 0}
   .status-pending{background:#FFF3CD;color:#856404;border:1px solid #FFE082}
   .status-signed{background:#EAF3DE;color:#27500A;border:1px solid #C0DD97}
+  .status-saving{background:#e3f2fd;color:#1565C0;border:1px solid #90CAF9}
+  .status-error{background:#FFEBEE;color:#B71C1C;border:1px solid #EF9A9A}
   .footer-doc{text-align:center;font-size:11px;color:#bbb;margin-top:36px;padding-top:16px;border-top:1px solid #f0e8ea;line-height:1.7}
   .lgpd-box{background:#f0f4f8;border:1px solid #b5d4f4;border-radius:8px;padding:12px 14px;margin:8px 0}
   .lgpd-box p{font-size:12px;color:#0c447c;line-height:1.65}
   .extras-list{margin:6px 0;padding-left:0;list-style:none}
   .extras-list li{font-size:13px;padding:3px 0;color:#3a3a3a;display:flex;justify-content:space-between}
   .extras-list li span{font-weight:600;color:#72243E}
-  @media print{body{background:#fff}.page{padding:20px}canvas,.sig-actions,.btn-clear,.btn-confirm{display:none}}
+  @media print{body{background:#fff}.page{padding:20px}canvas,.sig-actions,.perfil-badge{display:none}}
 `;
 
 function blocoPartes(d) {
@@ -125,9 +132,7 @@ function blocoServico(d) {
   ${d.temMenor && d.nomeCrianca ? `<div class="service-row"><span>Criança</span><span>${d.nomeCrianca}${d.idadeCrianca ? " · " + d.idadeCrianca : ""}</span></div>` : ""}
   ${extras.length > 0 ? `
     <div class="service-row" style="margin-top:6px;font-weight:600;color:#72243E"><span>Adicionais</span><span></span></div>
-    <ul class="extras-list">
-      ${extras.map(e => `<li>${e.label}<span>${fmtMoeda(e.price)}</span></li>`).join("")}
-    </ul>
+    <ul class="extras-list">${extras.map(e => `<li>${e.label}<span>${fmtMoeda(e.price)}</span></li>`).join("")}</ul>
   ` : ""}
   ${desconto > 0 ? `<div class="discount-row"><span>Desconto 10% (extras)</span><span>- ${fmtMoeda(desconto)}</span></div>` : ""}
   <div class="service-total"><span>Valor total</span><span>${fmtMoeda(d.valorTotal)}</span></div>
@@ -175,8 +180,7 @@ function blocoClausulasGerais(d) {
 <div class="clause">
   <h4>Cláusula 8 — LGPD e proteção de dados</h4>
   <div class="lgpd-box">
-    <p>Os dados pessoais serão tratados com base na Lei nº 13.709/2018 (LGPD) exclusivamente para execução contratual. O(a) CONTRATANTE poderá solicitar acesso, correção ou exclusão pelo e-mail <strong>${PHOTOGRAPHER.email}</strong>.
-    ${d.temMenor ? " O tratamento de dados e imagens de crianças observará o ECA Digital (Lei nº 15.211/2025)." : ""}</p>
+    <p>Os dados pessoais serão tratados com base na Lei nº 13.709/2018 (LGPD) exclusivamente para execução contratual. O(a) CONTRATANTE poderá solicitar acesso, correção ou exclusão pelo e-mail <strong>${PHOTOGRAPHER.email}</strong>.${d.temMenor ? " O tratamento de dados e imagens de crianças observará o ECA Digital (Lei nº 15.211/2025)." : ""}</p>
   </div>
 </div>
 <div class="clause">
@@ -189,230 +193,123 @@ function blocoAcompanhamento(d) {
   const isAnual = d.planoId?.includes("anual");
   return `
 <div class="block-title">Condições Específicas — Pacote de Acompanhamento</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>A CONTRATADA prestará serviços fotográficos de acompanhamento <strong>${d.catLabel} · ${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> por sessão.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Periodicidade</h4>
-  <p>Sessões nos marcos de <strong>${isAnual ? "1 a 12 meses (mensalmente)" : "3, 6, 9 e 12 meses"}</strong> de vida da criança.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E3 — Vigência e sessões vencidas</h4>
-  <p>Validade de <strong>12 meses</strong>. Sessões não realizadas na vigência serão consideradas perdidas, sem direito a crédito.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E4 — Cenários</h4>
-  <p>Cada sessão inclui <strong>${d.catLabel?.includes("Afeto") ? "1 cenário temático + 1 cenário família + cenário Mascote" : "1 cenário temático + cenário Mascote"}</strong>.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>A CONTRATADA prestará serviços fotográficos de acompanhamento <strong>${d.catLabel} · ${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong> por sessão.</p></div>
+<div class="clause"><h4>Cláusula E2 — Periodicidade</h4><p>Sessões nos marcos de <strong>${isAnual ? "1 a 12 meses (mensalmente)" : "3, 6, 9 e 12 meses"}</strong> de vida da criança.</p></div>
+<div class="clause"><h4>Cláusula E3 — Vigência e sessões vencidas</h4><p>Validade de <strong>12 meses</strong>. Sessões não realizadas na vigência serão consideradas perdidas, sem direito a crédito.</p></div>
+<div class="clause"><h4>Cláusula E4 — Cenários</h4><p>Cada sessão inclui <strong>${d.catLabel?.includes("Afeto") ? "1 cenário temático + 1 cenário família + cenário Mascote" : "1 cenário temático + cenário Mascote"}</strong>.</p></div>`;
 }
 
 function blocoGestante(d) {
   const externa = d.catKey?.includes("externa");
   return `
 <div class="block-title">Condições Específicas — Ensaio Gestante / Revelação</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio fotográfico <strong>${d.planoLabel}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 1 cenário clean e 1 cenário família.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Período recomendado</h4>
-  <p>Recomendado entre a descoberta e a <strong>38ª semana</strong>. Remarcação por saúde será avaliada com prioridade.</p>
-</div>
-${externa ? `
-<div class="clause">
-  <h4>Cláusula E3 — Ensaio externo</h4>
-  <p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada. Custos de deslocamento são de responsabilidade do(a) CONTRATANTE.</p>
-</div>` : ""}`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio fotográfico <strong>${d.planoLabel}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 1 cenário clean e 1 cenário família.</p></div>
+<div class="clause"><h4>Cláusula E2 — Período recomendado</h4><p>Recomendado entre a descoberta e a <strong>38ª semana</strong>. Remarcação por saúde será avaliada com prioridade.</p></div>
+${externa ? `<div class="clause"><h4>Cláusula E3 — Ensaio externo</h4><p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada.</p></div>` : ""}`;
 }
 
 function blocoNewborn(d) {
   return `
 <div class="block-title">Condições Específicas — Ensaio Newborn</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio de recém-nascido com entrega de <strong>${d.fotos || 20} fotografias</strong>, preferencialmente até <strong>10 dias de vida</strong>. Inclui 1 cenário bebê e 1 cenário família.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Segurança do bebê</h4>
-  <p>A sessão terá pausas para alimentação e conforto. A CONTRATADA poderá recusar poses inadequadas. <strong>A segurança do bebê prevalece sobre preferências estéticas.</strong></p>
-</div>
-<div class="clause">
-  <h4>Cláusula E3 — Presença obrigatória</h4>
-  <p>Presença de pelo menos um responsável legal é obrigatória. Alergias e condições de saúde devem ser informadas previamente.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E4 — Autorização do menor</h4>
-  <p>O(a) responsável legal autoriza a participação do recém-nascido em conformidade com o <strong>ECA Digital (Lei nº 15.211/2025)</strong> e a LGPD.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio de recém-nascido com entrega de <strong>${d.fotos || 20} fotografias</strong>, preferencialmente até <strong>10 dias de vida</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Segurança do bebê</h4><p>A sessão terá pausas para alimentação e conforto. <strong>A segurança do bebê prevalece sobre preferências estéticas.</strong></p></div>
+<div class="clause"><h4>Cláusula E3 — Presença obrigatória</h4><p>Presença de pelo menos um responsável legal é obrigatória durante toda a sessão.</p></div>
+<div class="clause"><h4>Cláusula E4 — Autorização do menor</h4><p>O(a) responsável legal autoriza a participação do recém-nascido nos termos do <strong>ECA Digital (Lei nº 15.211/2025)</strong> e da LGPD.</p></div>`;
 }
 
 function blocoInfantil(d) {
   const isSmash = d.planoId?.includes("smash");
   return `
 <div class="block-title">Condições Específicas — Ensaio Infantil</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio infantil <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? (d.fotos === 70 ? "a partir de 70" : d.fotos) + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Responsabilidade</h4>
-  <p>Presença de responsável legal obrigatória. A CONTRATADA não se responsabiliza por crises, cansaço ou recusa de figurino da criança.</p>
-</div>
-${isSmash ? `
-<div class="clause">
-  <h4>Cláusula E3 — Smash the Cake</h4>
-  <p>Restrições alimentares devem ser informadas previamente. A CONTRATADA não responde por reações alérgicas não informadas.</p>
-</div>` : ""}
-<div class="clause">
-  <h4>Cláusula E${isSmash ? "4" : "3"} — Autorização do menor</h4>
-  <p>O(a) responsável legal autoriza a participação de <strong>${d.nomeCrianca || "_______________"}</strong> (${d.idadeCrianca || "___"}) nos termos do <strong>ECA Digital (Lei nº 15.211/2025)</strong> e da LGPD.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio infantil <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? (d.fotos === 70 ? "a partir de 70" : d.fotos) + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p></div>
+<div class="clause"><h4>Cláusula E2 — Responsabilidade</h4><p>Presença de responsável legal obrigatória. A CONTRATADA não se responsabiliza por crises, cansaço ou recusa de figurino da criança.</p></div>
+${isSmash ? `<div class="clause"><h4>Cláusula E3 — Smash the Cake</h4><p>Restrições alimentares devem ser informadas previamente.</p></div>` : ""}
+<div class="clause"><h4>Cláusula E${isSmash ? "4" : "3"} — Autorização do menor</h4><p>O(a) responsável legal autoriza a participação de <strong>${d.nomeCrianca || "_______________"}</strong> (${d.idadeCrianca || "___"}) nos termos do <strong>ECA Digital (Lei nº 15.211/2025)</strong> e da LGPD.</p></div>`;
 }
 
 function blocoAdulto(d) {
   const externa = d.catKey?.includes("externo");
   return `
 <div class="block-title">Condições Específicas — Ensaio Adulto / Corporativo</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 2 cenários: 1 conforme perfil + 1 clean.</p>
-</div>
-${externa ? `
-<div class="clause">
-  <h4>Cláusula E2 — Ensaio externo</h4>
-  <p>Realizado em local externo ou no local de trabalho dentro de Bauru/SP. Custos de deslocamento são de responsabilidade do(a) CONTRATANTE.</p>
-</div>` : ""}`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}. Inclui 2 cenários: 1 conforme perfil + 1 clean.</p></div>
+${externa ? `<div class="clause"><h4>Cláusula E2 — Ensaio externo</h4><p>Realizado em local externo dentro de Bauru/SP. Custos de deslocamento são de responsabilidade do(a) CONTRATANTE.</p></div>` : ""}`;
 }
 
 function blocoFamilia(d) {
   const externa = d.catKey?.includes("externa");
   return `
 <div class="block-title">Condições Específicas — Ensaio Família</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio familiar <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Participantes e menores</h4>
-  <p>Acréscimo de participantes não informados poderá implicar ajuste de valor. Imagens de menores observarão o <strong>ECA Digital (Lei nº 15.211/2025)</strong>.</p>
-</div>
-${externa ? `
-<div class="clause">
-  <h4>Cláusula E3 — Ensaio externo</h4>
-  <p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada.</p>
-</div>` : ""}`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio familiar <strong>${d.planoLabel}</strong>, entregando <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>${d.duracao ? `, duração de <strong>${d.duracao}</strong>` : ""}.</p></div>
+<div class="clause"><h4>Cláusula E2 — Participantes e menores</h4><p>Acréscimo de participantes não informados poderá implicar ajuste de valor. Imagens de menores observarão o <strong>ECA Digital (Lei nº 15.211/2025)</strong>.</p></div>
+${externa ? `<div class="clause"><h4>Cláusula E3 — Ensaio externo</h4><p>Realizado em local externo dentro de Bauru/SP. Em caso de inviabilidade climática, a sessão poderá ser remarcada.</p></div>` : ""}`;
 }
 
 function blocoCampanha(d) {
   return `
 <div class="block-title">Condições Específicas — Campanha Sazonal</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Ensaio temático da campanha <strong>${d.nomeCampanha || "sazonal vigente"}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Cancelamento especial</h4>
-  <p>Por se tratar de campanha com agenda fechada, cancelamentos implicam em perda integral do valor pago, independentemente da antecedência.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Ensaio temático da campanha <strong>${d.nomeCampanha || "sazonal vigente"}</strong>, com entrega de <strong>${d.fotos ? d.fotos + " fotografias" : "fotografias conforme pacote"}</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Cancelamento especial</h4><p>Por se tratar de campanha com agenda fechada, cancelamentos implicam em perda integral do valor pago.</p></div>`;
 }
 
 function blocoEvento(d) {
   const extras = d.extras?.filter(e => e.price) || [];
   return `
 <div class="block-title">Condições Específicas — Cobertura de Evento</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Cobertura fotográfica de <strong>${d.catLabel} — ${d.planoLabel}</strong>, duração de <strong>${d.duracao}</strong>. Entrega em até <strong>10 dias corridos</strong>.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Hora extra</h4>
-  <p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional, mediante aceite no ato.</p>
-</div>
-${extras.length > 0 ? `
-<div class="clause">
-  <h4>Cláusula E3 — Adicionais contratados</h4>
-  <p>Adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>.${d.desconto > 0 ? ` Desconto de <strong>10%</strong> aplicado por inclusão de adicionais.` : ""}</p>
-</div>` : ""}
-<div class="clause">
-  <h4>Cláusula E${extras.length > 0 ? "4" : "3"} — Logística</h4>
-  <p>Valor válido para eventos dentro de Bauru/SP. Deslocamentos fora da cidade cobrados à parte.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Cobertura fotográfica de <strong>${d.catLabel} — ${d.planoLabel}</strong>, duração de <strong>${d.duracao}</strong>. Entrega em até <strong>10 dias corridos</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Hora extra</h4><p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional, mediante aceite no ato.</p></div>
+${extras.length > 0 ? `<div class="clause"><h4>Cláusula E3 — Adicionais contratados</h4><p>Adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>.${d.desconto > 0 ? ` Desconto de <strong>10%</strong> aplicado.` : ""}</p></div>` : ""}
+<div class="clause"><h4>Cláusula E${extras.length > 0 ? "4" : "3"} — Logística</h4><p>Valor válido para eventos dentro de Bauru/SP.</p></div>`;
 }
 
 function blocoQuinzeAnos(d) {
   const extras = d.extras?.filter(e => e.price) || [];
   return `
 <div class="block-title">Condições Específicas — Quinze Anos</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Cobertura fotográfica de evento de debutante com <strong>6 horas</strong>${extras.length > 0 ? `, adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>` : ""}. Entrega em até <strong>10 dias corridos</strong>.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Hora extra</h4>
-  <p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Cobertura fotográfica com <strong>6 horas</strong>${extras.length > 0 ? `, adicionais: <strong>${extras.map(e => e.label).join(", ")}</strong>` : ""}. Entrega em até <strong>10 dias corridos</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Hora extra</h4><p>Prorrogação cobrada a <strong>R$ 275,00/hora</strong> adicional.</p></div>`;
 }
 
 function blocoCofrinho(d) {
   return `
 <div class="block-title">Condições Específicas — Cofrinho de Recordações</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Adesão ao plano <strong>${d.planoLabel}</strong>, mensalidade de <strong>${fmtMoeda(d.valorMensal || d.valorTotal)}/mês</strong>.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Resgate</h4>
-  <ul>
-    <li>Resgate a partir do <strong>3º mês</strong> de pagamento.</li>
-    <li>Elegível em: ensaios avulsos e fotos extras.</li>
-    <li>Não elegível em: eventos (aniversários, batizados, 15 anos).</li>
-  </ul>
-</div>
-<div class="clause">
-  <h4>Cláusula E3 — Cancelamento</h4>
-  <p>Cancelamento sem multa a qualquer momento. Saldo não é reembolsado em dinheiro — permanece disponível por <strong>6 meses</strong> para resgate em ensaios.</p>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Adesão ao plano <strong>${d.planoLabel}</strong>, mensalidade de <strong>${fmtMoeda(d.valorMensal || d.valorTotal)}/mês</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Resgate</h4><ul><li>Resgate a partir do <strong>3º mês</strong>.</li><li>Elegível em: ensaios avulsos e fotos extras.</li><li>Não elegível em: eventos.</li></ul></div>
+<div class="clause"><h4>Cláusula E3 — Cancelamento</h4><p>Cancelamento sem multa. Saldo permanece disponível por <strong>6 meses</strong> após o cancelamento.</p></div>`;
 }
 
 function blocoValePresente(d) {
   return `
 <div class="block-title">Condições Específicas — Vale Presente</div>
-<div class="clause">
-  <h4>Cláusula E1 — Objeto</h4>
-  <p>Vale Presente no valor de <strong>${fmtMoeda(d.valorTotal)}</strong>, emitido por <strong>${d.nomeCliente}</strong> em favor de <strong>${d.nomePresenteado || "_______________"}</strong>.</p>
-</div>
-<div class="clause">
-  <h4>Cláusula E2 — Utilização e validade</h4>
-  <ul>
-    <li>Utilizável em qualquer ensaio fotográfico do catálogo.</li>
-    <li>Não elegível para eventos (aniversários, batizados, 15 anos).</li>
-    <li>Validade de <strong>12 meses</strong> a partir da emissão.</li>
-    <li>Não transferível a terceiros.</li>
-  </ul>
-</div>`;
+<div class="clause"><h4>Cláusula E1 — Objeto</h4><p>Vale Presente no valor de <strong>${fmtMoeda(d.valorTotal)}</strong>, emitido por <strong>${d.nomeCliente}</strong> em favor de <strong>${d.nomePresenteado || "_______________"}</strong>.</p></div>
+<div class="clause"><h4>Cláusula E2 — Utilização e validade</h4><ul><li>Utilizável em qualquer ensaio fotográfico do catálogo.</li><li>Não elegível para eventos.</li><li>Validade de <strong>12 meses</strong>.</li><li>Não transferível a terceiros.</li></ul></div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
-// BLOCO D — ASSINATURA
+// BLOCO D — ASSINATURA COM CONTROLE DE PERFIL
+// perfil: 'cliente' | 'fotografa' | 'todos' (padrão = todos, legado)
 // ══════════════════════════════════════════════════════════════════
 function blocoAssinatura(d) {
   return `
 <div class="sig-section">
   <div class="sig-title">Assinaturas Digitais</div>
-  <div id="sig-status" class="status-bar status-pending">✏️ Aguardando assinatura do(a) CONTRATANTE</div>
 
+  <!-- Badge de perfil — preenchido pelo JS -->
+  <div id="perfil-badge-area" style="text-align:center;margin-bottom:12px"></div>
+
+  <div id="sig-status" class="status-bar status-pending">✏️ Carregando contrato...</div>
+
+  <!-- ASSINATURA DO CLIENTE -->
   <div style="margin-bottom:24px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">1. Assinatura do(a) Contratante</p>
     <div class="sig-grid">
       <div class="sig-box">
         <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATANTE</div>
         <canvas id="sig-canvas" width="300" height="110"></canvas>
-        <div class="sig-actions" id="sig-actions-cliente">
+        <div id="sig-actions-cliente" class="sig-actions">
           <button class="btn-clear" onclick="clearSig()">Limpar</button>
           <button class="btn-confirm" onclick="confirmSig()">Assinar ✍️</button>
         </div>
-        <div class="sig-label" id="sig-name-label">${d.nomeCliente || "Cliente"}</div>
+        <div class="sig-label">${d.nomeCliente || "Cliente"}</div>
         <div class="sig-date" id="sig-date-label"></div>
       </div>
       <div class="sig-box" style="display:flex;flex-direction:column;justify-content:flex-end">
@@ -426,13 +323,14 @@ function blocoAssinatura(d) {
   </div>
 
   ${d.temMenor ? `
+  <!-- ASSINATURA DO RESPONSÁVEL LEGAL -->
   <div style="margin-bottom:24px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">2. Assinatura do Responsável Legal (menor)</p>
     <div class="sig-grid">
       <div class="sig-box">
         <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">RESPONSÁVEL LEGAL</div>
         <canvas id="sig-canvas-resp" width="300" height="110"></canvas>
-        <div class="sig-actions" id="sig-actions-resp">
+        <div id="sig-actions-resp" class="sig-actions">
           <button class="btn-clear" onclick="clearSigResp()">Limpar</button>
           <button class="btn-confirm" onclick="confirmSigResp()">Assinar ✍️</button>
         </div>
@@ -448,13 +346,14 @@ function blocoAssinatura(d) {
     </div>
   </div>` : ""}
 
+  <!-- ASSINATURA DA CONTRATADA -->
   <div style="margin-bottom:16px">
     <p style="font-size:11px;font-weight:700;color:#698494;text-transform:uppercase;letter-spacing:.06em;margin:0 0 12px">${d.temMenor ? "3" : "2"}. Assinatura da Contratada</p>
     <div class="sig-grid">
       <div class="sig-box">
         <div style="font-size:12px;font-weight:500;color:#2d2d2d;margin-bottom:8px">CONTRATADA</div>
         <canvas id="sig-canvas-contratada" width="300" height="110"></canvas>
-        <div class="sig-actions" id="sig-actions-contratada">
+        <div id="sig-actions-contratada" class="sig-actions">
           <button class="btn-clear" onclick="clearSigContratada()">Limpar</button>
           <button class="btn-confirm" onclick="confirmSigContratada()">Assinar ✍️</button>
         </div>
@@ -478,15 +377,31 @@ function blocoAssinatura(d) {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// SCRIPT DE ASSINATURA — CORRIGIDO: salva direto no Supabase
+// SCRIPT — controle de perfil + save Supabase + bloqueio pós-assinatura
 // ══════════════════════════════════════════════════════════════════
 function scriptAssinatura(d) {
   return `
 <script>
+// ── Configuração ──────────────────────────────────────────────────
+const SUPA_URL = 'https://uuorxycrxadhjbrebrlg.supabase.co';
+const SUPA_KEY = 'sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3';
+const AGENDAMENTO_ID = '${d.agendamentoId}';
+const CONTRATO_ID    = '${d.numeroContrato}';
+const TEM_MENOR      = ${d.temMenor ? "true" : "false"};
+
+// ── Detecta perfil pela URL ───────────────────────────────────────
+// /contrato/ID          → cliente
+// /contrato/ID?p=fotografa → fotografa
+const urlParams = new URLSearchParams(window.location.search);
+const PERFIL = urlParams.get('p') === 'fotografa' ? 'fotografa' : 'cliente';
+
+// ── Estado ───────────────────────────────────────────────────────
 let sigCliente = null;
 let sigContratada = null;
-${d.temMenor ? "let sigResp = null;" : ""}
+let sigResp = null;
+let contratoJaSalvo = false;
 
+// ── Setup canvas ─────────────────────────────────────────────────
 function setupCanvas(id) {
   const canvas = document.getElementById(id);
   if(!canvas) return null;
@@ -508,78 +423,214 @@ function setupCanvas(id) {
   canvas.addEventListener('touchmove', e=>{e.preventDefault();if(!drawing)return;const p=getPos(e);ctx.beginPath();ctx.moveTo(lastX,lastY);ctx.lineTo(p.x,p.y);ctx.stroke();lastX=p.x;lastY=p.y;},{passive:false});
   canvas.addEventListener('touchend', ()=>drawing=false);
   return {
-    canvas,
-    ctx,
+    canvas, ctx,
     clear: ()=>ctx.clearRect(0,0,canvas.width,canvas.height),
     getData: ()=>canvas.toDataURL('image/png'),
-    isEmpty: ()=>!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0)
+    isEmpty: ()=>!ctx.getImageData(0,0,canvas.width,canvas.height).data.some(v=>v!==0),
+    bloquear: (msg) => {
+      canvas.classList.add('bloqueado');
+      canvas.style.pointerEvents = 'none';
+      if(msg) {
+        const el = document.createElement('div');
+        el.className = 'sig-bloqueado-msg';
+        el.textContent = msg;
+        canvas.parentNode.insertBefore(el, canvas.nextSibling);
+      }
+    },
+    mostrarAssinado: (dataStr) => {
+      canvas.classList.remove('bloqueado');
+      canvas.classList.add('assinado');
+      canvas.style.pointerEvents = 'none';
+      canvas.style.opacity = '0.9';
+    }
   };
 }
 
-const canvasCliente = setupCanvas('sig-canvas');
+const canvasCliente    = setupCanvas('sig-canvas');
 const canvasContratada = setupCanvas('sig-canvas-contratada');
-${d.temMenor ? "const canvasResp = setupCanvas('sig-canvas-resp');" : ""}
+const canvasResp       = TEM_MENOR ? setupCanvas('sig-canvas-resp') : null;
 
-// ── CORRIGIDO: salva direto no Supabase ───────────────────────────
-function verificarAmbos() {
-  const ambos = sigCliente && sigContratada ${d.temMenor ? "&& sigResp" : ""};
-  if(!ambos) return;
+// ── Inicializa perfil e bloqueios ─────────────────────────────────
+function inicializar() {
+  const badge = document.getElementById('perfil-badge-area');
+
+  if(PERFIL === 'fotografa') {
+    badge.innerHTML = '<span class="perfil-badge perfil-fotografa">📷 Você está assinando como Contratada</span>';
+    // Bloqueia campos do cliente
+    canvasCliente?.bloquear('Este campo é para assinatura do cliente');
+    document.getElementById('sig-actions-cliente').innerHTML =
+      '<span class="sig-bloqueado-msg">🔒 Disponível apenas para o cliente</span>';
+    if(canvasResp) {
+      canvasResp.bloquear('Este campo é para assinatura do responsável legal');
+      document.getElementById('sig-actions-resp').innerHTML =
+        '<span class="sig-bloqueado-msg">🔒 Disponível apenas para o responsável</span>';
+    }
+    document.getElementById('sig-status').textContent = '✍️ Assine no campo "Contratada" abaixo';
+  } else {
+    badge.innerHTML = '<span class="perfil-badge perfil-cliente">🌸 Você está assinando como Contratante</span>';
+    // Bloqueia campo da fotógrafa
+    canvasContratada?.bloquear('Este campo será assinado pela fotógrafa');
+    document.getElementById('sig-actions-contratada').innerHTML =
+      '<span class="sig-bloqueado-msg">🔒 Disponível apenas para a fotógrafa</span>';
+    document.getElementById('sig-status').textContent = '✍️ Leia o contrato e assine abaixo para confirmar';
+  }
+}
+
+// ── Carrega assinaturas já salvas no Supabase ─────────────────────
+async function carregarAssinaturas() {
+  try {
+    const res = await fetch(
+      SUPA_URL + '/rest/v1/agendamentos?id=eq.' + AGENDAMENTO_ID + '&select=signature,signature_contratada,signature_responsavel,signed_at',
+      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } }
+    );
+    const data = await res.json();
+    if(!data || !data[0]) return;
+    const ag = data[0];
+
+    if(ag.signature) {
+      sigCliente = ag.signature;
+      restaurarAssinatura('sig-canvas', ag.signature);
+      document.getElementById('sig-actions-cliente').innerHTML =
+        '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+      document.getElementById('sig-date-label').textContent = ag.signed_at || '';
+      canvasCliente?.mostrarAssinado();
+    }
+    if(ag.signature_contratada) {
+      sigContratada = ag.signature_contratada;
+      restaurarAssinatura('sig-canvas-contratada', ag.signature_contratada);
+      document.getElementById('sig-actions-contratada').innerHTML =
+        '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+      document.getElementById('sig-date-contratada').textContent = ag.signed_at || '';
+      canvasContratada?.mostrarAssinado();
+    }
+    if(TEM_MENOR && ag.signature_responsavel) {
+      sigResp = ag.signature_responsavel;
+      restaurarAssinatura('sig-canvas-resp', ag.signature_responsavel);
+      document.getElementById('sig-actions-resp').innerHTML =
+        '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+      canvasResp?.mostrarAssinado();
+    }
+
+    // Se ambos já assinaram — trava tudo
+    const ambos = ag.signature && ag.signature_contratada && (!TEM_MENOR || ag.signature_responsavel);
+    if(ambos) {
+      contratoJaSalvo = true;
+      document.getElementById('sig-status').className = 'status-bar status-signed';
+      document.getElementById('sig-status').textContent = '✅ Contrato assinado por ambas as partes em ' + (ag.signed_at || '');
+      travarTudo();
+    } else {
+      inicializar();
+      if(ag.signature && PERFIL === 'cliente') {
+        document.getElementById('sig-status').textContent = '✅ Sua assinatura foi salva! Aguardando assinatura da fotógrafa.';
+      }
+      if(ag.signature_contratada && PERFIL === 'fotografa') {
+        document.getElementById('sig-status').textContent = '✅ Sua assinatura foi salva! Aguardando assinatura do cliente.';
+      }
+    }
+  } catch(e) {
+    console.error('Erro ao carregar assinaturas:', e);
+    inicializar();
+  }
+}
+
+// ── Restaura assinatura salva no canvas ───────────────────────────
+function restaurarAssinatura(canvasId, dataUrl) {
+  const canvas = document.getElementById(canvasId);
+  if(!canvas || !dataUrl) return;
+  const img = new Image();
+  img.onload = () => canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  img.src = dataUrl;
+}
+
+// ── Trava todos os campos após assinatura completa ────────────────
+function travarTudo() {
+  ['sig-canvas','sig-canvas-contratada','sig-canvas-resp'].forEach(id => {
+    const c = document.getElementById(id);
+    if(c) { c.style.pointerEvents = 'none'; c.classList.add('assinado'); }
+  });
+  ['sig-actions-cliente','sig-actions-contratada','sig-actions-resp'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+}
+
+// ── Salva no Supabase ─────────────────────────────────────────────
+async function salvarNoSupabase() {
+  if(contratoJaSalvo) return;
 
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
 
-  document.getElementById('sig-status').className = 'status-bar status-pending';
+  const ambos = sigCliente && sigContratada && (!TEM_MENOR || sigResp);
+
+  const payload = {};
+  if(PERFIL === 'cliente') {
+    payload.signature = sigCliente;
+    if(TEM_MENOR) payload.signature_responsavel = sigResp;
+  } else {
+    payload.signature_contratada = sigContratada;
+  }
+  if(ambos) {
+    payload.signed_at = dateStr;
+    payload.status = 'Contrato';
+  }
+
+  document.getElementById('sig-status').className = 'status-bar status-saving';
   document.getElementById('sig-status').textContent = '⏳ Salvando assinatura...';
 
-  const SUPA_URL = 'https://uuorxycrxadhjbrebrlg.supabase.co';
-  const SUPA_KEY = 'sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3';
-
-  fetch(SUPA_URL + '/rest/v1/agendamentos?id=eq.${d.agendamentoId}', {
-    method: 'PATCH',
-    headers: {
-      'apikey': SUPA_KEY,
-      'Authorization': 'Bearer ' + SUPA_KEY,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=representation',
-    },
-    body: JSON.stringify({
-      signature: sigCliente,
-      signature_contratada: sigContratada,
-      ${d.temMenor ? "signature_responsavel: sigResp," : ""}
-      signed_at: dateStr,
-      status: 'Contrato',
-    }),
-  })
-  .then(res => {
+  try {
+    const res = await fetch(SUPA_URL + '/rest/v1/agendamentos?id=eq.' + AGENDAMENTO_ID, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(payload),
+    });
     if(!res.ok) throw new Error('HTTP ' + res.status);
-    document.getElementById('sig-status').className = 'status-bar status-signed';
-    document.getElementById('sig-status').textContent = '✅ Contrato assinado e salvo em ' + dateStr;
-    // Dispara n8n para notificações (pode falhar sem problema)
-    fetch('https://ribbitingboar-n8n.cloudfy.live/webhook/contrato-assinado', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        agendamento_id: '${d.agendamentoId}',
-        contrato_id: '${d.numeroContrato}',
-        signed_at: now.toISOString(),
-        cliente_email: '${d.emailCliente}',
-        cliente_nome: '${d.nomeCliente}',
-        cliente_whatsapp: '${d.whatsappCliente}',
-      })
-    }).catch(()=>{});
-  })
-  .catch(err => {
+
+    if(ambos) {
+      contratoJaSalvo = true;
+      document.getElementById('sig-status').className = 'status-bar status-signed';
+      document.getElementById('sig-status').textContent = '✅ Contrato assinado e salvo em ' + dateStr;
+      travarTudo();
+      // Dispara n8n para notificações
+      fetch('https://ribbitingboar-n8n.cloudfy.live/webhook/contrato-assinado', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          agendamento_id: AGENDAMENTO_ID,
+          contrato_id: CONTRATO_ID,
+          signed_at: now.toISOString(),
+          cliente_email: '${d.emailCliente}',
+          cliente_nome: '${d.nomeCliente}',
+          cliente_whatsapp: '${d.whatsappCliente}',
+        })
+      }).catch(()=>{});
+    } else {
+      document.getElementById('sig-status').className = 'status-bar status-signed';
+      if(PERFIL === 'cliente') {
+        document.getElementById('sig-status').textContent = '✅ Sua assinatura foi salva! A fotógrafa será notificada para assinar.';
+      } else {
+        document.getElementById('sig-status').textContent = '✅ Sua assinatura foi salva! Aguardando assinatura do cliente.';
+      }
+    }
+  } catch(err) {
     console.error('Erro ao salvar:', err);
-    document.getElementById('sig-status').className = 'status-bar status-pending';
+    document.getElementById('sig-status').className = 'status-bar status-error';
     document.getElementById('sig-status').textContent = '❌ Erro ao salvar. Tente novamente ou entre em contato com a Crescidinhos.';
-    // Libera botões para tentar de novo
-    sigCliente = null; sigContratada = null;
-    ${d.temMenor ? "sigResp = null;" : ""}
-  });
+  }
 }
 
-function clearSig() { canvasCliente?.clear(); sigCliente = null; }
+// ── Ações do cliente ──────────────────────────────────────────────
+function clearSig() {
+  if(PERFIL !== 'cliente') return;
+  canvasCliente?.clear(); sigCliente = null;
+}
 function confirmSig() {
+  if(PERFIL !== 'cliente') return;
   if(!canvasCliente || canvasCliente.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
   sigCliente = canvasCliente.getData();
   const now = new Date();
@@ -587,24 +638,16 @@ function confirmSig() {
   document.getElementById('sig-actions-cliente').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
   canvasCliente.canvas.style.pointerEvents = 'none';
   canvasCliente.canvas.style.opacity = '0.85';
-  verificarAmbos();
+  salvarNoSupabase();
 }
 
-function clearSigContratada() { canvasContratada?.clear(); sigContratada = null; }
-function confirmSigContratada() {
-  if(!canvasContratada || canvasContratada.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
-  sigContratada = canvasContratada.getData();
-  const now = new Date();
-  document.getElementById('sig-date-contratada').textContent = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('sig-actions-contratada').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
-  canvasContratada.canvas.style.pointerEvents = 'none';
-  canvasContratada.canvas.style.opacity = '0.85';
-  verificarAmbos();
+// ── Ações do responsável (menor) ──────────────────────────────────
+function clearSigResp() {
+  if(PERFIL !== 'cliente') return;
+  canvasResp?.clear(); sigResp = null;
 }
-
-${d.temMenor ? `
-function clearSigResp() { canvasResp?.clear(); sigResp = null; }
 function confirmSigResp() {
+  if(PERFIL !== 'cliente') return;
   if(!canvasResp || canvasResp.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
   sigResp = canvasResp.getData();
   const now = new Date();
@@ -612,8 +655,28 @@ function confirmSigResp() {
   document.getElementById('sig-actions-resp').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
   canvasResp.canvas.style.pointerEvents = 'none';
   canvasResp.canvas.style.opacity = '0.85';
-  verificarAmbos();
-}` : ""}
+  salvarNoSupabase();
+}
+
+// ── Ações da contratada (Thais) ───────────────────────────────────
+function clearSigContratada() {
+  if(PERFIL !== 'fotografa') return;
+  canvasContratada?.clear(); sigContratada = null;
+}
+function confirmSigContratada() {
+  if(PERFIL !== 'fotografa') return;
+  if(!canvasContratada || canvasContratada.isEmpty()) { alert('Por favor, assine antes de confirmar.'); return; }
+  sigContratada = canvasContratada.getData();
+  const now = new Date();
+  document.getElementById('sig-date-contratada').textContent = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('sig-actions-contratada').innerHTML = '<span style="font-size:12px;color:#27500A;font-weight:500">✅ Assinado</span>';
+  canvasContratada.canvas.style.pointerEvents = 'none';
+  canvasContratada.canvas.style.opacity = '0.85';
+  salvarNoSupabase();
+}
+
+// ── Inicia ────────────────────────────────────────────────────────
+carregarAssinaturas();
 </script>`;
 }
 
@@ -646,7 +709,7 @@ export function gerarContratoHTML(dados) {
     "familia-estudio": "Ensaio Fotográfico — Família",
     "familia-externa": "Ensaio Fotográfico — Família Externa",
     infantil: "Ensaio Fotográfico — Infantil Avulso",
-aniversario: "Cobertura Fotográfica — Evento de Aniversário",
+    aniversario: "Cobertura Fotográfica — Evento de Aniversário",
     batizado: "Cobertura Fotográfica — Batizado / Confraternização / Chá Revelação",
     "quinze-anos": "Cobertura Fotográfica — Quinze Anos",
     cofrinho: "Adesão — Cofrinho de Recordações",
