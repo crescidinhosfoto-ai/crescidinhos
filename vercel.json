@@ -1,6 +1,4 @@
 {
-  "buildCommand": "cd crescidinhos-final && npm install && npm run build",
-  "outputDirectory": "crescidinhos-final/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]
