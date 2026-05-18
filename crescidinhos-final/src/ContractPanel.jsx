@@ -1,109 +1,109 @@
 // =============================================================
 // ContractPanel.jsx — Crescidinhos Fotografia
-// v3: links separados cliente/fotografia + status de assinaturas
+// v3: links separados cliente/fotógrafa + status de assinaturas
 // =============================================================
 
 import { useState, useEffect } from "react";
-importar { gerarContratoHTML, gerarNumeroContrato, fmtData } de "./ContractGenerator";
+import { gerarContratoHTML, gerarNumeroContrato, fmtData } from "./ContractGenerator";
 import { SERVICES } from "./config";
 
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
 const EVOLUTION_KEY = "gNnhqK2sv964EPigBYm1WJkBc91gu1t4";
-const N8N_EMAIL = "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-contrato-email";
-const APP_URL = "https://app.crescidinhosfoto.com.br";
+const N8N_EMAIL     = "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-contrato-email";
+const APP_URL       = "https://app.crescidinhosfoto.com.br";
 
 const sb = async (path, options = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    cabeçalhos: {
+    headers: {
       apikey: SUPABASE_KEY,
-      Autorização: `Portador ${SUPABASE_KEY}`,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      Preferência: "retorno=representação",
-      ...opções.cabeçalhos,
+      Prefer: "return=representation",
+      ...options.headers,
     },
-    ...opções,
+    ...options,
   });
   if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
-  retornar texto ? JSON.parse(texto) : nulo;
+  return text ? JSON.parse(text) : null;
 };
 
-função assíncrona enviarWhatsApp(número, mensagem) {
+async function enviarWhatsApp(numero, mensagem) {
   const tel = numero.replace(/\D/g, "");
-  se (!tel || tel.length < 10) retorne;
-  aguardar fetch(EVOLUTION_URL, {
-    método: "POST",
-    cabeçalhos: { "Content-Type": "application/json", apikey: EVOLUTION_KEY },
-    corpo: JSON.stringify({ número: `55${tel}`, texto: mensagem }),
+  if (!tel || tel.length < 10) return;
+  await fetch(EVOLUTION_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", apikey: EVOLUTION_KEY },
+    body: JSON.stringify({ number: `55${tel}`, text: mensagem }),
   }).catch(() => {});
 }
 
-função assíncrona enviarEmail(dados) {
-  aguardar fetch(N8N_EMAIL, {
-    método: "POST",
-    cabeçalhos: { "Content-Type": "application/json" },
-    corpo: JSON.stringify(dados),
+async function enviarEmail(dados) {
+  await fetch(N8N_EMAIL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
   }).catch(() => {});
 }
 
-// ── Estilos ─────────────────────────── ────────────────────────────
+// ── Estilos ───────────────────────────────────────────────────────
 const inp = {
-  largura: "100%", preenchimento: "10px 12px", raio da borda: 8,
-  borda: "1,5px sólida #e0d8d0", tamanho da fonte: 13, tamanho da caixa: "caixa de borda",
-  contorno: "nenhum", fundo: "#fff", família_da_fonte: "inherit", cor: "#1a1a1a",
-  margemInferior: 12,
+  width: "100%", padding: "10px 12px", borderRadius: 8,
+  border: "1.5px solid #e0d8d0", fontSize: 13, boxSizing: "border-box",
+  outline: "none", background: "#fff", fontFamily: "inherit", color: "#1a1a1a",
+  marginBottom: 12,
 };
 const lbl = { fontSize: 12, color: "#555", fontWeight: 600, display: "block", marginBottom: 5 };
 
-função Campo({ rótulo, filhos }) {
-  retornar (
+function Field({ label, children }) {
+  return (
     <div style={{ marginBottom: 12 }}>
-      <label style={lbl}>{labellabel>
-      {crianças}
+      <label style={lbl}>{label}</label>
+      {children}
     </div>
   );
 }
 
-função btnStyle(bg) {
-  retornar {
-    largura: "100%", preenchimento: 13, raio da borda: 10,
-    fundo: bg, cor: bg === "#ccc" ? "#999" : "#fff",
-    borda: "nenhuma", tamanho da fonte: 14, peso da fonte: 600,
-    cursor: bg === "#ccc" ? "não permitido" : "ponteiro",
+function btnStyle(bg) {
+  return {
+    width: "100%", padding: 13, borderRadius: 10,
+    background: bg, color: bg === "#ccc" ? "#999" : "#fff",
+    border: "none", fontSize: 14, fontWeight: 600,
+    cursor: bg === "#ccc" ? "not-allowed" : "pointer",
     fontFamily: "inherit", marginTop: 4,
   };
 }
 
 // ── Componente de status de assinatura ────────────────────────────
-função SigStatus({ label, assinado, data }) {
-  retornar (
+function SigStatus({ label, signed, date }) {
+  return (
     <div style={{
-      exibir: "flexível", justificarConteúdo: "espaço-entre", alinharItens: "centro",
-      preenchimento: "8px 0", bordaInferior: "1px sólida #f0e8e0", tamanhoDaFonte: 12,
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "8px 0", borderBottom: "1px solid #f0e8e0", fontSize: 12,
     }}>
       <span style={{ color: "#888" }}>{label}</span>
-      {assinado}
-        ? <span style={{ color: "#2e7d32", fontWeight: 600 }}>✅ Assinado{data ? ` em ${data}` : ""}</span>
+      {signed
+        ? <span style={{ color: "#2e7d32", fontWeight: 600 }}>✅ Assinado{date ? ` em ${date}` : ""}</span>
         : <span style={{ color: "#f57c00", fontWeight: 600 }}>⏳ Pendente</span>
       }
     </div>
   );
 }
 
-// ── Componente principal ───────────────────── ─────────────────────
+// ── Componente principal ──────────────────────────────────────────
 export default function ContractPanel({ agendamento, onUpdate }) {
   const cl = agendamento?.clientes || {};
   const catKey = agendamento?.servico_id || "infantil";
   const cat = SERVICES.find(s => s.id === catKey);
 
-  // Estado do Jesus
+  // Estado do formulário
   const [form, setForm] = useState({
     cpf: agendamento?.cpf_mae || cl.cpf_mae || "",
     valor: agendamento?.valor || "",
     formaPagamento: agendamento?.forma_pagamento || "",
-    autorizaImagem: verdadeiro,
+    autorizaImagem: true,
     obs: agendamento?.obs || "",
     extras: [],
     localEnsaio: "",
@@ -111,20 +111,20 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
   // Estado do painel
   const [status, setStatus] = useState(() => {
-    if (agendamento?.assinatura && agendamento?.assinatura_contratada) return "assinado_ambos";
-    if (agendamento?.assinatura) return "enviado"; // cliente já assinado
+    if (agendamento?.signature && agendamento?.signature_contratada) return "assinado_ambos";
+    if (agendamento?.signature) return "enviado"; // cliente já assinou
     if (agendamento?.contrato_html) return "enviado";
-    retornar "ocioso";
+    return "idle";
   });
 
   const [numContrato, setNumContrato] = useState(agendamento?.contrato_numero || "");
 
-  // Status de assinaturas — recarga do Supabase ao abrir
+  // Status de assinaturas — recarrega do Supabase ao abrir
   const [sigStatus, setSigStatus] = useState({
-    cliente: !!agendamento?.assinatura,
+    cliente: !!agendamento?.signature,
     contratada: !!agendamento?.signature_contratada,
     responsavel: !!agendamento?.signature_responsavel,
-    assinado_em: agendamento?.assinado_em || "",
+    signed_at: agendamento?.signed_at || "",
   });
 
   useEffect(() => {
@@ -133,20 +133,20 @@ export default function ContractPanel({ agendamento, onUpdate }) {
     }
   }, [agendamento?.id]);
 
-  função assíncrona recarregarSigStatus() {
-    tentar {
+  async function recarregarSigStatus() {
+    try {
       const r = await sb(
         `agendamentos?id=eq.${agendamento.id}&select=signature,signature_contratada,signature_responsavel,signed_at`
       );
-      se (r && r[0]) {
+      if (r && r[0]) {
         const a = r[0];
         setSigStatus({
-          cliente: !!a.assinatura,
+          cliente: !!a.signature,
           contratada: !!a.signature_contratada,
           responsavel: !!a.signature_responsavel,
-          assinado_em: a.assinado_em || "",
+          signed_at: a.signed_at || "",
         });
-        se (a.assinatura && a.assinatura_contratada) {
+        if (a.signature && a.signature_contratada) {
           setStatus("assinado_ambos");
         } else if (a.signature || a.contrato_html) {
           setStatus("enviado");
@@ -160,9 +160,9 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   // Extras
-  const extrasDisponiveis = gato?.extras || [];
-  const descontoExtras = cat?.descontoExtras || falso;
-  função toggleExtra(e) {
+  const extrasDisponiveis = cat?.extras || [];
+  const descontoExtras = cat?.descontoExtras || false;
+  function toggleExtra(e) {
     const prev = form.extras;
     const existe = prev.some(x => x.id === e.id);
     set("extras", existe ? prev.filter(x => x.id !== e.id) : [...prev, e]);
@@ -172,43 +172,43 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   const totalExtras = form.extras.reduce((a, e) => a + (e.price || 0), 0);
   const baseVal = Number(form.valor) || 0;
   const sub = baseVal + totalExtras;
-  const desconto = descontoExtras && form.extras.length > 0 ? Math.round(sub * 0,10): 0;
+  const desconto = descontoExtras && form.extras.length > 0 ? Math.round(sub * 0.10) : 0;
   const valorFinal = sub - desconto;
 
   // Menor
   const filhos = cl.filhos || [];
-  const temMenor = filhos.comprimento > 0 || !!cl.nome_crianca;
+  const temMenor = filhos.length > 0 || !!cl.nome_crianca;
   const nomeCrianca = filhos[0]?.nome_crianca || cl.nome_crianca || "";
-  const idadeCriança = filhos[0]?.idade || cl.idade || "";
+  const idadeCrianca = filhos[0]?.idade || cl.idade || "";
 
   // Links do contrato
-  const linkCliente = `${APP_URL}/contrato/${agendamento?.id}`;
+  const linkCliente   = `${APP_URL}/contrato/${agendamento?.id}`;
   const linkFotografa = `${APP_URL}/contrato/${agendamento?.id}?p=fotografa`;
 
-  // ── Gerar e enviar ─────────────────────── ───────────────────────
-  função assíncrona gerarEEnviar() {
+  // ── Gerar e enviar ──────────────────────────────────────────────
+  async function gerarEEnviar() {
     setStatus("gerando");
-    tentar {
+    try {
       const numero = gerarNumeroContrato(catKey);
       setNumContrato(numero);
 
       const dadosContrato = {
         catKey,
-        catLabel: gato?.label || agendamento?.serviço || "",
+        catLabel: cat?.label || agendamento?.servico || "",
         planoId: agendamento?.modalidade_id || "",
         planoLabel: agendamento?.modalidade || "",
-        fotos: cat?.modalidades?.find(m => m.id === agendamento?.modalidade_id)?.fotos,
-        duracao: cat?.modalidades?.find(m => m.id === agendamento?.modalidade_id)?.duracao,
+        fotos: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.fotos,
+        duracao: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.duracao,
         localExterno: catKey?.includes("externa") || catKey?.includes("externo"),
         localEnsaio: form.localEnsaio ||
           (catKey?.includes("externa") || catKey?.includes("externo")
             ? "A confirmar"
             : "Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP"),
         valorTotal: valorFinal,
-        valorMensal: catKey === "cofrinho" ? Número(form.valor): nulo,
+        valorMensal: catKey === "cofrinho" ? Number(form.valor) : null,
         desconto,
         formaPagamento: form.formaPagamento,
-        extras: formulário.extras,
+        extras: form.extras,
         descontoExtras: descontoExtras && form.extras.length > 0,
         autorizaUsoImagem: form.autorizaImagem,
         prazoEntrega: ["aniversario","batizado","quinze-anos"].includes(catKey)
@@ -232,12 +232,12 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
       // 1. Salva no Supabase
       await sb(`agendamentos?id=eq.${agendamento.id}`, {
-        método: "PATCH",
-        corpo: JSON.stringify({
+        method: "PATCH",
+        body: JSON.stringify({
           cpf_mae: form.cpf,
           valor: valorFinal,
           forma_pagamento: form.formaPagamento,
-          obs: formulário.obs,
+          obs: form.obs,
           contrato_html: html,
           contrato_numero: numero,
           contrato_gerado_em: new Date().toISOString(),
@@ -246,17 +246,17 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       });
 
       // 2. WhatsApp para o cliente
-      const primeiroNome = cl.nome_mae?.split(" ")[0] || “cliente”;
-      aguardar enviarWhatsApp(
+      const primeiroNome = cl.nome_mae?.split(" ")[0] || "cliente";
+      await enviarWhatsApp(
         cl.telefone,
-        `Olá, ${primeiroNome}! 🎀\n\nSeu contrato da Crescidinhos Fotografia está pronto!\n\n📋 *${cat?.label || agendamento?.servico}*\n📅 ${agendamento?.data ? fmtData(agendamento.data) : ""}\n\nAcesse o link abaixo para ler e transferir digitalmente:\n${linkCliente}\n\n_Qualquer dúvida, é só chamar! 🐘_`
+        `Olá, ${primeiroNome}! 🎀\n\nSeu contrato da Crescidinhos Fotografia está pronto!\n\n📋 *${cat?.label || agendamento?.servico}*\n📅 ${agendamento?.data ? fmtData(agendamento.data) : ""}\n\nAcesse o link abaixo para ler e assinar digitalmente:\n${linkCliente}\n\n_Qualquer dúvida, é só chamar! 🐘_`
       );
 
       // 3. E-mail via n8n
-      aguardar enviarEmail({
-        destinatário: cl.email,
+      await enviarEmail({
+        destinatario: cl.email,
         nome: cl.nome_mae,
-        serviço: gato?.label || agendamento?.serviço,
+        servico: cat?.label || agendamento?.servico,
         plano: agendamento?.modalidade,
         dataEnsaio: agendamento?.data,
         numeroContrato: numero,
@@ -264,30 +264,30 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         contratoHTML: html,
       });
 
-      // 4. Notifica Thais com link para concorrer
-      aguardar enviarWhatsApp(
+      // 4. Notifica Thais com link para assinar
+      await enviarWhatsApp(
         "14996845521",
-        `📄 *Contrato gerado!*\n\nCliente: ${cl.nome_mae}\nServiço: ${cat?.label || agendamento?.servico}\nContrato: ${numero}\n\nLink enviado ao cliente.\n\n✍️ *Seu link para discutir:*\n${linkFotografa}`
+        `📄 *Contrato gerado!*\n\nCliente: ${cl.nome_mae}\nServiço: ${cat?.label || agendamento?.servico}\nContrato: ${numero}\n\nLink enviado ao cliente.\n\n✍️ *Seu link para assinar:*\n${linkFotografa}`
       );
 
       onUpdate?.({ status: "Contrato", contrato_numero: numero, valor: valorFinal });
       setStatus("enviado");
-      setSigStatus({cliente: falso, contratada: falso, responsavel: falso, assinado_at: "" });
-    } catch (erro) {
+      setSigStatus({ cliente: false, contratada: false, responsavel: false, signed_at: "" });
+    } catch (err) {
       console.error(err);
       setStatus("erro");
     }
   }
 
-  // ── Render: ambos concordaram ─────────────────────────────────────
+  // ── Render: ambos assinaram ─────────────────────────────────────
   if (status === "assinado_ambos") return (
     <div style={{ background: "#e6f4ea", border: "1.5px solid #a5d6a7", borderRadius: 12, padding: 16 }}>
-      <p style={{ fontSize: 14, color: "#2e7d32", fontWeight: 600, margin: "0 0 6px" }}>✅ Contrato celebrado por ambas as partes!</p>
+      <p style={{ fontSize: 14, color: "#2e7d32", fontWeight: 600, margin: "0 0 6px" }}>✅ Contrato assinado por ambas as partes!</p>
       <p style={{ fontSize: 12, color: "#555", margin: "0 0 4px" }}>Assinado em {sigStatus.signed_at || agendamento?.signed_at}</p>
       <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Nº {numContrato || agendamento?.contrato_numero}</p>
       <a
         href={linkCliente}
-        alvo="_blank"
+        target="_blank"
         rel="noreferrer"
         style={{ display: "inline-block", marginTop: 10, fontSize: 12, color: "#2e7d32", fontWeight: 600 }}
       >
@@ -309,12 +309,12 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         <p style={{ fontSize: 11, color: "#b8967e", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", margin: "0 0 10px" }}>
           Status das assinaturas
         </p>
-        <SigStatus label="Cliente" assinado={sigStatus.cliente} data={sigStatus.signed_at} />
+        <SigStatus label="Cliente" signed={sigStatus.cliente} date={sigStatus.signed_at} />
         {temMenor && (
-          <SigStatus label="Responsável legal" assinado={sigStatus.responsavel} date={sigStatus.signed_at} />
+          <SigStatus label="Responsável legal" signed={sigStatus.responsavel} date={sigStatus.signed_at} />
         )}
-        <SigStatus label="Contratada (você)" assinado={sigStatus.contratada} date={sigStatus.signed_at} />
-        <botão
+        <SigStatus label="Contratada (você)" signed={sigStatus.contratada} date={sigStatus.signed_at} />
+        <button
           onClick={recarregarSigStatus}
           style={{ marginTop: 10, fontSize: 11, color: "#888", background: "none", border: "1px solid #e8e0d8", borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}
         >
@@ -342,8 +342,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         {/* Link da fotógrafa */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 4px" }}>
           <div>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#7b1fa2", margin: 0 }}>📷 Seu link para alternar</p>
-            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Use este para revisar como fotografia</p>
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#7b1fa2", margin: 0 }}>📷 Seu link para assinar</p>
+            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Use este para assinar como fotógrafa</p>
           </div>
           <a href={linkFotografa} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#7b1fa2", fontWeight: 700, textDecoration: "none" }}>
             Assinar →
@@ -358,48 +358,48 @@ export default function ContractPanel({ agendamento, onUpdate }) {
     </div>
   );
 
-  // ── Renderização: gerando ────────────────────── ───────────────────────
+  // ── Render: gerando ─────────────────────────────────────────────
   if (status === "gerando") return (
     <div style={{ background: "#FFF3CD", border: "1px solid #FFE082", borderRadius: 10, padding: 14, textAlign: "center", fontSize: 13, color: "#856404" }}>
       ⏳ Gerando contrato e enviando para o cliente...
     </div>
   );
 
-  // ── Renderização: erro ──────────────────────── ────────────────────────
-  if (status === "erro") retornar (
+  // ── Render: erro ────────────────────────────────────────────────
+  if (status === "erro") return (
     <div>
       <div style={{ background: "#FFEBEE", border: "1px solid #EF9A9A", borderRadius: 10, padding: 14, fontSize: 13, color: "#B71C1C", marginBottom: 10 }}>
         ❌ Erro ao gerar contrato. Verifique a conexão e tente novamente.
       </div>
-      <button onClick={() => setStatus("idle")} style={btnStyle("#72243E")}>Tentando novamente</button>
+      <button onClick={() => setStatus("idle")} style={btnStyle("#72243E")}>Tentar novamente</button>
     </div>
   );
 
-  // ── Render: inativo — formulário de geração ────────────────────────
-  retornar (
+  // ── Render: idle — formulário de geração ────────────────────────
+  return (
     <div>
       <p style={{ fontSize: 11, color: "#b8967e", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", margin: "0 0 14px" }}>
-        Gerar
+        Gerar contrato
       </p>
 
-      <Etiqueta do campo="CPF do cliente">
-        <entrada
-          estilo={inp}
-          espaço reservado="000.000.000-00"
-          valor={form.cpf}
+      <Field label="CPF da cliente">
+        <input
+          style={inp}
+          placeholder="000.000.000-00"
+          value={form.cpf}
           onChange={e => set("cpf", e.target.value)}
         />
-      </Campo>
+      </Field>
 
       <Field label="Valor total (R$)">
-        <entrada
-          estilo={inp}
-          tipo="número"
+        <input
+          style={inp}
+          type="number"
           placeholder="0,00"
-          valor={form.valor}
+          value={form.valor}
           onChange={e => set("valor", e.target.value)}
         />
-      </Campo>
+      </Field>
 
       <Field label="Forma de pagamento">
         <select style={inp} value={form.formaPagamento} onChange={e => set("formaPagamento", e.target.value)}>
@@ -409,43 +409,43 @@ export default function ContractPanel({ agendamento, onUpdate }) {
           <option>Cartão de crédito — 2x</option>
           <option>Cartão de crédito — 3x</option>
           <option>50% entrada + 50% no dia do ensaio</option>
-          <option>Entrada + parcelas (a combinação)</option>
+          <option>Entrada + parcelas (a combinar)</option>
         </select>
-      </Campo>
+      </Field>
 
       {(catKey?.includes("externa") || catKey?.includes("externo")) && (
         <Field label="Local do ensaio externo">
-          <entrada
-            estilo={inp}
+          <input
+            style={inp}
             placeholder="Endereço ou nome do local"
-            valor={form.localEnsaio}
+            value={form.localEnsaio}
             onChange={e => set("localEnsaio", e.target.value)}
           />
-        </Campo>
+        </Field>
       )}
 
       {/* Extras para eventos */}
       {extrasDisponiveis.length > 0 && (
         <div style={{ marginBottom: 14 }}>
           <label style={lbl}>
-            sítio
+            Adicionais
             {descontoExtras && (
               <span style={{ marginLeft: 6, fontSize: 10, background: "#EAF3DE", color: "#27500A", padding: "1px 7px", borderRadius: 20, fontWeight: 600 }}>
-                10% de desconto ao incluir
+                10% OFF ao incluir
               </span>
             )}
           </label>
           {extrasDisponiveis.map(e => {
             const sel = form.extras.some(x => x.id === e.id);
-            retornar (
+            return (
               <div
-                chave={e.id}
+                key={e.id}
                 onClick={() => toggleExtra(e)}
-                estilo={{
-                  exibir: "flex", alinharItens: "centro", justificarConteúdo: "espaço-entre",
-                  preenchimento: "9px 12px", raio da borda: 9, margem inferior: 5, cursor: "ponteiro",
-                  borda: sel ? "2px sólida #1a1a1a" : "1,5px sólida #e8e0d8",
-                  fundo: sel ? "#1a1a1a" : "#fff",
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "9px 12px", borderRadius: 9, marginBottom: 5, cursor: "pointer",
+                  border: sel ? "2px solid #1a1a1a" : "1.5px solid #e8e0d8",
+                  background: sel ? "#1a1a1a" : "#fff",
                 }}
               >
                 <span style={{ fontSize: 13, color: sel ? "#fff" : "#1a1a1a" }}>{e.label}</span>
@@ -468,19 +468,19 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       <div style={{ marginBottom: 14 }}>
         <label style={lbl}>Autorização de uso de imagem</label>
         <div style={{ display: "flex", gap: 8 }}>
-          {[["Autoriza", true], ["Não autorizada", false]].map(([txt, val]) => (
-            <botão
-              chave={txt}
+          {[["Autoriza", true], ["Não autoriza", false]].map(([txt, val]) => (
+            <button
+              key={txt}
               onClick={() => set("autorizaImagem", val)}
-              estilo={{
+              style={{
                 flex: 1, padding: "9px 0", borderRadius: 9, cursor: "pointer",
-                Tamanho da fonte: 12, Peso da fonte: 600,
-                borda: form.autorizaImagem === val ? "2px solid #1a1a1a" : "1.5px solid #e8e0d8",
+                fontSize: 12, fontWeight: 600,
+                border: form.autorizaImagem === val ? "2px solid #1a1a1a" : "1.5px solid #e8e0d8",
                 background: form.autorizaImagem === val ? "#1a1a1a" : "#fff",
-                cor: form.autorizaImagem === val ? "#fff" : "#666",
+                color: form.autorizaImagem === val ? "#fff" : "#666",
               }}
             >
-              {TXT}
+              {txt}
             </button>
           ))}
         </div>
@@ -489,14 +489,14 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       <Field label="Observações (aparecem no contrato)">
         <textarea
           style={{ ...inp, resize: "vertical", marginBottom: 0 }}
-          linhas={2}
-          valor={form.obs}
+          rows={2}
+          value={form.obs}
           onChange={e => set("obs", e.target.value)}
           placeholder="Ex: pacote inclui cenário temático de Páscoa..."
         />
-      </Campo>
+      </Field>
 
-      <botão
+      <button
         onClick={gerarEEnviar}
         disabled={!form.cpf || !form.valor || !form.formaPagamento}
         style={btnStyle(!form.cpf || !form.valor || !form.formaPagamento ? "#ccc" : "#72243E")}
