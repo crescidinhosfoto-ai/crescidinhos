@@ -34,9 +34,14 @@ const getAgendamentos      = () => sb("agendamentos?select=*,clientes(*)&order=d
 const getClientes          = () => sb("clientes?select=*,agendamentos(*)&order=created_at.desc");
 const getAgendamentosByCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}&order=data.desc`);
 const atualizarAgendamento = (id, data) => sb(`agendamentos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
-const deletarCliente = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
+const deletarCliente       = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
 const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
+
+// ─── SERVIÇOS QUE REQUEREM DADOS DE EVENTO/EXTERNO ───────────────
+const SERVICOS_EVENTO   = ["aniversario","batizado","quinze-anos"];
+const SERVICOS_EXTERNOS = ["gestante-externa","adulto-externo","familia-externa"];
+const requerDadosEvento = (serviceId) => SERVICOS_EVENTO.includes(serviceId) || SERVICOS_EXTERNOS.includes(serviceId);
 
 // ─── EVOLUTION API WhatsApp ───────────────────────────────────────
 const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
@@ -57,9 +62,9 @@ const enviarWhatsApp = async (numero, mensagem) => {
 const MONTHS   = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const WEEKDAYS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const pad = n => String(n).padStart(2,"0");
-const formatDate = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
-const formatDateBR = iso => { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
-const mesAno = iso => { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MONTHS[parseInt(m)-1]}/${y}`; };
+const formatDate    = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
+const formatDateBR  = iso => { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
+const mesAno        = iso => { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MONTHS[parseInt(m)-1]}/${y}`; };
 const getDaysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const getFirstDay    = (y,m) => new Date(y,m,1).getDay();
 
@@ -102,6 +107,45 @@ function Check({ options, values=[], onChange }) {
           {o}
         </label>
       ))}
+    </div>
+  );
+}
+
+// ─── FORMULÁRIO DE DADOS DO EVENTO/EXTERNO ───────────────────────
+function DadosEventoForm({ serviceId, data, onChange }) {
+  const set = (k,v) => onChange({...data,[k]:v});
+  const isEvento = SERVICOS_EVENTO.includes(serviceId);
+  return (
+    <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"16px 14px",marginBottom:16}}>
+      <p style={{...sec,marginTop:0}}>📍 Dados do {isEvento?"evento":"local externo"}</p>
+      {isEvento && (
+        <>
+          <Field label="Nome do aniversariante" required>
+            <input style={inp} value={data.nome_aniversariante||""} onChange={e=>set("nome_aniversariante",e.target.value)} placeholder="Nome completo"/>
+          </Field>
+          <Field label="Idade do aniversariante">
+            <input style={inp} value={data.idade_aniversariante||""} onChange={e=>set("idade_aniversariante",e.target.value)} placeholder="Ex: 5 anos"/>
+          </Field>
+          <Field label="Número aproximado de convidados">
+            <input style={inp} type="number" value={data.num_convidados||""} onChange={e=>set("num_convidados",e.target.value)} placeholder="Ex: 80"/>
+          </Field>
+        </>
+      )}
+      <Field label="Nome/tipo do local" required>
+        <input style={inp} value={data.local_nome||""} onChange={e=>set("local_nome",e.target.value)} placeholder={isEvento?"Ex: Buffet Sonho de Festa":"Ex: Parque Vitória Régia"}/>
+      </Field>
+      <Field label="Rua e número">
+        <input style={inp} value={data.local_rua||""} onChange={e=>set("local_rua",e.target.value)} placeholder="Rua, número"/>
+      </Field>
+      <Field label="Complemento">
+        <input style={inp} value={data.local_complemento||""} onChange={e=>set("local_complemento",e.target.value)} placeholder="Sala, andar..."/>
+      </Field>
+      <Field label="Bairro">
+        <input style={inp} value={data.local_bairro||""} onChange={e=>set("local_bairro",e.target.value)} placeholder="Bairro"/>
+      </Field>
+      <Field label="Cidade">
+        <input style={inp} value={data.local_cidade||"Bauru"} onChange={e=>set("local_cidade",e.target.value)} placeholder="Bauru"/>
+      </Field>
     </div>
   );
 }
@@ -340,7 +384,6 @@ function ServiceSelector({ onConfirm }) {
                     <div style={{padding:"12px 14px",borderRadius:10,background:"#e6f4ea",border:"2px solid #a5d6a7"}}>
                       <p style={{fontSize:13,color:"#2e7d32",fontWeight:700,margin:"0 0 4px"}}>🎁 Vale Presente</p>
                       <p style={{fontSize:12,color:"#555",margin:0,lineHeight:1.6}}>{s.modalities[0].detail}</p>
-                      <p style={{fontSize:11,color:"#856404",margin:"6px 0 0"}}>⚠ Informe o valor desejado nas observações do próximo passo.</p>
                     </div>
                   ) : s.modalities.length===1?(
                     <div style={{padding:"12px 14px",borderRadius:10,background:"#e6f4ea",border:"2px solid #a5d6a7"}}>
@@ -392,7 +435,6 @@ function ServiceSelector({ onConfirm }) {
             <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0}}>{selService.icon} {selService.label}</p>
             <p style={{fontSize:12,color:"#888",margin:"2px 0 0"}}>{selModality.label}</p>
             {calc&&<p style={{fontSize:13,fontWeight:700,color:"#b8967e",margin:"2px 0 0"}}>R$ {calc.total.toLocaleString("pt-BR")}{calc.disc>0?" (com desconto)":""}</p>}
-            {selModality.price&&!calc&&<p style={{fontSize:13,fontWeight:700,color:"#b8967e",margin:"2px 0 0"}}>{fmtPreco(selModality.price,selModality.priceLabel,selModality.periodo)}</p>}
           </div>
           <button style={{padding:"6px 10px",borderRadius:8,background:"#f0e8e0",border:"none",cursor:"pointer",fontSize:18,color:"#b8967e",lineHeight:1}} onClick={()=>{setSelService(null);setSelModality(null);setOpenId(null);setSelExtras([])}}>✕</button>
         </div>
@@ -442,7 +484,7 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
         </div>
         {Object.keys(anamnese).length>0?(
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese — {atipico?"🧡 Atípica":"🌿 Típica"}</p>
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese</p>
             {camposPrio.map(([k,label])=>{const v=anamnese[k];if(!v||v==="")return null;return(<div key={k} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f0e8e0"}}><span style={{fontSize:10,color:"#b8967e",display:"block",fontWeight:700,marginBottom:3}}>{label}</span><span style={{fontSize:13,color:"#333",lineHeight:1.5}}>{Array.isArray(v)?v.join(", "):String(v)}</span></div>);})}
           </div>
         ):(
@@ -536,7 +578,6 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [newClient,setNewClient]=useState({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});
   const [newAnamnese,setNewAnamnese]=useState({});
   const [salvando,setSalvando]=useState(false);
-  // Estados edição de cliente (item 7)
   const [editandoCliente,setEditandoCliente]=useState(false);
   const [editClienteForm,setEditClienteForm]=useState({});
   const [confirmDeleteCliente,setConfirmDeleteCliente]=useState(false);
@@ -572,11 +613,13 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  // ── Detalhe do agendamento ─────────────────────────────────────
+  // ── Detalhe do agendamento ──────────────────────────────────────
   if(agendamento){
     const st=STATUS_COLORS[agendamento.status]||STATUS_COLORS["Pendente"];
     const cl=agendamento.clientes||{};
     const camposAnamnese=Object.entries(cl.anamnese||{}).filter(([k,v])=>v&&v!==""&&!["nome_mae","email","phone","nome_crianca","idade","atipico"].includes(k));
+    const dadosEvento=agendamento.dados_evento||{};
+    const temDadosEvento=Object.keys(dadosEvento).length>0;
     return(
       <div>
         <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
@@ -587,6 +630,25 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["Data",formatDateBR(agendamento.data)],["Horário",agendamento.hora],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",",")}`],["WhatsApp",cl.telefone]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
         </div>
+
+        {/* Dados do evento */}
+        {temDadosEvento&&(
+          <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📍 Dados do evento/local</p>
+            {[
+              dadosEvento.nome_aniversariante&&["Aniversariante",dadosEvento.nome_aniversariante+(dadosEvento.idade_aniversariante?" · "+dadosEvento.idade_aniversariante:"")],
+              dadosEvento.num_convidados&&["Convidados",dadosEvento.num_convidados],
+              dadosEvento.local_nome&&["Local",dadosEvento.local_nome],
+              (dadosEvento.local_rua||dadosEvento.local_cidade)&&["Endereço",[dadosEvento.local_rua,dadosEvento.local_complemento,dadosEvento.local_bairro,dadosEvento.local_cidade].filter(Boolean).join(", ")],
+            ].filter(Boolean).map(([k,v])=>(
+              <div key={k} style={{marginBottom:8,paddingBottom:8,borderBottom:"1px solid #f0e8e0"}}>
+                <span style={{fontSize:10,color:"#b8967e",display:"block",fontWeight:600,marginBottom:2}}>{k}</span>
+                <span style={{fontSize:13,color:"#444"}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {camposAnamnese.length>0?(
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📋 Anamnese — {cl.atipico?"🧡 Atípica":"🌿 Típica"}</p>
@@ -605,45 +667,21 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           <Field label="Link de pagamento (InfinityPay)"><input style={inp} type="url" placeholder="Cole aqui o link" value={agendamento.pagamento_link||""} onChange={e=>update(agendamento.id,{pagamento_link:e.target.value})}/></Field>
           {agendamento.pagamento_link&&<a href={agendamento.pagamento_link} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,padding:"10px",borderRadius:8,background:"#e3f2fd",color:"#1565C0",textDecoration:"none",fontSize:13,fontWeight:600}}>🔗 Abrir link de pagamento</a>}
         </div>
-
-        {/* ── BLOCO CONTRATO — usa ContractPanel ── */}
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📄 Contrato</p>
-          <ContractPanel
-            agendamento={agendamento}
-            onUpdate={(patch) => update(agendamento.id, patch)}
-          />
+          <ContractPanel agendamento={agendamento} onUpdate={(patch)=>update(agendamento.id,patch)}/>
         </div>
-
         <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
       </div>
     );
   }
 
-  // ── Detalhe do cliente ─────────────────────────────────────────
+  // ── Detalhe do cliente ──────────────────────────────────────────
   if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
-
-    const salvarEdicaoCliente = async () => {
-      setSalvandoEditCliente(true);
-      try {
-        await atualizarCliente(cliente.id, editClienteForm);
-        setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm}:c));
-        setEditandoCliente(false);
-      } catch(e){ alert("Erro: "+e.message); }
-      setSalvandoEditCliente(false);
-    };
-
-    const excluirClienteFn = async () => {
-      try {
-        await deletarAgendamentosCliente(cliente.id);
-        await deletarCliente(cliente.id);
-        setSelectedCliente(null);
-        setConfirmDeleteCliente(false);
-        carregar();
-      } catch(e){ alert("Erro ao excluir: "+e.message); }
-    };
-
+    const endereco=cliente.endereco||{};
+    const salvarEdicaoCliente=async()=>{setSalvandoEditCliente(true);try{await atualizarCliente(cliente.id,editClienteForm);setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm}:c));setEditandoCliente(false);}catch(e){alert("Erro: "+e.message);}setSalvandoEditCliente(false);};
+    const excluirClienteFn=async()=>{try{await deletarAgendamentosCliente(cliente.id);await deletarCliente(cliente.id);setSelectedCliente(null);setConfirmDeleteCliente(false);carregar();}catch(e){alert("Erro ao excluir: "+e.message);}};
     return(
       <div>
         <button onClick={()=>{setSelectedCliente(null);setEditandoCliente(false);setConfirmDeleteCliente(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
@@ -651,22 +689,36 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
             <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:0}}>{cliente.nome_mae}</h3>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{setEditandoCliente(!editandoCliente);setEditClienteForm({nome_mae:cliente.nome_mae||"",email:cliente.email||"",telefone:cliente.telefone||"",cpf_mae:cliente.cpf_mae||""});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Editar</button>
+              <button onClick={()=>{setEditandoCliente(!editandoCliente);setEditClienteForm({nome_mae:cliente.nome_mae||"",email:cliente.email||"",telefone:cliente.telefone||"",cpf_mae:cliente.cpf_mae||"",rg:cliente.rg||"",data_nascimento:cliente.data_nascimento||"",endereco:cliente.endereco||{}});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Editar</button>
               <button onClick={()=>setConfirmDeleteCliente(true)} style={{padding:"5px 10px",borderRadius:7,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:12,color:"#c62828",fontWeight:600}}>🗑 Excluir</button>
             </div>
           </div>
-          {editandoCliente ? (
+          {editandoCliente?(
             <div>
-              {[["nome_mae","Nome"],["email","E-mail"],["telefone","WhatsApp"],["cpf_mae","CPF"]].map(([k,l])=>(
+              {[["nome_mae","Nome"],["email","E-mail"],["telefone","WhatsApp"],["cpf_mae","CPF"],["rg","RG"],["data_nascimento","Data de nascimento"]].map(([k,l])=>(
                 <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={editClienteForm[k]||""} onChange={e=>setEditClienteForm(f=>({...f,[k]:e.target.value}))}/></Field>
+              ))}
+              <p style={{...sec,marginTop:12}}>Endereço</p>
+              {[["cep","CEP"],["rua","Rua e número"],["complemento","Complemento"],["bairro","Bairro"],["cidade","Cidade"]].map(([k,l])=>(
+                <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={editClienteForm.endereco?.[k]||""} onChange={e=>setEditClienteForm(f=>({...f,endereco:{...f.endereco,[k]:e.target.value}}))}/></Field>
               ))}
               <div style={{display:"flex",gap:8,marginTop:8}}>
                 <button onClick={()=>setEditandoCliente(false)} style={{flex:1,padding:10,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
                 <button disabled={salvandoEditCliente} onClick={salvarEdicaoCliente} style={{flex:2,padding:10,borderRadius:8,background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>{salvandoEditCliente?"Salvando...":"Salvar"}</button>
               </div>
             </div>
-          ) : (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          ):(
+            <div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                {[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["CPF",cliente.cpf_mae],["RG",cliente.rg],["Nascimento",cliente.data_nascimento],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}
+              </div>
+              {(endereco.rua||endereco.cidade)&&(
+                <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #f0e8e0"}}>
+                  <span style={{fontSize:10,color:"#aaa",display:"block",marginBottom:2}}>Endereço</span>
+                  <span style={{fontSize:13,color:"#1a1a1a"}}>{[endereco.rua,endereco.complemento,endereco.bairro,endereco.cidade].filter(Boolean).join(", ")}{endereco.cep?" — CEP "+endereco.cep:""}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
         {confirmDeleteCliente&&(
@@ -700,14 +752,13 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     );
   }
 
-  // ── Lista principal ────────────────────────────────────────────
+  // ── Lista principal ─────────────────────────────────────────────
   return(
     <div>
       {showNew&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,overflowY:"auto",padding:16}}>
           <div style={{background:"#fff",borderRadius:16,padding:20,maxWidth:480,margin:"0 auto",paddingBottom:40}}>
             <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,margin:"0 0 4px"}}>Novo agendamento</h3>
-            <p style={{fontSize:12,color:"#999",margin:"0 0 16px"}}>Dados do ensaio + dados da cliente</p>
             <p style={sec}>📅 Dados do agendamento</p>
             {[["nome_mae","Nome da mãe","text"],["cpf_mae","CPF da mãe","text"],["email","E-mail","email"],["telefone","WhatsApp","tel"],["data","Data do ensaio","date"],["hora","Horário","time"],["valor","Valor (R$)","number"]].map(([k,l,t])=>(<Field key={k} label={l}><input style={inp} type={t} value={newClient[k]||""} onChange={e=>setNewClient(n=>({...n,[k]:e.target.value}))}/></Field>))}
             <Field label="Serviço"><select style={inp} value={newClient.servico} onChange={e=>setNewClient(n=>({...n,servico:e.target.value,modalidade:""}))}>
@@ -757,38 +808,15 @@ function ClientePanel() {
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("agendamentos");
+  const [editandoPerfil,setEditandoPerfil]=useState(false);
+  const [perfilForm,setPerfilForm]=useState({});
+  const [salvandoPerfil,setSalvandoPerfil]=useState(false);
 
-  const entrar = async () => {
-    if(!email) return;
-    setLoading(true);
-    try {
-      const r = await getClienteByEmail(email);
-      if(r&&r.length>0){
-        const cl = r[0];
-        setLogado(cl);
-        // Sempre recarrega agendamentos frescos do Supabase
-        const ags = await getAgendamentosByCliente(cl.id);
-        setAgendamentos(ags||[]);
-      } else {
-        alert("E-mail não encontrado. Verifique ou fale com a Crescidinhos para cadastro.");
-      }
-    } catch(e){ console.error(e); }
-    setLoading(false);
-  };
+  const entrar=async()=>{if(!email)return;setLoading(true);try{const r=await getClienteByEmail(email);if(r&&r.length>0){const cl=r[0];setLogado(cl);const ags=await getAgendamentosByCliente(cl.id);setAgendamentos(ags||[]);}else{alert("E-mail não encontrado. Verifique ou fale com a Crescidinhos para cadastro.");}}catch(e){console.error(e);}setLoading(false);};
 
-  // Recarregar dados ao entrar na aba para garantir dados atualizados
-  const recarregarDados = async (clienteId) => {
-    try {
-      const [cl, ags] = await Promise.all([
-        sb(`clientes?id=eq.${clienteId}&limit=1`),
-        getAgendamentosByCliente(clienteId)
-      ]);
-      if(cl&&cl.length>0) setLogado(cl[0]);
-      setAgendamentos(ags||[]);
-    } catch(e){ console.error(e); }
-  };
+  const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
 
-  if(!logado) return (
+  if(!logado)return(
     <div style={{textAlign:"center",padding:"48px 16px"}}>
       <div style={{fontSize:48,marginBottom:16}}>🐘</div>
       <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
@@ -805,31 +833,25 @@ function ClientePanel() {
     </div>
   );
 
-  const cofrinho = logado.cofrinho;
-  return (
+  const cofrinho=logado.cofrinho;
+  const endereco=logado.endereco||{};
+
+  return(
     <div>
       <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
         <div style={{fontSize:36}}>🐘</div>
-        <div>
-          <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,color:"#1a1a1a"}}>Olá, {logado.nome_mae?.split(" ")[0]}! 🌸</p>
-          <p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{logado.email}</p>
-        </div>
+        <div><p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,color:"#1a1a1a"}}>Olá, {logado.nome_mae?.split(" ")[0]}! 🌸</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{logado.email}</p></div>
         <button onClick={()=>{setLogado(null);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
-        {[
-          ["agendamentos","📅 Ensaios"],
-          ["contratos","📄 Contratos"],
-          ["cofrinho","💰 Cofrinho"],
-          ["vale","🎁 Vale Presente"],
-          ["perfil","👤 Perfil"]
-        ].map(([t,l])=>
+        {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],["cofrinho","💰 Cofrinho"],["vale","🎁 Vale"],["perfil","👤 Perfil"]].map(([t,l])=>
           <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
         )}
       </div>
+
       {tab==="agendamentos"&&(
         <div>
-          {agendamentos.length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum ensaio ainda</p><p style={{fontSize:12,color:"#bbb"}}>Que tal agendar o primeiro? 🌸</p></div>}
+          {agendamentos.length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum ensaio ainda</p></div>}
           {agendamentos.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];return(
             <div key={a.id} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
@@ -845,6 +867,7 @@ function ClientePanel() {
           );})}
         </div>
       )}
+
       {tab==="contratos"&&(
         <div>
           {agendamentos.filter(a=>a.signature||a.status==="Contrato").length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📄</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum contrato ainda</p></div>}
@@ -852,7 +875,7 @@ function ClientePanel() {
             <div key={a.id} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:10}}>
               <p style={{margin:0,fontSize:14,fontWeight:700}}>{a.servico} — {a.modalidade}</p>
               <p style={{margin:"4px 0 8px",fontSize:12,color:"#888"}}>{formatDateBR(a.data)} · Nº {a.contrato_numero||"—"}</p>
-              {a.signature
+              {a.signature&&a.signature_contratada
                 ?<span style={{fontSize:12,color:"#2e7d32",fontWeight:600}}>✅ Assinado em {a.signed_at}</span>
                 :<a href={`https://app.crescidinhosfoto.com.br/contrato/${a.id}`} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#72243E",fontWeight:600}}>✍️ Assinar contrato →</a>
               }
@@ -860,73 +883,81 @@ function ClientePanel() {
           ))}
         </div>
       )}
+
       {tab==="cofrinho"&&(
         <div>
-          {cofrinho ? (
-            <div>
-              <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,marginBottom:16,color:"#fff"}}>
-                <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>Cofrinho de Recordações</p>
-                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
-                <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
-                <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
-                <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
-              </div>
-              <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14}}>
-                <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Regras</p>
-                {[["Resgate mínimo","3 meses"],["Elegível em","Ensaios e fotos extras"],["Não elegível em","Eventos"],["Cancelamento","Sem reembolso do saldo"]].map(([k,v])=>(
-                  <div key={k} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
-                    <span style={{color:"#888"}}>{k}</span><span style={{fontWeight:600,color:"#1a1a1a"}}>{v}</span>
-                  </div>
-                ))}
-              </div>
+          {cofrinho?(
+            <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,color:"#fff"}}>
+              <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>Cofrinho de Recordações</p>
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
+              <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
+              <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
+              <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
             </div>
-          ) : (
+          ):(
             <div style={{textAlign:"center",padding:"40px 16px"}}>
               <div style={{fontSize:40,marginBottom:12}}>💰</div>
               <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",marginBottom:8}}>Cofrinho de Recordações</p>
-              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Acumule saldo mensalmente e resgate em ensaios fotográficos. Economize para eternizar cada fase do seu filho! 🌸</p>
-              <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:16,textAlign:"left"}}>
-                {[["🌱 Sementinha","R$ 50/mês"],["🌿 Broto","R$ 100/mês"],["🌸 Florido","R$ 150/mês"],["🌳 Crescido","R$ 200/mês"]].map(([p,v])=>(
-                  <div key={p} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f0e8e0",fontSize:13}}><span>{p}</span><span style={{fontWeight:600,color:"#b8967e"}}>{v}</span></div>
-                ))}
-              </div>
-              <a href="https://wa.me/5514996845521?text=Olá! Quero assinar o Cofrinho de Recordações 💰" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>💬 Quero assinar</a>
+              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Acumule saldo mensalmente e resgate em ensaios. 🌸</p>
+              <a href="https://wa.me/5514996845521?text=Olá! Quero assinar o Cofrinho 💰" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>💬 Quero assinar</a>
             </div>
           )}
         </div>
       )}
+
       {tab==="vale"&&(
         <div>
-          {agendamentos.filter(a=>a.servico_id==="vale-presente").length>0 ? (
-            <div>
-              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Seus vales presente</p>
-              {agendamentos.filter(a=>a.servico_id==="vale-presente").map(a=>(
-                <div key={a.id} style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:14,padding:18,marginBottom:12,color:"#fff"}}>
-                  <p style={{fontSize:10,fontWeight:700,letterSpacing:"2px",textTransform:"uppercase",margin:"0 0 8px",opacity:.8}}>CRESCIDINHOS FOTOGRAFIA</p>
-                  <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:700,margin:"0 0 4px"}}>Vale Presente</p>
-                  <p style={{fontSize:24,fontWeight:700,margin:"0 0 8px"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
-                  <p style={{fontSize:12,opacity:.8,margin:"0 0 4px"}}>Para: {a.obs||"—"}</p>
-                  <p style={{fontSize:11,opacity:.7}}>Válido por 12 meses · {a.status==="Concluído"?"✅ Utilizado":"⏳ Disponível"}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
+          {agendamentos.filter(a=>a.servico_id==="vale-presente").length>0?(
+            agendamentos.filter(a=>a.servico_id==="vale-presente").map(a=>(
+              <div key={a.id} style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:14,padding:18,marginBottom:12,color:"#fff"}}>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:700,margin:"0 0 4px"}}>Vale Presente</p>
+                <p style={{fontSize:24,fontWeight:700,margin:"0 0 8px"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
+                <p style={{fontSize:11,opacity:.7}}>{a.status==="Concluído"?"✅ Utilizado":"⏳ Disponível"}</p>
+              </div>
+            ))
+          ):(
             <div style={{textAlign:"center",padding:"40px 16px"}}>
               <div style={{fontSize:40,marginBottom:12}}>🎁</div>
-              <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",marginBottom:8}}>Vale Presente</p>
-              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Presenteie alguém especial com um ensaio na Crescidinhos. Você escolhe o valor!</p>
               <a href="https://wa.me/5514996845521?text=Olá! Quero comprar um Vale Presente 🎁" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#72243E",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>🎁 Comprar vale presente</a>
             </div>
           )}
         </div>
       )}
+
       {tab==="perfil"&&(
         <div>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>Seus dados</p>
-            {[["Nome",logado.nome_mae],["E-mail",logado.email],["WhatsApp",logado.telefone],["CPF",logado.cpf_mae||"—"]].map(([k,v])=>(
-              <div key={k} style={{marginBottom:8}}><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>{k}</p><p style={{fontSize:13,fontWeight:600,margin:0}}>{v||"—"}</p></div>
-            ))}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:0}}>Seus dados</p>
+              <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilForm({nome_mae:logado.nome_mae||"",email:logado.email||"",cpf_mae:logado.cpf_mae||"",rg:logado.rg||"",data_nascimento:logado.data_nascimento||"",endereco:logado.endereco||{}});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Atualizar</button>
+            </div>
+            {editandoPerfil?(
+              <div>
+                {[["nome_mae","Nome completo"],["email","E-mail"],["cpf_mae","CPF"],["rg","RG"],["data_nascimento","Data de nascimento"]].map(([k,l])=>(
+                  <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={perfilForm[k]||""} onChange={e=>setPerfilForm(f=>({...f,[k]:e.target.value}))}/></Field>
+                ))}
+                <p style={{...sec,marginTop:12}}>Endereço</p>
+                {[["cep","CEP"],["rua","Rua e número"],["complemento","Complemento"],["bairro","Bairro"],["cidade","Cidade"]].map(([k,l])=>(
+                  <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={perfilForm.endereco?.[k]||""} onChange={e=>setPerfilForm(f=>({...f,endereco:{...f.endereco,[k]:e.target.value}}))}/></Field>
+                ))}
+                <div style={{display:"flex",gap:8,marginTop:12}}>
+                  <button onClick={()=>setEditandoPerfil(false)} style={{flex:1,padding:10,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
+                  <button disabled={salvandoPerfil} onClick={salvarPerfil} style={{flex:2,padding:10,borderRadius:8,background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>{salvandoPerfil?"Salvando...":"Salvar"}</button>
+                </div>
+              </div>
+            ):(
+              <div>
+                {[["Nome",logado.nome_mae],["E-mail",logado.email],["WhatsApp",logado.telefone],["CPF",logado.cpf_mae],["RG",logado.rg],["Nascimento",logado.data_nascimento]].map(([k,v])=>v?(
+                  <div key={k} style={{marginBottom:8}}><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>{k}</p><p style={{fontSize:13,fontWeight:600,margin:0}}>{v}</p></div>
+                ):null)}
+                {(endereco.rua||endereco.cidade)&&(
+                  <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #f0e8e0"}}>
+                    <p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>Endereço</p>
+                    <p style={{fontSize:13,fontWeight:600,margin:0}}>{[endereco.rua,endereco.complemento,endereco.bairro,endereco.cidade].filter(Boolean).join(", ")}{endereco.cep?" — CEP "+endereco.cep:""}</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {logado.filhos?.length>0&&(
             <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16}}>
@@ -953,47 +984,29 @@ function ClientView() {
   const [extras,setExtras]=useState([]);
   const [date,setDate]=useState(null);
   const [time,setTime]=useState(null);
+  const [dadosEvento,setDadosEvento]=useState({});
   const [submitted,setSubmitted]=useState(false);
   const [loading,setLoading]=useState(false);
   const [clienteExistente,setClienteExistente]=useState(null);
   const [verificando,setVerificando]=useState(false);
 
-  // Recupera cadastro salvo da sessão (persiste ao trocar de aba e voltar)
-  const cadastroSalvo = (() => {
-    try { return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}"); } catch { return {}; }
-  })();
+  const cadastroSalvo=(()=>{try{return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}");}catch{return {};}})();
   const [cadastro,setCadastroRaw]=useState({
-    nome_mae:"", email:"", telefone:"", cpf:"", temFilho:"",
+    nome_mae:"",email:"",telefone:"",cpf:"",rg:"",data_nascimento:"",
+    endereco_cep:"",endereco_rua:"",endereco_complemento:"",endereco_bairro:"",endereco_cidade:"Bauru",
+    temFilho:"",
     ...cadastroSalvo
   });
-  const [filhos,setFilhosRaw]=useState(()=>{
-    try { return JSON.parse(sessionStorage.getItem("cres_filhos")||"[{}]"); } catch { return [{}]; }
-  });
+  const [filhos,setFilhosRaw]=useState(()=>{try{return JSON.parse(sessionStorage.getItem("cres_filhos")||"[{}]");}catch{return [{}];}});
 
-  const setCadastro = (fn) => {
-    setCadastroRaw(prev => {
-      const next = typeof fn === "function" ? fn(prev) : fn;
-      try { sessionStorage.setItem("cres_cadastro", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
-  const setFilhos = (fn) => {
-    setFilhosRaw(prev => {
-      const next = typeof fn === "function" ? fn(prev) : fn;
-      try { sessionStorage.setItem("cres_filhos", JSON.stringify(next)); } catch {}
-      return next;
-    });
-  };
+  const setCadastro=(fn)=>{setCadastroRaw(prev=>{const next=typeof fn==="function"?fn(prev):fn;try{sessionStorage.setItem("cres_cadastro",JSON.stringify(next));}catch{}return next;});};
+  const setFilhos=(fn)=>{setFilhosRaw(prev=>{const next=typeof fn==="function"?fn(prev):fn;try{sessionStorage.setItem("cres_filhos",JSON.stringify(next));}catch{}return next;});};
   const setCad=(k,v)=>setCadastro(p=>({...p,[k]:v}));
+  const limparSessao=()=>{try{sessionStorage.removeItem("cres_cadastro");sessionStorage.removeItem("cres_filhos");}catch{}};
 
-  // Limpa sessão ao submeter com sucesso
-  const limparSessao = () => {
-    try { sessionStorage.removeItem("cres_cadastro"); sessionStorage.removeItem("cres_filhos"); } catch {}
-  };
-
-  // Cofrinho e Vale pulam etapa de data
-  const semAgenda = service?.grupo === "cofrinho" || service?.grupo === "vale";
-  const STEPS = semAgenda ? ["Cadastro","Serviço","Confirmar"] : ["Cadastro","Serviço","Data","Confirmar"];
+  const semAgenda=service?.grupo==="cofrinho"||service?.grupo==="vale";
+  const precisaDadosEvento=service&&requerDadosEvento(service.id);
+  const STEPS=semAgenda?["Cadastro","Serviço","Confirmar"]:["Cadastro","Serviço","Data","Confirmar"];
 
   const verificarCliente=async(telefone)=>{
     const tel=telefone.replace(/\D/g,"");
@@ -1004,23 +1017,8 @@ function ClientView() {
       if(r&&r.length>0){
         const cl=r[0];
         setClienteExistente(cl);
-        // Dados do Supabase têm prioridade — sobrescreve sessionStorage
-        const dadosCl = {
-          nome_mae: cl.nome_mae||"",
-          email: cl.email||"",
-          cpf: cl.cpf_mae||"",
-          telefone: tel,
-          temFilho: cl.filhos?.length>0 ? "Sim" : (cl.anamnese?.nome_crianca ? "Sim" : "")
-        };
-        setCadastro(dadosCl);
-        if(cl.filhos?.length>0){
-          setFilhos(cl.filhos);
-        } else if(cl.anamnese?.nome_crianca){
-          setFilhos([cl.anamnese]);
-        }
-      } else {
-        setClienteExistente(null);
-      }
+        setCadastro({nome_mae:cl.nome_mae||"",email:cl.email||"",cpf:cl.cpf_mae||"",telefone:tel,temFilho:cl.filhos?.length>0?"Sim":cl.anamnese?.nome_crianca?"Sim":"",rg:"",data_nascimento:"",endereco_cep:"",endereco_rua:"",endereco_complemento:"",endereco_bairro:"",endereco_cidade:"Bauru"});
+      }else{setClienteExistente(null);}
     }catch(e){}
     setVerificando(false);
   };
@@ -1035,24 +1033,31 @@ function ClientView() {
       const tel=cadastro.telefone.replace(/\D/g,"");
       let cid;
       const ex=await getClienteByTelefone(tel);
-      const filhosData=cadastro.temFilho==="Sim"?filhos:[];
+      const filhosData=cadastro.temFilho==="Sim"&&!clienteExistente?filhos:[];
       const anamnese=filhosData[0]||{};
-      if(ex&&ex.length>0){cid=ex[0].id;await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:(ex[0].total_ensaios||0)+1,updated_at:new Date().toISOString()});}
-      else{const nc=await criarCliente({nome_mae:cadastro.nome_mae,email:cadastro.email,telefone:tel,cpf_mae:cadastro.cpf,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});cid=nc[0].id;}
+      const enderecoObj={cep:cadastro.endereco_cep,rua:cadastro.endereco_rua,complemento:cadastro.endereco_complemento,bairro:cadastro.endereco_bairro,cidade:cadastro.endereco_cidade};
+      const camposCliente={nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,rg:cadastro.rg||null,data_nascimento:cadastro.data_nascimento||null,endereco:enderecoObj};
+      if(ex&&ex.length>0){
+        cid=ex[0].id;
+        await atualizarCliente(cid,{...camposCliente,updated_at:new Date().toISOString()});
+      }else{
+        const nc=await criarCliente({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
+        cid=nc[0].id;
+      }
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
-      await criarAgendamento({cliente_id:cid,servico:service?.label,servico_id:service?.id||null,modalidade:modality?.label,modalidade_id:modality?.id||null,data:date,hora:time,valor:calc.total||modality?.price||null,status:"Pendente",pagamento_status:"Pendente"});
-      // WhatsApp para a Thais
-      const dataFmt = date ? `${date.split("-").reverse().join("/")}` : "a confirmar";
-      const horaFmt = time || "a confirmar";
-      await enviarWhatsApp(
-        "14996845521",
-        `🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${horaFmt}\nWhatsApp: ${cadastro.telefone}\n\nAcesse o painel para confirmar.`
-      );
-      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total})}).catch(()=>{});
+      await criarAgendamento({
+        cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
+        modalidade:modality?.label,modalidade_id:modality?.id||null,
+        data:date,hora:time,valor:calc.total||modality?.price||null,
+        status:"Pendente",pagamento_status:"Pendente",
+        dados_evento:precisaDadosEvento?dadosEvento:null,
+      });
+      const dataFmt=date?`${date.split("-").reverse().join("/")}`:"-";
+      const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}${dadosEvento.local_nome?"\nLocal: "+dadosEvento.local_nome:""}`: "";
+      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nWhatsApp: ${cadastro.telefone}${msgEvento}\n\nAcesse o painel para confirmar.`);
+      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento})}).catch(()=>{});
     }catch(e){console.error(e);}
-    setLoading(false);
-    limparSessao();
-    setSubmitted(true);
+    setLoading(false);limparSessao();setSubmitted(true);
   };
 
   const Btn=({disabled,onClick,label})=><button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>;
@@ -1070,46 +1075,72 @@ function ClientView() {
   );
 
   const cadastroOk=cadastro.nome_mae&&cadastro.email&&cadastro.telefone&&cadastro.temFilho;
+
   return(
     <div>
       <StepBar step={step} steps={STEPS}/>
+
       {step===1&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#1a1a1a",marginBottom:4}}>Seus dados</h3>
           <p style={{fontSize:13,color:"#999",marginBottom:20,lineHeight:1.6}}>Preenchido uma vez, salvo para sempre 🌸</p>
-          <Field label="WhatsApp" required><input style={inp} type="tel" value={cadastro.telefone} onChange={e=>{setCad("telefone",e.target.value);verificarCliente(e.target.value);}} placeholder="(00) 00000-0000"/></Field>
-          {verificando&&<p style={{fontSize:11,color:"#b8967e",margin:"-8px 0 8px"}}>Verificando cadastro...</p>}
-          {clienteExistente&&<div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginTop:-8,marginBottom:12}}><p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro.</p></div>}
-          <Field label="Nome completo" required><input style={inp} value={cadastro.nome_mae} onChange={e=>setCad("nome_mae",e.target.value)} placeholder="Seu nome completo"/></Field>
-          <Field label="E-mail" required><input style={inp} type="email" value={cadastro.email} onChange={e=>setCad("email",e.target.value)} placeholder="seu@email.com"/></Field>
-          <Field label="CPF"><input style={inp} value={cadastro.cpf} onChange={e=>setCad("cpf",e.target.value)} placeholder="000.000.000-00"/></Field>
-          <Field label="Este ensaio é para uma criança?" required>
-            <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>{setCad("temFilho",v);if(v==="Não")setFilhos([{}]);}}/>
+          <Field label="WhatsApp" required>
+            <input style={inp} type="tel" value={cadastro.telefone} onChange={e=>{setCad("telefone",e.target.value);verificarCliente(e.target.value);}} placeholder="(00) 00000-0000"/>
           </Field>
-          {cadastro.temFilho==="Sim"&&(
+          {verificando&&<p style={{fontSize:11,color:"#b8967e",margin:"-8px 0 8px"}}>Verificando cadastro...</p>}
+
+          {clienteExistente?(
             <div>
-              {filhos.map((f,i)=>(
-                <div key={i} style={{position:"relative"}}>
-                  {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>}
-                  <AnamneseForm data={f} onChange={data=>updateFilho(i,data)} titulo={filhos.length>1?`👶 Filho ${i+1}`:null}/>
+              <div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginBottom:12}}>
+                <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro.</p>
+                <p style={{fontSize:11,color:"#555",margin:"4px 0 0"}}>Para atualizar seus dados acesse "Minha Área" após o agendamento.</p>
+              </div>
+              <Field label="Nome completo" required><input style={inp} value={cadastro.nome_mae} onChange={e=>setCad("nome_mae",e.target.value)}/></Field>
+              <Field label="E-mail" required><input style={inp} type="email" value={cadastro.email} onChange={e=>setCad("email",e.target.value)}/></Field>
+              <Field label="Este ensaio é para uma criança?" required>
+                <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>setCad("temFilho",v)}/>
+              </Field>
+            </div>
+          ):(
+            <div>
+              <Field label="Nome completo" required><input style={inp} value={cadastro.nome_mae} onChange={e=>setCad("nome_mae",e.target.value)} placeholder="Seu nome completo"/></Field>
+              <Field label="E-mail" required><input style={inp} type="email" value={cadastro.email} onChange={e=>setCad("email",e.target.value)} placeholder="seu@email.com"/></Field>
+              <Field label="CPF"><input style={inp} value={cadastro.cpf} onChange={e=>setCad("cpf",e.target.value)} placeholder="000.000.000-00"/></Field>
+              <Field label="RG"><input style={inp} value={cadastro.rg} onChange={e=>setCad("rg",e.target.value)} placeholder="00.000.000-0"/></Field>
+              <Field label="Data de nascimento"><input style={inp} type="date" value={cadastro.data_nascimento} onChange={e=>setCad("data_nascimento",e.target.value)}/></Field>
+              <p style={sec}>📍 Endereço</p>
+              <Field label="CEP"><input style={inp} value={cadastro.endereco_cep} onChange={e=>setCad("endereco_cep",e.target.value)} placeholder="00000-000"/></Field>
+              <Field label="Rua e número"><input style={inp} value={cadastro.endereco_rua} onChange={e=>setCad("endereco_rua",e.target.value)} placeholder="Rua, número"/></Field>
+              <Field label="Complemento"><input style={inp} value={cadastro.endereco_complemento} onChange={e=>setCad("endereco_complemento",e.target.value)} placeholder="Apto, sala..."/></Field>
+              <Field label="Bairro"><input style={inp} value={cadastro.endereco_bairro} onChange={e=>setCad("endereco_bairro",e.target.value)} placeholder="Bairro"/></Field>
+              <Field label="Cidade"><input style={inp} value={cadastro.endereco_cidade} onChange={e=>setCad("endereco_cidade",e.target.value)} placeholder="Bauru"/></Field>
+              <Field label="Este ensaio é para uma criança?" required>
+                <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>{setCad("temFilho",v);if(v==="Não")setFilhos([{}]);}}/>
+              </Field>
+              {cadastro.temFilho==="Sim"&&(
+                <div>
+                  {filhos.map((f,i)=>(
+                    <div key={i} style={{position:"relative"}}>
+                      {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>}
+                      <AnamneseForm data={f} onChange={data=>updateFilho(i,data)} titulo={filhos.length>1?`👶 Filho ${i+1}`:null}/>
+                    </div>
+                  ))}
+                  <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>+ Adicionar outro filho</button>
                 </div>
-              ))}
-              <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>+ Adicionar outro filho</button>
+              )}
             </div>
           )}
           <button disabled={!cadastroOk} onClick={()=>setStep(2)} style={{width:"100%",padding:"14px",borderRadius:12,background:cadastroOk?"#1a1a1a":"#e8e0d8",color:cadastroOk?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?"pointer":"default"}}>Continuar →</button>
         </div>
       )}
+
       {step===2&&(
         <div>
-          <ServiceSelector onConfirm={(s,m,ex)=>{
-          setService(s);setModality(m);setExtras(ex||[]);
-          const skip = s?.grupo==="cofrinho"||s?.grupo==="vale";
-          setStep(skip?3:3);
-        }}/>
+          <ServiceSelector onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}/>
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
       )}
+
       {step===3&&!semAgenda&&(
         <div>
           <div style={{padding:"10px 12px",background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:18,display:"flex",alignItems:"center",gap:10}}>
@@ -1119,6 +1150,11 @@ function ClientView() {
               {extras.length>0&&<p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>+ {extras.map(e=>e.label).join(", ")}</p>}
             </div>
           </div>
+
+          {precisaDadosEvento&&(
+            <DadosEventoForm serviceId={service.id} data={dadosEvento} onChange={setDadosEvento}/>
+          )}
+
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
           <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}}/>
@@ -1136,26 +1172,36 @@ function ClientView() {
           </div>
         </div>
       )}
+
       {(step===4||(step===3&&semAgenda))&&(
         <div>
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:16}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 10px",letterSpacing:"1px",textTransform:"uppercase"}}>Resumo</p>
-            {[["Serviço",`${service?.icon} ${service?.label}`],["Modalidade",modality?.label],["Data",`${formatDateBR(date)} às ${time}`],["Nome",cadastro.nome_mae],["E-mail",cadastro.email],extras.length>0?["Adicionais",extras.map(e=>e.label).join(", ")]:null,modality?.price?["Valor estimado",`R$ ${calcularTotal(modality.price,extras,!!service?.descontoExtras).total.toLocaleString("pt-BR")}`]:null].filter(Boolean).map(([k,v])=>v&&(
+            {[
+              ["Serviço",`${service?.icon} ${service?.label}`],
+              ["Modalidade",modality?.label],
+              !semAgenda?["Data",`${formatDateBR(date)} às ${time}`]:null,
+              ["Nome",cadastro.nome_mae],
+              ["E-mail",cadastro.email],
+              extras.length>0?["Adicionais",extras.map(e=>e.label).join(", ")]:null,
+              modality?.price?["Valor estimado",`R$ ${calcularTotal(modality.price,extras,!!service?.descontoExtras).total.toLocaleString("pt-BR")}`]:null,
+              dadosEvento.nome_aniversariante?["Aniversariante",dadosEvento.nome_aniversariante+(dadosEvento.idade_aniversariante?" · "+dadosEvento.idade_aniversariante:"")]:null,
+              dadosEvento.local_nome?["Local",dadosEvento.local_nome]:null,
+            ].filter(Boolean).map(([k,v])=>v&&(
               <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{fontSize:12,color:"#999"}}>{k}</span>
                 <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600,textAlign:"right",maxWidth:"60%"}}>{v}</span>
               </div>
             ))}
-            {filhos.filter(f=>f.nome_crianca).map((f,i)=>(
+            {!clienteExistente&&cadastro.temFilho==="Sim"&&filhos.filter(f=>f.nome_crianca).map((f,i)=>(
               <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f0e8e0"}}>
                 <span style={{fontSize:12,color:"#999"}}>{filhos.length>1?`Filho ${i+1}`:"Criança"}</span>
                 <span style={{fontSize:13,color:"#1a1a1a",fontWeight:600}}>{f.nome_crianca} · {f.idade}</span>
               </div>
             ))}
           </div>
-          {extras.length>0&&service?.descontoExtras&&<div style={{padding:10,background:"#e6f4ea",border:"1px solid #C0DD97",borderRadius:10,marginBottom:12,fontSize:12,color:"#27500A",fontWeight:500}}>🎉 Desconto de 10% aplicado!</div>}
           <div style={{padding:12,background:"#fdf8f5",border:"1.5px solid #f0ddd0",borderRadius:10,marginBottom:16}}>
             <p style={{fontSize:12,color:"#b8967e",margin:0,lineHeight:1.6}}>💬 Em breve a <strong>Crescidinhos</strong> entrará em contato pelo WhatsApp para confirmar seu horário.</p>
           </div>
@@ -1215,11 +1261,9 @@ function PhotographerPanel({ auth, onLogout }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
-  // ── ROTA DE CONTRATO — detecta /contrato/:id na URL ──────────
-  if (window.location.pathname.startsWith("/contrato/")) {
-    return <ContractPage />;
+  if(window.location.pathname.startsWith("/contrato/")){
+    return <ContractPage/>;
   }
-
   const [view,setView]=useState("client");
   const [auth,setAuth]=useState(null);
   return(
