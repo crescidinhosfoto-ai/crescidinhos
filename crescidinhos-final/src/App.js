@@ -4,6 +4,7 @@ import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularT
 import { fetchCalendarEvents } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
+import DisponibilidadePanel from "./DisponibilidadePanel";
 
 // ─── SUPABASE ────────────────────────────────────────────────────
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
@@ -150,34 +151,66 @@ function DadosEventoForm({ serviceId, data, onChange }) {
   );
 }
 
-// ─── CALENDAR ────────────────────────────────────────────────────
-function Calendar({ selectedDate, onSelectDate }) {
+// ─── CALENDAR (lê disponibilidades do Supabase) ──────────────────
+function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
   const today = new Date();
   const [vy,setVy] = useState(today.getFullYear());
   const [vm,setVm] = useState(today.getMonth());
+  const [disponibilidades,setDisponibilidades] = useState({});
+  const [loadingDisp,setLoadingDisp] = useState(true);
+
+  useEffect(() => { carregarDisp(vy,vm); }, [vy,vm]);
+
+  const carregarDisp = async (ano,mes) => {
+    setLoadingDisp(true);
+    try {
+      const inicio = `${ano}-${pad(mes+1)}-01`;
+      const fim = `${ano}-${pad(mes+1)}-${String(getDaysInMonth(ano,mes)).padStart(2,"0")}`;
+      const r = await sb(`disponibilidades?data=gte.${inicio}&data=lte.${fim}&order=data.asc`);
+      const map = {};
+      (r||[]).forEach(d => { map[d.data] = d.horarios||[]; });
+      setDisponibilidades(map);
+    } catch(e) { console.error(e); }
+    setLoadingDisp(false);
+  };
+
   const days = getDaysInMonth(vy,vm);
   const firstDay = getFirstDay(vy,vm);
   const cells = [];
   for(let i=0;i<firstDay;i++) cells.push(null);
   for(let d=1;d<=days;d++) cells.push(d);
+
+  const handleSelect = (ds) => {
+    onSelectDate(ds);
+    if(onHorariosChange) onHorariosChange(disponibilidades[ds]||[]);
+  };
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <button onClick={()=>vm===0?(setVm(11),setVy(y=>y-1)):setVm(m=>m-1)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>‹</button>
+        <button onClick={()=>{vm===0?(setVm(11),setVy(y=>y-1)):setVm(m=>m-1);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>‹</button>
         <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600}}>{MONTHS[vm]} {vy}</span>
-        <button onClick={()=>vm===11?(setVm(0),setVy(y=>y+1)):setVm(m=>m+1)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>›</button>
+        <button onClick={()=>{vm===11?(setVm(0),setVy(y=>y+1)):setVm(m=>m+1);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>›</button>
       </div>
+      {loadingDisp&&<p style={{textAlign:"center",fontSize:12,color:"#bbb",padding:"8px 0"}}>Carregando agenda...</p>}
+      {!loadingDisp&&Object.keys(disponibilidades).length===0&&(
+        <div style={{padding:"12px",background:"#fff8e1",borderRadius:8,marginBottom:12,fontSize:12,color:"#856404",textAlign:"center"}}>
+          ⚠️ Nenhuma data disponível neste mês. Entre em contato pelo WhatsApp!
+        </div>
+      )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
         {WEEKDAYS.map(w=><div key={w} style={{textAlign:"center",fontSize:10,color:"#aaa",fontWeight:600,padding:"3px 0"}}>{w}</div>)}
         {cells.map((d,i)=>{
           if(!d) return <div key={i}/>;
           const ds=formatDate(vy,vm,d);
           const isPast=new Date(ds)<new Date(today.toDateString());
-          const isSun=i%7===0;
+          const temH=(disponibilidades[ds]||[]).length>0;
+          const disponivel=!isPast&&temH;
           const isSel=selectedDate===ds;
-          return <div key={i} onClick={()=>!isPast&&!isSun&&onSelectDate(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":"transparent",color:isSel?"#fff":isPast||isSun?"#ccc":"#1a1a1a",cursor:isPast||isSun?"default":"pointer"}}>{d}</div>;
+          return <div key={i} onClick={()=>disponivel&&handleSelect(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":disponivel?"#f0faf0":"transparent",color:isSel?"#fff":!disponivel?"#ccc":"#1a1a1a",cursor:disponivel?"pointer":"default",border:isSel?"2px solid #1a1a1a":disponivel?"1px solid #a5d6a7":"1px solid transparent"}}>{d}</div>;
         })}
       </div>
+      <p style={{fontSize:11,color:"#888",textAlign:"center",marginTop:4}}>Datas disponíveis destacadas em verde</p>
     </div>
   );
 }
@@ -622,7 +655,10 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     const temDadosEvento=Object.keys(dadosEvento).length>0;
     return(
       <div>
-        <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <button onClick={()=>setSelected(null)} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,padding:0}}>← Voltar</button>
+          <button onClick={async()=>{if(!window.confirm("Excluir este agendamento?"))return;try{await atualizarAgendamento(agendamento.id,{status:"Cancelado"});setSelected(null);carregar();}catch(e){alert("Erro: "+e.message);}}} style={{padding:"5px 10px",borderRadius:7,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600}}>🗑 Excluir</button>
+        </div>
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
             <div><h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 2px"}}>{cl.nome_mae}</h3><p style={{fontSize:12,color:"#999",margin:0}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico"):""}</p></div>
@@ -814,6 +850,13 @@ function ClientePanel() {
 
   const entrar=async()=>{if(!email)return;setLoading(true);try{const r=await getClienteByEmail(email);if(r&&r.length>0){const cl=r[0];setLogado(cl);const ags=await getAgendamentosByCliente(cl.id);setAgendamentos(ags||[]);}else{alert("E-mail não encontrado. Verifique ou fale com a Crescidinhos para cadastro.");}}catch(e){console.error(e);}setLoading(false);};
 
+  // Recarrega agendamentos frescos ao trocar de aba (garante status atualizado)
+  const recarregarAgs = async () => {
+    if(!logado) return;
+    try { const ags=await getAgendamentosByCliente(logado.id); setAgendamentos(ags||[]); } catch(e){}
+  };
+  useEffect(()=>{ if(logado&&(tab==="agendamentos"||tab==="contratos")) recarregarAgs(); },[tab,logado?.id]);
+
   const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
 
   if(!logado)return(
@@ -984,6 +1027,7 @@ function ClientView() {
   const [extras,setExtras]=useState([]);
   const [date,setDate]=useState(null);
   const [time,setTime]=useState(null);
+  const [horariosDisponiveis,setHorariosDisponiveis]=useState([]);
   const [dadosEvento,setDadosEvento]=useState({});
   const [submitted,setSubmitted]=useState(false);
   const [loading,setLoading]=useState(false);
@@ -1157,13 +1201,17 @@ function ClientView() {
 
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
-          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}}/>
+          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis}/>
           {date&&(
             <div style={{marginTop:14}}>
               <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(date)}</strong>:</p>
-              <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
-                {TIMES.map(t=><button key={t} onClick={()=>setTime(t)} style={{padding:"8px 14px",borderRadius:8,fontSize:13,border:time===t?"2px solid #1a1a1a":"2px solid #e8e0d8",background:time===t?"#1a1a1a":"#fff",color:time===t?"#fff":"#1a1a1a",cursor:"pointer"}}>{t}</button>)}
-              </div>
+              {horariosDisponiveis.length===0?(
+                <p style={{fontSize:12,color:"#f57c00",background:"#fff8e1",padding:"10px 12px",borderRadius:8}}>⚠️ Nenhum horário disponível nesta data.</p>
+              ):(
+                <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                  {horariosDisponiveis.map(t=><button key={t} onClick={()=>setTime(t)} style={{padding:"8px 14px",borderRadius:8,fontSize:13,border:time===t?"2px solid #1a1a1a":"2px solid #e8e0d8",background:time===t?"#1a1a1a":"#fff",color:time===t?"#fff":"#1a1a1a",cursor:"pointer"}}>{t}</button>)}
+                </div>
+              )}
             </div>
           )}
           <div style={{display:"flex",gap:10,marginTop:20}}>
@@ -1249,10 +1297,11 @@ function PhotographerPanel({ auth, onLogout }) {
       {auth.email===PHOTOGRAPHER.email&&(
         <>
           <div style={{display:"flex",gap:6,marginBottom:20}}>
-            {[["agenda","📅 Agenda"],["crm","🗂 CRM"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:12,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
+            {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Agenda"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
           </div>
           {tab==="agenda"&&<AgendaView auth={auth} onVerCliente={(id)=>{setAbrirAgId(id);setTab("crm");}}/>}
           {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)}/>}
+          {tab==="disponibilidade"&&<DisponibilidadePanel/>}
         </>
       )}
     </div>
