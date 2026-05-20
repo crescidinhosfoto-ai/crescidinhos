@@ -23,6 +23,9 @@ export const PHOTOGRAPHER = {
 export const WEBHOOK_URL =
   "https://ribbitingboar-n8n.cloudfy.live/webhook/novo-agendamento";
 
+export const WEBHOOK_CONFIRMAR =
+  "https://ribbitingboar-n8n.cloudfy.live/webhook/confirmar-agendamento";
+
 export const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 

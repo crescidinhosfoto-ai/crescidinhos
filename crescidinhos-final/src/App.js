@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularTotal } from "./config";
+import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, REGRAS, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
@@ -619,7 +619,33 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   useEffect(()=>{carregar();},[carregar]);
   useEffect(()=>{if(abrirAgendamentoId&&agendamentos.length>0){setSelected(abrirAgendamentoId);setTab("agendamentos");onAgendamentoAberto&&onAgendamentoAberto();}},[abrirAgendamentoId,agendamentos]);
 
-  const update=async(id,patch)=>{try{await atualizarAgendamento(id,patch);setAgendamentos(as=>as.map(a=>a.id===id?{...a,...patch}:a));}catch(e){alert("Erro: "+e.message);}};
+  const update=async(id,patch)=>{
+    try{
+      await atualizarAgendamento(id,patch);
+      setAgendamentos(as=>as.map(a=>a.id===id?{...a,...patch}:a));
+      if(patch.status==="Confirmado"){
+        const ag=agendamentos.find(a=>a.id===id)||{};
+        const cl=ag.clientes||{};
+        fetch(WEBHOOK_CONFIRMAR,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            id,
+            nome_mae:cl.nome_mae,
+            nome_crianca:ag.nome_crianca||cl.nome_crianca,
+            email:cl.email,
+            telefone:cl.telefone,
+            servico:ag.servico,
+            modalidade:ag.modalidade,
+            data:ag.data,
+            hora:ag.hora,
+            duracao_min:ag.duracao_min||60,
+            valor:ag.valor,
+          }),
+        }).catch(()=>{});
+      }
+    }catch(e){alert("Erro: "+e.message);}
+  };
   const agendamento=selected?agendamentos.find(a=>a.id===selected):null;
   const cliente=selectedCliente?clientes.find(c=>c.id===selectedCliente):null;
   const mesesDisp=[...new Set(agendamentos.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
