@@ -38,7 +38,6 @@ const atualizarAgendamento = (id, data) => sb(`agendamentos?id=eq.${id}`, { meth
 const deletarCliente       = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
 const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DELETE" });
-const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DELETE" });
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
 
 // ─── SERVIÇOS QUE REQUEREM DADOS DE EVENTO/EXTERNO ───────────────
