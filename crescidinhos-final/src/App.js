@@ -530,16 +530,14 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
 
 // ─── AGENDA VIEW ──────────────────────────────────────────────────
 function AgendaView({ auth, onVerCliente }) {
-  const [calEvents,setCalEvents]=useState([]);
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [fichaSel,setFichaSel]=useState(null);
-  const carregar=useCallback(async()=>{setLoading(true);try{const [ev,ags]=await Promise.all([fetchCalendarEvents(auth.token.access_token),getAgendamentos()]);setCalEvents(ev||[]);setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[auth]);
+  const carregar=useCallback(async()=>{setLoading(true);try{const ags=await getAgendamentos();setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
-  const cruzar=(ev)=>{const dt=ev.start?.dateTime||ev.start?.date;if(!dt)return null;const data=dt.substring(0,10);const hora=dt.length>10?new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):null;return agendamentos.find(a=>{if(a.data!==data)return false;if(!hora)return true;return a.hora&&a.hora.startsWith(hora.substring(0,5));})};
   const hoje=new Date().toISOString().substring(0,10);
-  const upcoming=calEvents.filter(e=>{const dt=e.start?.dateTime||e.start?.date;return dt&&dt.substring(0,10)>=hoje;}).sort((a,b)=>((a.start?.dateTime||a.start?.date||"")).localeCompare(b.start?.dateTime||b.start?.date||"")).slice(0,30);
-  const porDia={};upcoming.forEach(e=>{const dt=e.start?.dateTime||e.start?.date||"";const dia=dt.substring(0,10);if(!porDia[dia])porDia[dia]=[];porDia[dia].push(e);});
+  const upcoming=agendamentos.filter(a=>a.data&&a.data>=hoje&&a.status!=="Cancelado").sort((a,b)=>a.data.localeCompare(b.data)||(a.hora||"").localeCompare(b.hora||"")).slice(0,50);
+  const porDia={};upcoming.forEach(a=>{if(!porDia[a.data])porDia[a.data]=[];porDia[a.data].push(a);});
   const dias=Object.keys(porDia).sort();
   return (
     <div>
@@ -561,22 +559,27 @@ function AgendaView({ auth, onVerCliente }) {
               {isHoje&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
               <div style={{flex:1,height:1,background:"#f0e8e0"}}/>
             </div>
-            {porDia[dia].map(evento=>{
-              const ag=cruzar(evento);const cl=ag?.clientes||{};const dt=evento.start?.dateTime||evento.start?.date;const hora=dt&&dt.length>10?new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";const st=ag?STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"]:null;const pc=ag?PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"]:null;
+            {porDia[dia].map(ag=>{
+              const cl=ag?.clientes||{};const st=STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"];
               return(
-                <div key={evento.id} onClick={()=>ag&&setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:ag?"pointer":"default",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
+                <div key={ag.id} onClick={()=>setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:"pointer",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        {hora&&<span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{hora}</span>}
-                        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{evento.summary?.replace("📸 ","")}</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{ag.hora}</span>
+                        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</span>
                       </div>
-                      {ag&&(<div><p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico")+" ("+cl.idade+")":cl.nome_mae}</p>{ag.modalidade&&<p style={{margin:"0 0 4px",fontSize:11,color:"#b8967e"}}>📌 {ag.modalidade}</p>}<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>{cl.anamnese&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}</div></div>)}
-                      {!ag&&evento.description&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa",lineHeight:1.5}}>{evento.description.substring(0,80)}</p>}
+                      <p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{ag.servico}{ag.modalidade?" — "+ag.modalidade:""}</p>
+                      {cl.telefone&&<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p>}
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span>
+                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>
+                        {cl.anamnese&&Object.keys(cl.anamnese).length>0&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}
+                      </div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
-                      {ag&&<p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>}
-                      {ag&&<span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>}
+                      <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>
+                      <span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>
                     </div>
                   </div>
                 </div>
@@ -1289,11 +1292,10 @@ function PhotographerPanel({ auth, onLogout }) {
       {auth.email===PHOTOGRAPHER.email&&(
         <>
           <div style={{display:"flex",gap:6,marginBottom:20}}>
-            {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Agenda"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
+            {[["agenda","📅 Agenda"],["crm","🗂 CRM"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
           </div>
           {tab==="agenda"&&<AgendaView auth={auth} onVerCliente={(id)=>{setAbrirAgId(id);setTab("crm");}}/>}
           {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)}/>}
-          {tab==="disponibilidade"&&<DisponibilidadePanel/>}
         </>
       )}
     </div>
