@@ -1137,16 +1137,20 @@ function ClientView() {
       const camposCliente={nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,rg:cadastro.rg||null,data_nascimento:cadastro.data_nascimento||null,endereco:enderecoObj};
       if(ex&&ex.length>0){
         cid=ex[0].id;
-        await atualizarCliente(cid,{...camposCliente,updated_at:new Date().toISOString()});
+        await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,updated_at:new Date().toISOString()});
       }else{
         const nc=await criarCliente({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
         cid=nc[0].id;
       }
+      // Nome da criança: retornante usa seleção/campo simples; novo cliente usa anamnese
+      const nomeCrianca=clienteExistente
+        ?(cadastro.nomeCriancaSel&&cadastro.nomeCriancaSel!=="__nova"?cadastro.nomeCriancaSel:cadastro.nomeCriancaNova||"")
+        :(anamnese.nome_crianca||"");
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
-        duracao_min:modality?.duracao_min||60,
+        duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
         data:date,hora:time,valor:calc.total||modality?.price||null,
         status:"Pendente",pagamento_status:"Pendente",
         dados_evento:precisaDadosEvento?dadosEvento:null,
@@ -1173,7 +1177,8 @@ function ClientView() {
     </div>
   );
 
-  const cadastroOk=cadastro.nome_mae&&cadastro.email&&cadastro.telefone&&cadastro.temFilho;
+  const criancaOk=cadastro.temFilho!=="Sim"||(clienteExistente?(cadastro.nomeCriancaSel&&cadastro.nomeCriancaSel!=="__nova"?true:!!cadastro.nomeCriancaNova):filhos.some(f=>f.nome_crianca));
+  const cadastroOk=cadastro.nome_mae&&cadastro.email&&cadastro.telefone&&cadastro.temFilho&&criancaOk;
 
   return(
     <div>
@@ -1190,15 +1195,35 @@ function ClientView() {
 
           {clienteExistente?(
             <div>
-              <div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginBottom:12}}>
-                <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro.</p>
+              <div style={{padding:12,background:"#e6f4ea",borderRadius:8,marginBottom:16}}>
+                <p style={{fontSize:13,color:"#2e7d32",margin:0,fontWeight:600}}>✅ Olá, {clienteExistente.nome_mae?.split(" ")[0]}! Encontramos seu cadastro. 🌸</p>
                 <p style={{fontSize:11,color:"#555",margin:"4px 0 0"}}>Para atualizar seus dados acesse "Minha Área" após o agendamento.</p>
               </div>
               <Field label="Nome completo" required><input style={inp} value={cadastro.nome_mae} onChange={e=>setCad("nome_mae",e.target.value)}/></Field>
               <Field label="E-mail" required><input style={inp} type="email" value={cadastro.email} onChange={e=>setCad("email",e.target.value)}/></Field>
               <Field label="Este ensaio é para uma criança?" required>
-                <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>setCad("temFilho",v)}/>
+                <Radio options={["Sim","Não"]} value={cadastro.temFilho} onChange={v=>{setCad("temFilho",v);setCad("nomeCriancaSel","");setCad("nomeCriancaNova","");}}/>
               </Field>
+              {cadastro.temFilho==="Sim"&&(
+                <div style={{marginTop:4}}>
+                  {clienteExistente.filhos?.length>0?(
+                    <Field label="Qual criança é o ensaio?" required>
+                      <select style={inp} value={cadastro.nomeCriancaSel||""} onChange={e=>setCad("nomeCriancaSel",e.target.value)}>
+                        <option value="">Selecione...</option>
+                        {clienteExistente.filhos.map((f,i)=>(
+                          <option key={i} value={f.nome_crianca}>{f.nome_crianca}{f.idade?" · "+f.idade:""}</option>
+                        ))}
+                        <option value="__nova">+ Outra criança</option>
+                      </select>
+                    </Field>
+                  ):null}
+                  {(!clienteExistente.filhos?.length||cadastro.nomeCriancaSel==="__nova")&&(
+                    <Field label="Nome da criança" required>
+                      <input style={inp} value={cadastro.nomeCriancaNova||""} onChange={e=>setCad("nomeCriancaNova",e.target.value)} placeholder="Nome da criança"/>
+                    </Field>
+                  )}
+                </div>
+              )}
             </div>
           ):(
             <div>
@@ -1255,8 +1280,16 @@ function ClientView() {
           )}
 
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
-          <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
+          <p style={{fontSize:12,color:"#999",marginBottom:14}}>Selecione uma data verde disponível</p>
           <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis} duracaoMin={modality?.duracao_min||60}/>
+          {!date&&horariosDisponiveis.length===0&&(
+            <div style={{marginTop:12,padding:"10px 14px",background:"#fff8e1",border:"1.5px solid #ffe082",borderRadius:10}}>
+              <p style={{fontSize:12,color:"#f57c00",margin:"0 0 6px",fontWeight:600}}>⚠️ Nenhuma data liberada neste mês.</p>
+              <a href={`https://wa.me/${PHOTOGRAPHER.whatsapp}?text=Olá! Quero agendar um ${service?.label} e não encontrei datas disponíveis no app.`} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#25D366",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}>
+                💬 Falar pelo WhatsApp para verificar datas →
+              </a>
+            </div>
+          )}
           {date&&(
             <div style={{marginTop:14}}>
               <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(date)}</strong>:</p>

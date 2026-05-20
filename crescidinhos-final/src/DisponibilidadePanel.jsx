@@ -2,18 +2,27 @@
 // Painel para a Thais liberar datas e horários disponíveis no Supabase
 
 import { useState, useEffect, useCallback } from "react";
-import { SUPABASE_URL, SUPABASE_KEY, TIMES } from "./config";
+import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+
+// Gera todos os horários do dia em intervalos de 30 min: 00:00 até 23:30
+const HORARIOS_DIA = Array.from({ length: 48 }, (_, i) => {
+  const h = Math.floor(i / 2);
+  const m = i % 2 === 0 ? "00" : "30";
+  return `${String(h).padStart(2, "0")}:${m}`;
+});
 
 const sb = async (path, options = {}) => {
+  // Desestrutura headers separado para não sobrescrever apikey/Authorization
+  const { headers: extraHeaders = {}, ...restOptions } = options;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
-      ...options.headers,
+      ...extraHeaders,
     },
-    ...options,
+    ...restOptions,
   });
   if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
@@ -104,7 +113,7 @@ export default function DisponibilidadePanel() {
   const diasNoMes = new Date(ano, mes + 1, 0).getDate();
   const primeiroDia = new Date(ano, mes, 1).getDay();
 
-  const todos = TIMES;
+  const todos = HORARIOS_DIA;
 
   return (
     <div style={{ maxWidth: 480 }}>
@@ -162,21 +171,34 @@ export default function DisponibilidadePanel() {
             {new Date(dataSel + "T12:00:00").toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
           </p>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
-            {todos.map(h => {
-              const sel = horariosSel.includes(h);
+          <div style={{ maxHeight: 260, overflowY: "auto", marginBottom: 12, paddingRight: 4 }}>
+            {["Madrugada (00–05)", "Manhã (06–11)", "Tarde (12–17)", "Noite (18–23)"].map((titulo, bloco) => {
+              const slots = todos.filter(h => {
+                const hora = parseInt(h);
+                return hora >= bloco * 6 && hora < (bloco + 1) * 6;
+              });
               return (
-                <button key={h} onClick={() => toggleHorario(h)}
-                  style={{
-                    padding: "10px 4px", borderRadius: 8,
-                    border: `1.5px solid ${sel ? C.primary : C.border}`,
-                    background: sel ? C.light : "#fff",
-                    color: sel ? C.primary : C.text,
-                    fontWeight: sel ? 700 : 400,
-                    fontSize: 13, cursor: "pointer",
-                  }}>
-                  {h}
-                </button>
+                <div key={bloco} style={{ marginBottom: 10 }}>
+                  <p style={{ fontSize: 10, color: C.muted, fontWeight: 700, margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "1px" }}>{titulo}</p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 5 }}>
+                    {slots.map(h => {
+                      const sel = horariosSel.includes(h);
+                      return (
+                        <button key={h} onClick={() => toggleHorario(h)}
+                          style={{
+                            padding: "7px 2px", borderRadius: 6,
+                            border: `1.5px solid ${sel ? C.primary : C.border}`,
+                            background: sel ? C.light : "#fff",
+                            color: sel ? C.primary : C.text,
+                            fontWeight: sel ? 700 : 400,
+                            fontSize: 11, cursor: "pointer",
+                          }}>
+                          {h}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               );
             })}
           </div>
