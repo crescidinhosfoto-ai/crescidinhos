@@ -155,7 +155,7 @@ function DadosEventoForm({ serviceId, data, onChange }) {
 }
 
 // ─── CALENDAR (lê disponibilidades do Supabase) ──────────────────
-function Calendar({ selectedDate, onSelectDate, onHorariosChange, duracaoMin = 60 }) {
+function Calendar({ selectedDate, onSelectDate, onHorariosChange, onDatasChange, duracaoMin = 60 }) {
   const today = new Date();
   const [vy,setVy] = useState(today.getFullYear());
   const [vm,setVm] = useState(today.getMonth());
@@ -167,6 +167,7 @@ function Calendar({ selectedDate, onSelectDate, onHorariosChange, duracaoMin = 6
       setCarregandoMes(true);
       const datas = await fetchDatasDisponiveis(vy, vm+1);
       setDiasLiberados(datas||[]);
+      if(onDatasChange) onDatasChange(datas||[]);
       setCarregandoMes(false);
     };
     buscar();
@@ -691,7 +692,11 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             <div><h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 2px"}}>{cl.nome_mae}</h3><p style={{fontSize:12,color:"#999",margin:0}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico"):""}</p></div>
             <span style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{agendamento.status}</span>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["Data",formatDateBR(agendamento.data)],["Horário",agendamento.hora],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",",")}`],["WhatsApp",cl.telefone]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>{[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",",")}`],["WhatsApp",cl.telefone]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Data</label><input style={{...inp,fontSize:13}} type="date" defaultValue={agendamento.data||""} onBlur={e=>e.target.value&&update(agendamento.id,{data:e.target.value})}/></div>
+            <div><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Horário</label><input style={{...inp,fontSize:13}} type="time" defaultValue={agendamento.hora||""} onBlur={e=>e.target.value&&update(agendamento.id,{hora:e.target.value})}/></div>
+          </div>
         </div>
 
         {/* Dados do evento */}
@@ -992,10 +997,12 @@ function ClientePanel() {
                 <div><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>Data</p><p style={{fontSize:13,fontWeight:600,margin:0}}>{formatDateBR(a.data)} às {a.hora}</p></div>
                 <div><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>Valor</p><p style={{fontSize:13,fontWeight:600,margin:0}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p></div>
               </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:a.pagamento_link||a.status==="Confirmado"?8:0}}>
                 <span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
                 <button onClick={()=>setGaleriaAg(galeriaAberta?null:a.id)} style={{padding:"4px 12px",borderRadius:8,background:galeriaAberta?"#1a1a1a":"#f5f0eb",color:galeriaAberta?"#fff":"#b8967e",border:"none",fontSize:12,fontWeight:600,cursor:"pointer"}}>📷 {galeriaAberta?"Fechar":"Ver galeria"}</button>
               </div>
+              {a.pagamento_link&&a.pagamento_status!=="Pago"&&<a href={a.pagamento_link} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:8,background:"#1565C0",color:"#fff",textDecoration:"none",fontSize:13,fontWeight:600,boxSizing:"border-box",marginBottom:6}}>💳 Realizar pagamento →</a>}
+              {(a.status==="Confirmado"||a.signature)&&<a href={`https://app.crescidinhosfoto.com.br/contrato/${a.id}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,width:"100%",padding:"10px",borderRadius:8,background:"#f5f0eb",color:"#b8967e",textDecoration:"none",fontSize:13,fontWeight:600,boxSizing:"border-box",border:"1.5px solid #e8e0d8"}}>📄 Ver / assinar contrato →</a>}
               {galeriaAberta&&<div style={{marginTop:14,borderTop:"1px solid #f0e8e0",paddingTop:14}}><GaleriaCliente agendamento={a}/></div>}
             </div>
           );})}
@@ -1121,6 +1128,7 @@ function ClientView() {
   const [date,setDate]=useState(null);
   const [time,setTime]=useState(null);
   const [horariosDisponiveis,setHorariosDisponiveis]=useState([]);
+  const [datasDisponiveis,setDatasDisponiveis]=useState(null);
   const [dadosEvento,setDadosEvento]=useState({});
   const [submitted,setSubmitted]=useState(false);
   const [loading,setLoading]=useState(false);
@@ -1320,8 +1328,8 @@ function ClientView() {
 
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Selecione uma data verde disponível</p>
-          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis} duracaoMin={modality?.duracao_min||60}/>
-          {!date&&horariosDisponiveis.length===0&&(
+          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis} onDatasChange={setDatasDisponiveis} duracaoMin={modality?.duracao_min||60}/>
+          {!date&&datasDisponiveis!==null&&datasDisponiveis.length===0&&(
             <div style={{marginTop:12,padding:"10px 14px",background:"#fff8e1",border:"1.5px solid #ffe082",borderRadius:10}}>
               <p style={{fontSize:12,color:"#f57c00",margin:"0 0 6px",fontWeight:600}}>⚠️ Nenhuma data liberada neste mês.</p>
               <a href={`https://wa.me/${PHOTOGRAPHER.whatsapp}?text=Olá! Quero agendar um ${service?.label} e não encontrei datas disponíveis no app.`} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#25D366",fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}>
