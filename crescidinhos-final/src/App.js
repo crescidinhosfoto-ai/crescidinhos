@@ -1166,7 +1166,7 @@ function ClientView() {
       const camposCliente={nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,rg:cadastro.rg||null,data_nascimento:cadastro.data_nascimento||null,endereco:enderecoObj};
       if(ex&&ex.length>0){
         cid=ex[0].id;
-        await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,updated_at:new Date().toISOString()});
+        await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf||null,updated_at:new Date().toISOString()});
       }else{
         const nc=await criarCliente({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
         cid=nc[0].id;
