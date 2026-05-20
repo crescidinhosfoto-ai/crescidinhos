@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularTotal } from "./config";
-import { fetchCalendarEvents } from "./googleCalendar";
+import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
