@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularTotal } from "./config";
-import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalendar";
+import { fetchCalendarEvents } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
@@ -203,67 +203,6 @@ function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
         })}
       </div>
       <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = disponíveis no Google Calendar</p>
-    </div>
-  );
-}) {
-  const today = new Date();
-  const [vy,setVy] = useState(today.getFullYear());
-  const [vm,setVm] = useState(today.getMonth());
-  const [disponibilidades,setDisponibilidades] = useState({});
-  const [loadingDisp,setLoadingDisp] = useState(true);
-
-  useEffect(() => { carregarDisp(vy,vm); }, [vy,vm]);
-
-  const carregarDisp = async (ano,mes) => {
-    setLoadingDisp(true);
-    try {
-      const inicio = `${ano}-${pad(mes+1)}-01`;
-      const fim = `${ano}-${pad(mes+1)}-${String(getDaysInMonth(ano,mes)).padStart(2,"0")}`;
-      const r = await sb(`disponibilidades?data=gte.${inicio}&data=lte.${fim}&order=data.asc`);
-      const map = {};
-      (r||[]).forEach(d => { map[d.data] = d.horarios||[]; });
-      setDisponibilidades(map);
-    } catch(e) { console.error(e); }
-    setLoadingDisp(false);
-  };
-
-  const days = getDaysInMonth(vy,vm);
-  const firstDay = getFirstDay(vy,vm);
-  const cells = [];
-  for(let i=0;i<firstDay;i++) cells.push(null);
-  for(let d=1;d<=days;d++) cells.push(d);
-
-  const handleSelect = (ds) => {
-    onSelectDate(ds);
-    if(onHorariosChange) onHorariosChange(disponibilidades[ds]||[]);
-  };
-
-  return (
-    <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <button onClick={()=>{vm===0?(setVm(11),setVy(y=>y-1)):setVm(m=>m-1);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>‹</button>
-        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600}}>{MONTHS[vm]} {vy}</span>
-        <button onClick={()=>{vm===11?(setVm(0),setVy(y=>y+1)):setVm(m=>m+1);}} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>›</button>
-      </div>
-      {loadingDisp&&<p style={{textAlign:"center",fontSize:12,color:"#bbb",padding:"8px 0"}}>Carregando agenda...</p>}
-      {!loadingDisp&&Object.keys(disponibilidades).length===0&&(
-        <div style={{padding:"12px",background:"#fff8e1",borderRadius:8,marginBottom:12,fontSize:12,color:"#856404",textAlign:"center"}}>
-          ⚠️ Nenhuma data disponível neste mês. Entre em contato pelo WhatsApp!
-        </div>
-      )}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-        {WEEKDAYS.map(w=><div key={w} style={{textAlign:"center",fontSize:10,color:"#aaa",fontWeight:600,padding:"3px 0"}}>{w}</div>)}
-        {cells.map((d,i)=>{
-          if(!d) return <div key={i}/>;
-          const ds=formatDate(vy,vm,d);
-          const isPast=new Date(ds)<new Date(today.toDateString());
-          const temH=(disponibilidades[ds]||[]).length>0;
-          const disponivel=!isPast&&temH;
-          const isSel=selectedDate===ds;
-          return <div key={i} onClick={()=>disponivel&&handleSelect(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":disponivel?"#f0faf0":"transparent",color:isSel?"#fff":!disponivel?"#ccc":"#1a1a1a",cursor:disponivel?"pointer":"default",border:isSel?"2px solid #1a1a1a":disponivel?"1px solid #a5d6a7":"1px solid transparent"}}>{d}</div>;
-        })}
-      </div>
-      <p style={{fontSize:11,color:"#888",textAlign:"center",marginTop:4}}>Datas disponíveis destacadas em verde</p>
     </div>
   );
 }
