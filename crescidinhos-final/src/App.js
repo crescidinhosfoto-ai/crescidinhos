@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, REGRAS, fmtPreco, calcularTotal } from "./config";
-import { fetchHorariosDisponiveis } from "./googleCalendar";
+import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
@@ -464,16 +464,14 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
 
 // ─── AGENDA VIEW ──────────────────────────────────────────────────
 function AgendaView({ auth, onVerCliente }) {
-  const [calEvents,setCalEvents]=useState([]);
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [fichaSel,setFichaSel]=useState(null);
-  const carregar=useCallback(async()=>{setLoading(true);try{const [ev,ags]=await Promise.all([fetchCalendarEvents(auth.token.access_token),getAgendamentos()]);setCalEvents(ev||[]);setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[auth]);
+  const carregar=useCallback(async()=>{setLoading(true);try{const ags=await getAgendamentos();setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
-  const cruzar=(ev)=>{const dt=ev.start?.dateTime||ev.start?.date;if(!dt)return null;const data=dt.substring(0,10);const hora=dt.length>10?new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):null;return agendamentos.find(a=>{if(a.data!==data)return false;if(!hora)return true;return a.hora&&a.hora.startsWith(hora.substring(0,5));})};
   const hoje=new Date().toISOString().substring(0,10);
-  const upcoming=calEvents.filter(e=>{const dt=e.start?.dateTime||e.start?.date;return dt&&dt.substring(0,10)>=hoje;}).sort((a,b)=>((a.start?.dateTime||a.start?.date||"")).localeCompare(b.start?.dateTime||b.start?.date||"")).slice(0,30);
-  const porDia={};upcoming.forEach(e=>{const dt=e.start?.dateTime||e.start?.date||"";const dia=dt.substring(0,10);if(!porDia[dia])porDia[dia]=[];porDia[dia].push(e);});
+  const upcoming=agendamentos.filter(a=>a.data&&a.data>=hoje&&a.status!=="Cancelado").sort((a,b)=>a.data.localeCompare(b.data)||a.hora.localeCompare(b.hora)).slice(0,30);
+  const porDia={};upcoming.forEach(a=>{if(!porDia[a.data])porDia[a.data]=[];porDia[a.data].push(a);});
   const dias=Object.keys(porDia).sort();
   return (
     <div>
@@ -483,7 +481,7 @@ function AgendaView({ auth, onVerCliente }) {
         <button onClick={carregar} style={{padding:"6px 12px",borderRadius:7,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>🔄 Atualizar</button>
       </div>
       {loading&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Sincronizando com Google Calendar...</p>}
-      {!loading&&dias.length===0&&<div style={{textAlign:"center",padding:"48px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum evento nos próximos dias</p></div>}
+      {!loading&&dias.length===0&&<div style={{textAlign:"center",padding:"48px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum agendamento nos próximos dias</p></div>}
       {!loading&&dias.map(dia=>{
         const isHoje=dia===hoje;
         const d=new Date(dia+"T12:00:00");
@@ -495,22 +493,27 @@ function AgendaView({ auth, onVerCliente }) {
               {isHoje&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
               <div style={{flex:1,height:1,background:"#f0e8e0"}}/>
             </div>
-            {porDia[dia].map(evento=>{
-              const ag=cruzar(evento);const cl=ag?.clientes||{};const dt=evento.start?.dateTime||evento.start?.date;const hora=dt&&dt.length>10?new Date(dt).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"";const st=ag?STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"]:null;const pc=ag?PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"]:null;
+            {porDia[dia].map(ag=>{
+              const cl=ag?.clientes||{};const st=STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"];
               return(
-                <div key={evento.id} onClick={()=>ag&&setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:ag?"pointer":"default",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
+                <div key={ag.id} onClick={()=>setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:"pointer",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                     <div style={{flex:1}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        {hora&&<span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{hora}</span>}
-                        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{evento.summary?.replace("📸 ","")}</span>
+                        <span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{ag.hora}</span>
+                        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</span>
                       </div>
-                      {ag&&(<div><p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico")+" ("+cl.idade+")":cl.nome_mae}</p>{ag.modalidade&&<p style={{margin:"0 0 4px",fontSize:11,color:"#b8967e"}}>📌 {ag.modalidade}</p>}<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p><div style={{display:"flex",gap:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>{cl.anamnese&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}</div></div>)}
-                      {!ag&&evento.description&&<p style={{margin:"4px 0 0",fontSize:11,color:"#aaa",lineHeight:1.5}}>{evento.description.substring(0,80)}</p>}
+                      <p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{ag.servico}{ag.modalidade?" — "+ag.modalidade:""}</p>
+                      {cl.telefone&&<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p>}
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span>
+                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>
+                        {cl.anamnese&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}
+                      </div>
                     </div>
                     <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
-                      {ag&&<p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>}
-                      {ag&&<span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>}
+                      <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>
+                      <span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>
                     </div>
                   </div>
                 </div>
@@ -1091,13 +1094,41 @@ function ClientView() {
           </Field>
           {cadastro.temFilho==="Sim"&&(
             <div>
-              {filhos.map((f,i)=>(
-                <div key={i} style={{position:"relative"}}>
-                  {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>}
-                  <AnamneseForm data={f} onChange={data=>updateFilho(i,data)} titulo={filhos.length>1?`👶 Filho ${i+1}`:null}/>
+              {/* Cliente existente: só nome e idade. Novo cliente: anamnese completa */}
+              {clienteExistente ? (
+                <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"14px",marginBottom:8}}>
+                  <p style={{fontSize:12,color:"#b8967e",fontWeight:700,margin:"0 0 10px"}}>👶 Dados da criança</p>
+                  {(clienteExistente.filhos||[]).length>0 ? (
+                    <div>
+                      <p style={{fontSize:12,color:"#666",margin:"0 0 8px"}}>Filhos cadastrados:</p>
+                      {(clienteExistente.filhos||[]).map((f,i)=>(
+                        <div key={i} style={{padding:"8px 10px",background:"#fff",borderRadius:8,marginBottom:6,fontSize:13,border:"1px solid #e8e0d8"}}>
+                          {f.nome_crianca||f.nome} · {f.idade}
+                          {f.atipico==="Sim"&&<span style={{marginLeft:6,fontSize:11,color:"#b8600a"}}>🧡 Atípico</span>}
+                        </div>
+                      ))}
+                      <p style={{fontSize:11,color:"#aaa",margin:"8px 0 0"}}>Para atualizar as informações, acesse <strong>Minha Área → Perfil</strong>.</p>
+                    </div>
+                  ) : (
+                    filhos.map((f,i)=>(
+                      <div key={i}>
+                        <Field label="Nome da criança" required><input style={inp} value={f.nome_crianca||""} onChange={e=>updateFilho(i,{...f,nome_crianca:e.target.value})} placeholder="Nome"/></Field>
+                        <Field label="Idade" required><input style={inp} value={f.idade||""} onChange={e=>updateFilho(i,{...f,idade:e.target.value})} placeholder="Ex: 2 anos"/></Field>
+                      </div>
+                    ))
+                  )}
                 </div>
-              ))}
-              <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>+ Adicionar outro filho</button>
+              ) : (
+                <div>
+                  {filhos.map((f,i)=>(
+                    <div key={i} style={{position:"relative"}}>
+                      {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{position:"absolute",top:12,right:12,background:"#fde8e8",border:"none",borderRadius:6,padding:"4px 8px",cursor:"pointer",fontSize:12,color:"#c62828",zIndex:1}}>✕ Remover</button>}
+                      <AnamneseForm data={f} onChange={data=>updateFilho(i,data)} titulo={filhos.length>1?`👶 Filho ${i+1}`:null}/>
+                    </div>
+                  ))}
+                  <button onClick={addFilho} style={{width:"100%",padding:11,borderRadius:10,background:"#faf8f5",border:"1.5px dashed #b8967e",cursor:"pointer",fontSize:13,color:"#b8967e",fontWeight:600,marginBottom:16}}>+ Adicionar outro filho</button>
+                </div>
+              )}
             </div>
           )}
           <button disabled={!cadastroOk} onClick={()=>setStep(2)} style={{width:"100%",padding:"14px",borderRadius:12,background:cadastroOk?"#1a1a1a":"#e8e0d8",color:cadastroOk?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?"pointer":"default"}}>Continuar →</button>
@@ -1181,13 +1212,13 @@ function CalendarComDisponibilidade({ selectedDate, onSelectDate }) {
   const [vy,setVy] = useState(today.getFullYear());
   const [vm,setVm] = useState(today.getMonth());
   const [diasLiberados,setDiasLiberados] = useState([]);
+  const [carregandoMes,setCarregandoMes] = useState(false);
   useEffect(()=>{
     const buscar = async () => {
-      try {
-        const mesStr = `${vy}-${String(vm+1).padStart(2,"0")}`;
-        const r = await sb(`disponibilidades?data=gte.${mesStr}-01&data=lte.${mesStr}-31&select=data`);
-        setDiasLiberados((r||[]).map(d=>d.data));
-      } catch {}
+      setCarregandoMes(true);
+      const datas = await fetchDatasDisponiveis(vy, vm+1);
+      setDiasLiberados(datas);
+      setCarregandoMes(false);
     };
     buscar();
   },[vy,vm]);
@@ -1216,7 +1247,7 @@ function CalendarComDisponibilidade({ selectedDate, onSelectDate }) {
           return <div key={i} onClick={()=>disponivel&&onSelectDate(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":disponivel?"#e8f5e8":"transparent",color:isSel?"#fff":disponivel?"#2e7d32":isPast||isSun?"#ccc":"#1a1a1a",cursor:disponivel?"pointer":"default"}}>{d}</div>;
         })}
       </div>
-      <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = disponíveis</p>
+      <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>{carregandoMes?"Verificando disponibilidade...":"Datas verdes = disponíveis no Google Calendar"}</p>
     </div>
   );
 }
