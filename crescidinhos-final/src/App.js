@@ -5,6 +5,8 @@ import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalenda
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
+import GaleriaPanel from "./GaleriaPanel";
+import GaleriaCliente from "./GaleriaCliente";
 
 // ─── SUPABASE ────────────────────────────────────────────────────
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
@@ -732,6 +734,9 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📄 Contrato</p>
           <ContractPanel agendamento={agendamento} onUpdate={(patch)=>update(agendamento.id,patch)}/>
         </div>
+        <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
+          <GaleriaPanel agendamento={agendamento}/>
+        </div>
         <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
       </div>
     );
@@ -925,6 +930,7 @@ function ClientePanel() {
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(false);
   const [tab,setTab]=useState("agendamentos");
+  const [galeriaAg,setGaleriaAg]=useState(null);
   const [editandoPerfil,setEditandoPerfil]=useState(false);
   const [perfilForm,setPerfilForm]=useState({});
   const [salvandoPerfil,setSalvandoPerfil]=useState(false);
@@ -976,7 +982,7 @@ function ClientePanel() {
       {tab==="agendamentos"&&(
         <div>
           {agendamentos.length===0&&<div style={{textAlign:"center",padding:"40px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum ensaio ainda</p></div>}
-          {agendamentos.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];return(
+          {agendamentos.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];const galeriaAberta=galeriaAg===a.id;return(
             <div key={a.id} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:10}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                 <div><p style={{margin:0,fontSize:14,fontWeight:700,color:"#1a1a1a"}}>{a.servico}</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{a.modalidade}</p></div>
@@ -986,7 +992,11 @@ function ClientePanel() {
                 <div><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>Data</p><p style={{fontSize:13,fontWeight:600,margin:0}}>{formatDateBR(a.data)} às {a.hora}</p></div>
                 <div><p style={{fontSize:10,color:"#aaa",margin:"0 0 2px"}}>Valor</p><p style={{fontSize:13,fontWeight:600,margin:0}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p></div>
               </div>
-              <span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span style={{padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
+                <button onClick={()=>setGaleriaAg(galeriaAberta?null:a.id)} style={{padding:"4px 12px",borderRadius:8,background:galeriaAberta?"#1a1a1a":"#f5f0eb",color:galeriaAberta?"#fff":"#b8967e",border:"none",fontSize:12,fontWeight:600,cursor:"pointer"}}>📷 {galeriaAberta?"Fechar":"Ver galeria"}</button>
+              </div>
+              {galeriaAberta&&<div style={{marginTop:14,borderTop:"1px solid #f0e8e0",paddingTop:14}}><GaleriaCliente agendamento={a}/></div>}
             </div>
           );})}
         </div>
