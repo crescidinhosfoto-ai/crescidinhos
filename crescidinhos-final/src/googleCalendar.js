@@ -1,39 +1,87 @@
 // googleCalendar.js — Crescidinhos Fotografia
-// Busca disponibilidade via n8n (que lê o iCal do Google Calendar da Thais)
+// Lê disponibilidade direto do Supabase (tabela disponibilidades)
+// Bloqueia automaticamente horários já agendados, considerando duração do serviço
 
-const N8N_BASE = "https://ribbitingboar-n8n.cloudfy.live";
+import { SUPABASE_URL, SUPABASE_KEY } from "./config";
 
-/**
- * Busca horários disponíveis para uma data específica
- * @param {string} data - formato 'YYYY-MM-DD'
- * @returns {Promise<string[]|null>} ex: ["09:00","10:00"] ou null se erro
- */
-export async function fetchHorariosDisponiveis(data) {
+const sbGet = async (path) => {
   try {
-    const res = await fetch(`${N8N_BASE}/webhook/horarios-disponiveis?data=${data}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    return Array.isArray(json.horarios) ? json.horarios : null;
-  } catch (err) {
-    console.warn("[GCal] horarios error:", err.message);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } catch {
     return null;
   }
-}
+};
 
 /**
- * Busca quais datas do mês têm pelo menos 1 slot "Ensaio" no Google Calendar
+ * Busca quais datas do mês têm horários liberados no Supabase
  * @param {number} ano
  * @param {number} mes - 1-12
  * @returns {Promise<string[]>} ex: ["2026-05-24","2026-05-27"]
  */
 export async function fetchDatasDisponiveis(ano, mes) {
   try {
-    const res = await fetch(`${N8N_BASE}/webhook/datas-disponiveis?ano=${ano}&mes=${mes}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    return Array.isArray(json.datas) ? json.datas : [];
+    const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
+    const res = await sbGet(
+      `disponibilidades?data=gte.${mesStr}-01&data=lte.${mesStr}-31&select=data`
+    );
+    return (res || []).map((d) => d.data);
   } catch (err) {
-    console.warn("[GCal] datas error:", err.message);
+    console.warn("[Disp] datas error:", err);
+    return [];
+  }
+}
+
+/**
+ * Busca horários disponíveis para uma data, bloqueando os já ocupados
+ * @param {string} data - formato 'YYYY-MM-DD'
+ * @param {number} duracaoMin - duração do serviço em minutos (default 60)
+ * @returns {Promise<string[]>} ex: ["09:00","10:00"]
+ */
+export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
+  try {
+    // 1. Horários liberados pela Thais para este dia
+    const dispRes = await sbGet(
+      `disponibilidades?data=eq.${data}&select=horarios`
+    );
+    if (!dispRes || dispRes.length === 0) return [];
+    const horariosLiberados = dispRes[0].horarios || [];
+    if (horariosLiberados.length === 0) return [];
+
+    // 2. Agendamentos ativos do dia para calcular bloqueios
+    const agsRes = await sbGet(
+      `agendamentos?data=eq.${data}&status=not.in.(Cancelado)&select=hora,duracao_min`
+    );
+    const agendados = agsRes || [];
+
+    // 3. Monta intervalos bloqueados [inicio_min, fim_min)
+    const intervalosOcupados = agendados
+      .filter((ag) => ag.hora)
+      .map((ag) => {
+        const [h, m] = ag.hora.split(":").map(Number);
+        const inicio = h * 60 + m;
+        const dur = ag.duracao_min || 60;
+        return [inicio, inicio + dur];
+      });
+
+    // 4. Filtra slots: o slot é válido se [slot, slot+duracaoMin) não colide com ocupados
+    return horariosLiberados.filter((slot) => {
+      const [sh, sm] = slot.split(":").map(Number);
+      const slotInicio = sh * 60 + sm;
+      const slotFim = slotInicio + duracaoMin;
+      return !intervalosOcupados.some(
+        ([inicio, fim]) => slotInicio < fim && slotFim > inicio
+      );
+    });
+  } catch (err) {
+    console.warn("[Disp] horarios error:", err);
     return [];
   }
 }

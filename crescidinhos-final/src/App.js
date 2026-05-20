@@ -153,7 +153,7 @@ function DadosEventoForm({ serviceId, data, onChange }) {
 }
 
 // ─── CALENDAR (lê disponibilidades do Supabase) ──────────────────
-function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
+function Calendar({ selectedDate, onSelectDate, onHorariosChange, duracaoMin = 60 }) {
   const today = new Date();
   const [vy,setVy] = useState(today.getFullYear());
   const [vm,setVm] = useState(today.getMonth());
@@ -176,7 +176,7 @@ function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
   const handleSelect = async (ds) => {
     onSelectDate(ds);
     if(onHorariosChange) {
-      const slots = await fetchHorariosDisponiveis(ds);
+      const slots = await fetchHorariosDisponiveis(ds, duracaoMin);
       onHorariosChange(slots||[]);
     }
   };
@@ -201,7 +201,7 @@ function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
           return <div key={i} onClick={()=>disponivel&&handleSelect(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":disponivel?"#e8f5e8":"transparent",color:isSel?"#fff":disponivel?"#2e7d32":isPast||isSun?"#ccc":"#1a1a1a",cursor:disponivel?"pointer":"default"}}>{d}</div>;
         })}
       </div>
-      <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = disponíveis no Google Calendar</p>
+      <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = horários disponíveis</p>
     </div>
   );
 }
@@ -472,11 +472,13 @@ function ServiceSelector({ onConfirm }) {
 
 // ─── STATUS ───────────────────────────────────────────────────────
 const STATUS_COLORS = {
-  "Pendente":   {bg:"#fff8e1",color:"#f57c00"},
-  "Confirmado": {bg:"#e3f2fd",color:"#1565C0"},
-  "Contrato":   {bg:"#f3e5f5",color:"#7b1fa2"},
-  "Concluído":  {bg:"#e6f4ea",color:"#2e7d32"},
-  "Cancelado":  {bg:"#fde8e8",color:"#c62828"},
+  "Pendente":          {bg:"#fff8e1",color:"#f57c00"},
+  "A Realizar":        {bg:"#e8f4fd",color:"#0277bd"},
+  "Confirmado":        {bg:"#e3f2fd",color:"#1565C0"},
+  "Contrato":          {bg:"#f3e5f5",color:"#7b1fa2"},
+  "Concluído":         {bg:"#e6f4ea",color:"#2e7d32"},
+  "Cancelado":         {bg:"#fde8e8",color:"#c62828"},
+  "Cancelado (multa)": {bg:"#fde8e8",color:"#b71c1c"},
 };
 const PAG_COLORS = {
   "Pendente":  {bg:"#fff8e1",color:"#f57c00"},
@@ -831,6 +833,62 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   );
 }
 
+// ─── ESTÚDIO VIEW ─────────────────────────────────────────────────
+function EstudioView() {
+  const [expandido,setExpandido] = useState(null);
+  const C = { primary:"#b8967e", light:"#f5f0eb", border:"#e8e0d8", text:"#3d2b1f", muted:"#a09080" };
+  return (
+    <div>
+      <div style={{background:"linear-gradient(135deg,#b8967e,#d4b89a)",borderRadius:14,padding:"20px 18px",marginBottom:20,color:"#fff",textAlign:"center"}}>
+        <div style={{fontSize:36,marginBottom:8}}>🐘</div>
+        <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,margin:"0 0 6px"}}>Crescidinhos Fotografia</h2>
+        <p style={{fontSize:12,opacity:.9,margin:0}}>{PHOTOGRAPHER.endereco}</p>
+      </div>
+      <div style={{background:"#fff",border:`1.5px solid ${C.border}`,borderRadius:12,padding:16,marginBottom:16}}>
+        <p style={{fontSize:11,color:C.primary,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📞 Contato</p>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <a href={`https://wa.me/${PHOTOGRAPHER.whatsapp}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px",borderRadius:10,background:"#e8f5e9",textDecoration:"none",fontSize:13,fontWeight:600,color:"#2e7d32"}}>
+            💬 WhatsApp
+          </a>
+          <a href={`https://instagram.com/${PHOTOGRAPHER.instagram.replace("@","")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px",borderRadius:10,background:"#fce4ec",textDecoration:"none",fontSize:13,fontWeight:600,color:"#c2185b"}}>
+            📸 Instagram
+          </a>
+        </div>
+        <div style={{marginTop:10,padding:"10px 12px",background:"#faf8f5",borderRadius:8}}>
+          <p style={{fontSize:12,color:C.muted,margin:"0 0 2px"}}>Endereço</p>
+          <p style={{fontSize:13,fontWeight:600,color:C.text,margin:0}}>{PHOTOGRAPHER.endereco}</p>
+        </div>
+      </div>
+      <p style={{fontSize:11,color:C.primary,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Nossos serviços</p>
+      {SERVICES.filter(s=>s.grupo!=="cofrinho"&&s.grupo!=="vale").map(s=>(
+        <div key={s.id} style={{background:"#fff",border:`1.5px solid ${expandido===s.id?C.primary:C.border}`,borderRadius:12,marginBottom:8,overflow:"hidden"}}>
+          <button onClick={()=>setExpandido(expandido===s.id?null:s.id)} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 14px",background:"none",border:"none",cursor:"pointer",textAlign:"left"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:20}}>{s.icon}</span>
+              <span style={{fontSize:14,fontWeight:600,color:C.text}}>{s.label}</span>
+            </div>
+            <span style={{fontSize:16,color:C.muted,transform:expandido===s.id?"rotate(180deg)":"none",transition:"transform .2s"}}>›</span>
+          </button>
+          {expandido===s.id&&(
+            <div style={{padding:"0 14px 14px"}}>
+              <p style={{fontSize:12,color:C.muted,lineHeight:1.6,margin:"0 0 10px"}}>{s.detail}</p>
+              {s.modalities.map(m=>(
+                <div key={m.id} style={{padding:"8px 10px",background:C.light,borderRadius:8,marginBottom:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontSize:13,fontWeight:600,color:C.text}}>{m.label}</span>
+                    <span style={{fontSize:13,fontWeight:700,color:C.primary}}>{m.price?`R$ ${Number(m.price).toLocaleString("pt-BR")}`:"A combinar"}</span>
+                  </div>
+                  {m.detail&&<p style={{fontSize:11,color:C.muted,margin:"3px 0 0"}}>{m.detail}</p>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── PAINEL DO CLIENTE ────────────────────────────────────────────
 function ClientePanel() {
   const [email,setEmail]=useState("");
@@ -881,7 +939,7 @@ function ClientePanel() {
         <button onClick={()=>{setLogado(null);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
-        {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],["cofrinho","💰 Cofrinho"],["vale","🎁 Vale"],["perfil","👤 Perfil"]].map(([t,l])=>
+        {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],["cofrinho","💰 Cofrinho"],["vale","🎁 Vale"],["estudio","🐘 Estúdio"],["perfil","👤 Perfil"]].map(([t,l])=>
           <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
         )}
       </div>
@@ -960,6 +1018,8 @@ function ClientePanel() {
           )}
         </div>
       )}
+
+      {tab==="estudio"&&<EstudioView/>}
 
       {tab==="perfil"&&(
         <div>
@@ -1086,6 +1146,7 @@ function ClientView() {
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
+        duracao_min:modality?.duracao_min||60,
         data:date,hora:time,valor:calc.total||modality?.price||null,
         status:"Pendente",pagamento_status:"Pendente",
         dados_evento:precisaDadosEvento?dadosEvento:null,
@@ -1195,7 +1256,7 @@ function ClientView() {
 
           <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Domingos não disponíveis</p>
-          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis}/>
+          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis} duracaoMin={modality?.duracao_min||60}/>
           {date&&(
             <div style={{marginTop:14}}>
               <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(date)}</strong>:</p>
@@ -1291,10 +1352,11 @@ function PhotographerPanel({ auth, onLogout }) {
       {auth.email===PHOTOGRAPHER.email&&(
         <>
           <div style={{display:"flex",gap:6,marginBottom:20}}>
-            {[["agenda","📅 Agenda"],["crm","🗂 CRM"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
+            {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Horários"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
           </div>
           {tab==="agenda"&&<AgendaView auth={auth} onVerCliente={(id)=>{setAbrirAgId(id);setTab("crm");}}/>}
           {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)}/>}
+          {tab==="disponibilidade"&&<DisponibilidadePanel/>}
         </>
       )}
     </div>
