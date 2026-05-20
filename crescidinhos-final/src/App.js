@@ -204,58 +204,6 @@ function Calendar({ selectedDate, onSelectDate, onHorariosChange }) {
       <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = disponíveis no Google Calendar</p>
     </div>
   );
-}) {
-  // Calendário legado - mantido para compatibilidade
-  const today = new Date();
-  const [vy,setVy] = useState(today.getFullYear());
-  const [vm,setVm] = useState(today.getMonth());
-  const [diasLiberados,setDiasLiberados] = useState([]);
-  const [carregandoMes,setCarregandoMes] = useState(false);
-  useEffect(()=>{
-    const buscar = async () => {
-      setCarregandoMes(true);
-      const datas = await fetchDatasDisponiveis(vy, vm+1);
-      setDiasLiberados(datas||[]);
-      setCarregandoMes(false);
-    };
-    buscar();
-  },[vy,vm]);
-  const days = new Date(vy,vm+1,0).getDate();
-  const firstDay = new Date(vy,vm,1).getDay();
-  const cells = [];
-  for(let i=0;i<firstDay;i++) cells.push(null);
-  for(let d=1;d<=days;d++) cells.push(d);
-  const handleSelect = async (ds) => {
-    onSelectDate(ds);
-    if(onHorariosChange) {
-      const slots = await fetchHorariosDisponiveis(ds);
-      onHorariosChange(slots||[]);
-    }
-  };
-  return (
-    <div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <button onClick={()=>vm===0?(setVm(11),setVy(y=>y-1)):setVm(m=>m-1)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>‹</button>
-        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:600}}>{MONTHS[vm]} {vy}</span>
-        <button onClick={()=>vm===11?(setVm(0),setVy(y=>y+1)):setVm(m=>m+1)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#1a1a1a",padding:"4px 10px"}}>›</button>
-      </div>
-      {carregandoMes&&<p style={{textAlign:"center",fontSize:12,color:"#bbb",padding:"8px 0"}}>Verificando disponibilidade...</p>}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-        {WEEKDAYS.map(w=><div key={w} style={{textAlign:"center",fontSize:10,color:"#aaa",fontWeight:600,padding:"3px 0"}}>{w}</div>)}
-        {cells.map((d,i)=>{
-          if(!d) return <div key={i}/>;
-          const ds=`${vy}-${String(vm+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-          const isPast=new Date(ds)<new Date(today.toDateString());
-          const isSun=i%7===0;
-          const isLiberado=diasLiberados.includes(ds);
-          const isSel=selectedDate===ds;
-          const disponivel=!isPast&&!isSun&&isLiberado;
-          return <div key={i} onClick={()=>disponivel&&handleSelect(ds)} style={{textAlign:"center",padding:"7px 0",borderRadius:8,fontSize:13,fontWeight:isSel?700:400,background:isSel?"#1a1a1a":disponivel?"#e8f5e8":"transparent",color:isSel?"#fff":disponivel?"#2e7d32":isPast||isSun?"#ccc":"#1a1a1a",cursor:disponivel?"pointer":"default"}}>{d}</div>;
-        })}
-      </div>
-      <p style={{fontSize:11,color:"#aaa",textAlign:"center",margin:"6px 0 0"}}>Datas verdes = disponíveis no Google Calendar</p>
-    </div>
-  );
 }
 
 // ─── STEP BAR ────────────────────────────────────────────────────
