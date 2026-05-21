@@ -146,7 +146,7 @@ function SignaturePad({ onSign, disabled, jaSalvo, nomeLabel, dataLabel, savedIm
 
   if (assinado) return (
     <div style={st.sigBox}>
-      <canvas ref={canvasRef} width={300} height={110}
+      <canvas ref={canvasRef} width={600} height={220}
         style={{ ...st.canvas, borderColor: "#a5d6a7", cursor: "default", opacity: 0.85 }} />
       <p style={{ fontSize: 12, color: "#2e7d32", fontWeight: 600, margin: "6px 0 2px", textAlign: "center" }}>✅ Assinado</p>
       <p style={st.sigLabel}>{nomeLabel}</p>
@@ -156,7 +156,18 @@ function SignaturePad({ onSign, disabled, jaSalvo, nomeLabel, dataLabel, savedIm
 
   return (
     <div style={st.sigBox}>
-      <canvas ref={canvasRef} width={300} height={110} style={st.canvas} />
+      <div style={{ position: "relative" }}>
+        <canvas ref={canvasRef} width={600} height={220} style={st.canvas} />
+        {vazio && (
+          <div style={{
+            position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center", pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 28, marginBottom: 6 }}>✍️</span>
+            <span style={{ fontSize: 13, color: "#c9a0b0", fontWeight: 500 }}>Toque aqui e assine com o dedo</span>
+          </div>
+        )}
+      </div>
       <div style={st.sigActions}>
         <button onClick={limpar} style={st.btnClear}>Limpar</button>
         <button onClick={confirmar} disabled={salvando || vazio}
