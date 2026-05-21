@@ -375,9 +375,18 @@ function ExtrasPanel({ extras, selected, onChange, temDesconto, basePrice }) {
 // ─── SERVICE SELECTOR ────────────────────────────────────────────
 function ServiceSelector({ onConfirm }) {
   const [openId, setOpenId] = useState(null);
+  const [openCatId, setOpenCatId] = useState(null);
   const [selService, setSelService] = useState(null);
   const [selModality, setSelModality] = useState(null);
   const [selExtras, setSelExtras] = useState([]);
+
+  // Agrupa Chamego e Afeto em categoria Acompanhamento
+  const catServices = SERVICES.filter(s => s.categoria === "acompanhamento");
+  const otherServices = SERVICES.filter(s => s.categoria !== "acompanhamento");
+  const groupedItems = [
+    { type:"categoria", id:"acompanhamento", icon:"📆", label:"Acompanhamento", services: catServices },
+    ...otherServices.map(s => ({ type:"service", ...s }))
+  ];
 
   const handleService = (s) => {
     if(openId===s.id){ setOpenId(null); return; }
@@ -395,7 +404,68 @@ function ServiceSelector({ onConfirm }) {
       <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:"#1a1a1a",marginBottom:4}}>Que tipo de ensaio você deseja?</h3>
       <p style={{fontSize:13,color:"#999",marginBottom:20,lineHeight:1.6}}>Escolha o serviço e depois selecione o que melhor combina com você 🌸</p>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:24}}>
-        {SERVICES.map(s=>{
+        {groupedItems.map(item=>{
+          if(item.type==="categoria"){
+            const isCatOpen=openCatId===item.id;
+            return(
+              <div key={item.id} style={{borderRadius:14,border:isCatOpen?"2px solid #b8967e":"2px solid #e8e0d8",background:isCatOpen?"#faf8f5":"#fff",overflow:"hidden",transition:"border-color .15s"}}>
+                <div onClick={()=>setOpenCatId(isCatOpen?null:item.id)} style={{padding:"15px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:14}}>
+                  <span style={{fontSize:26,flexShrink:0}}>{item.icon}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:"#1a1a1a",margin:0,lineHeight:1.2}}>{item.label}</p>
+                    <p style={{fontSize:12,color:"#999",margin:"4px 0 0"}}>Chamego · Afeto</p>
+                  </div>
+                  <span style={{fontSize:13,color:"#b8967e",flexShrink:0,fontWeight:700,marginLeft:8}}>{isCatOpen?"▲":"▼"}</span>
+                </div>
+                {isCatOpen&&(
+                  <div style={{borderTop:"1px solid #f0e8e0",padding:"10px 12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                    {item.services.map(s=>{
+                      const isOpen=openId===s.id;
+                      const isSel=selService?.id===s.id;
+                      return(
+                        <div key={s.id} style={{borderRadius:12,border:isSel?"2px solid #1a1a1a":isOpen?"2px solid #b8967e":"2px solid #e8e0d8",background:isOpen?"#fff":"#faf8f5",overflow:"hidden"}}>
+                          <div onClick={()=>handleService(s)} style={{padding:"13px 14px",cursor:"pointer",display:"flex",alignItems:"center",gap:12}}>
+                            <span style={{fontSize:22,flexShrink:0}}>{s.icon}</span>
+                            <div style={{flex:1,minWidth:0}}>
+                              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:700,color:"#1a1a1a",margin:0}}>{s.label}</p>
+                              <p style={{fontSize:11,color:"#999",margin:"3px 0 0",lineHeight:1.4}}>{s.detail?.substring(0,60)}...</p>
+                            </div>
+                            <span style={{fontSize:12,color:"#b8967e",flexShrink:0,fontWeight:700}}>{isOpen?"▲":"▼"}</span>
+                          </div>
+                          {isOpen&&(
+                            <div style={{borderTop:"1px solid #f0e8e0",padding:"10px 14px 14px"}}>
+                              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Escolha uma opção:</p>
+                              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                                {s.modalities.map(m=>{
+                                  const isMSel=selService?.id===s.id&&selModality?.id===m.id;
+                                  return(
+                                    <div key={m.id} onClick={()=>handleModality(s,m)} style={{padding:"12px 14px",borderRadius:10,border:isMSel?"2px solid #1a1a1a":"2px solid #e8e0d8",background:isMSel?"#1a1a1a":"#fff",cursor:"pointer",transition:"all .15s"}}>
+                                      <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                                        <div style={{width:18,height:18,borderRadius:"50%",flexShrink:0,border:"2px solid "+(isMSel?"#fff":"#ccc"),background:isMSel?"#fff":"transparent",display:"flex",alignItems:"center",justifyContent:"center",marginTop:2}}>
+                                          {isMSel&&<div style={{width:8,height:8,borderRadius:"50%",background:"#1a1a1a"}}/>}
+                                        </div>
+                                        <div style={{flex:1}}>
+                                          <p style={{fontSize:14,fontWeight:700,color:isMSel?"#fff":"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>{m.label}</p>
+                                          <p style={{fontSize:12,color:isMSel?"#ccc":"#888",margin:"3px 0 0",lineHeight:1.5}}>{m.detail}</p>
+                                          {m.price&&<p style={{fontSize:13,fontWeight:700,color:isMSel?"#fff":"#b8967e",margin:"5px 0 0"}}>{fmtPreco(m.price,m.priceLabel,m.periodo)}</p>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          }
+          // Serviço normal
+          const s=item;
           const isOpen=openId===s.id;
           const isSel=selService?.id===s.id;
           return (
@@ -1448,24 +1518,53 @@ export default function App() {
   if(window.location.pathname.startsWith("/contrato/")){
     return <ContractPage/>;
   }
-  const [view,setView]=useState("client");
+  const [view,setView]=useState("home");
   const [auth,setAuth]=useState(null);
+  const btnBase={display:"flex",alignItems:"center",gap:16,width:"100%",padding:"20px 22px",borderRadius:16,cursor:"pointer",border:"2px solid #e8e0d8",background:"#fff",textAlign:"left",transition:"all .15s"};
   return(
     <div style={{fontFamily:"'Lato',sans-serif",background:"#f5f0eb",minHeight:"100vh",paddingBottom:48}}>
       <div style={{background:"#fff",padding:"20px 24px 14px",borderBottom:"1px solid #e8e0d8",marginBottom:24,textAlign:"center"}}>
-        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,margin:0,color:"#1a1a1a"}}>crescidinhos</h1>
+        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,margin:0,color:"#1a1a1a",cursor:"pointer"}} onClick={()=>setView("home")}>crescidinhos</h1>
         <p style={{fontSize:10,color:"#b8967e",margin:"2px 0 0",letterSpacing:"3px",textTransform:"uppercase"}}>fotografia</p>
-        <div style={{marginTop:14,display:"inline-flex",background:"#f5f0eb",borderRadius:8,padding:3}}>
-          <button onClick={()=>setView("client")} style={{padding:"7px 14px",borderRadius:6,fontSize:11,fontWeight:600,background:view==="client"?"#1a1a1a":"transparent",color:view==="client"?"#fff":"#888",border:"none",cursor:"pointer"}}>🌸 Agendar</button>
-          <button onClick={()=>setView("minha-area")} style={{padding:"7px 14px",borderRadius:6,fontSize:11,fontWeight:600,background:view==="minha-area"?"#1a1a1a":"transparent",color:view==="minha-area"?"#fff":"#888",border:"none",cursor:"pointer"}}>👤 Minha Área</button>
-          <button onClick={()=>setView("photographer")} style={{padding:"7px 14px",borderRadius:6,fontSize:11,fontWeight:600,background:view==="photographer"?"#1a1a1a":"transparent",color:view==="photographer"?"#fff":"#888",border:"none",cursor:"pointer"}}>{auth?"🗂 Painel":"🔐"}</button>
-        </div>
+        {view!=="home"&&(
+          <div style={{marginTop:14,display:"inline-flex",background:"#f5f0eb",borderRadius:8,padding:3}}>
+            <button onClick={()=>setView("home")} style={{padding:"7px 14px",borderRadius:6,fontSize:11,fontWeight:600,background:"transparent",color:"#888",border:"none",cursor:"pointer"}}>← Início</button>
+          </div>
+        )}
       </div>
       <div style={{maxWidth:480,margin:"0 auto",padding:"0 18px"}}>
+        {view==="home"&&(
+          <div>
+            <p style={{fontSize:14,color:"#888",marginBottom:24,lineHeight:1.7,textAlign:"center"}}>Bem-vinda! Como posso te ajudar hoje? 🌸</p>
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <button onClick={()=>setView("client")} style={{...btnBase,background:"#1a1a1a",border:"2px solid #1a1a1a"}}>
+                <span style={{fontSize:32,flexShrink:0}}>📸</span>
+                <div>
+                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#fff"}}>Agendar Ensaio</p>
+                  <p style={{margin:"4px 0 0",fontSize:12,color:"#aaa"}}>Escolha seu serviço e data</p>
+                </div>
+              </button>
+              <button onClick={()=>setView("minha-area")} style={{...btnBase}}>
+                <span style={{fontSize:32,flexShrink:0}}>👤</span>
+                <div>
+                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#1a1a1a"}}>Minha Área</p>
+                  <p style={{margin:"4px 0 0",fontSize:12,color:"#888"}}>Agendamentos, contratos e fotos</p>
+                </div>
+              </button>
+              <button onClick={()=>setView("photographer")} style={{...btnBase,background:"#f5f0eb"}}>
+                <span style={{fontSize:32,flexShrink:0}}>🗂</span>
+                <div>
+                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#1a1a1a"}}>Área da Fotógrafa</p>
+                  <p style={{margin:"4px 0 0",fontSize:12,color:"#888"}}>Painel de gerenciamento</p>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
         {view==="client"&&<ClientView/>}
         {view==="minha-area"&&<ClientePanel/>}
         {view==="photographer"&&!auth&&<PhotographerLogin onLogin={setAuth}/>}
-        {view==="photographer"&&auth&&<PhotographerPanel auth={auth} onLogout={()=>{setAuth(null);setView("client");}}/>}
+        {view==="photographer"&&auth&&<PhotographerPanel auth={auth} onLogout={()=>{setAuth(null);setView("home");}}/>}
       </div>
     </div>
   );

@@ -76,7 +76,7 @@ export const SERVICES = [
   // ─── CHAMEGO (Acompanhamento básico) ────────────────────────────
   {
     id: "chamego", icon: "🥰", label: "Chamego",
-    grupo: "ensaio",
+    grupo: "ensaio", categoria: "acompanhamento",
     detail: "Acompanhe a melhor fase do seu filho. Você pode escolher 1 cenário temático e faremos mais o cenário com o nosso mascote. Para você lembrar como eles crescem rápido.",
     descontoExtras: false,
     modalities: [
@@ -91,7 +91,7 @@ export const SERVICES = [
   // ─── AFETO (Acompanhamento completo) ────────────────────────────
   {
     id: "afeto", icon: "💛", label: "Afeto",
-    grupo: "ensaio",
+    grupo: "ensaio", categoria: "acompanhamento",
     detail: "Acompanhe a melhor fase do seu filho. Você pode escolher 1 cenário temático, 1 cenário família e faremos mais o cenário com o nosso mascote. Para você lembrar como eles crescem rápido de um jeito mais completo.",
     descontoExtras: false,
     modalities: [
