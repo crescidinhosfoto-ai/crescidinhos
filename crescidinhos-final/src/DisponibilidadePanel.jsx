@@ -87,18 +87,18 @@ export default function DisponibilidadePanel() {
     setSaving(true);
     setMsg("");
     try {
-      // Upsert (insert or update)
+      // Sempre deleta primeiro — evita problemas de duplicata ou falta de UNIQUE constraint
+      await sb(`disponibilidades?data=eq.${dataSel}`, { method: "DELETE" });
+
       if (horariosSel.length === 0) {
-        // Deletar disponibilidade se sem horários
-        await sb(`disponibilidades?data=eq.${dataSel}`, { method: "DELETE" });
         const novo = { ...disponibilidades };
         delete novo[dataSel];
         setDisponibilidades(novo);
         setMsg("✅ Data removida das disponibilidades.");
       } else {
+        // Insere novo registro limpo
         await sb("disponibilidades", {
           method: "POST",
-          headers: { Prefer: "resolution=merge-duplicates,return=representation" },
           body: JSON.stringify({ data: dataSel, horarios: horariosSel }),
         });
         setDisponibilidades(d => ({ ...d, [dataSel]: horariosSel }));

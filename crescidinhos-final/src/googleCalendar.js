@@ -2,7 +2,23 @@
 // Lê disponibilidade direto do Supabase (tabela disponibilidades)
 // Bloqueia automaticamente horários já agendados, considerando duração do serviço
 
-import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+import { SUPABASE_URL, SUPABASE_KEY, SERVICES } from "./config";
+
+// Busca duração do serviço no config pelo servico_id ou label
+function getDuracaoMin(ag) {
+  if (ag.duracao_min && ag.duracao_min > 0) return ag.duracao_min;
+  // Tenta achar pela modalidade no config
+  if (ag.servico_id || ag.modalidade_id) {
+    for (const svc of SERVICES) {
+      for (const mod of svc.modalities || []) {
+        if (mod.id === ag.modalidade_id || mod.id === ag.servico_id) {
+          return mod.duracao_min || 60;
+        }
+      }
+    }
+  }
+  return 60; // fallback: 1h
+}
 
 const sbGet = async (path) => {
   try {
@@ -57,7 +73,7 @@ export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
 
     // 2. Agendamentos ativos do dia para calcular bloqueios
     const agsRes = await sbGet(
-      `agendamentos?data=eq.${data}&status=not.in.(Cancelado)&select=hora,duracao_min`
+      `agendamentos?data=eq.${data}&status=not.in.(Cancelado)&select=hora,duracao_min,servico_id,modalidade_id`
     );
     const agendados = agsRes || [];
 
@@ -67,7 +83,7 @@ export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
       .map((ag) => {
         const [h, m] = ag.hora.split(":").map(Number);
         const inicio = h * 60 + m;
-        const dur = ag.duracao_min || 60;
+        const dur = getDuracaoMin(ag); // usa duração real do serviço
         return [inicio, inicio + dur];
       });
 
