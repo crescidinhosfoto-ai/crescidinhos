@@ -45,8 +45,11 @@ const sbGet = async (path) => {
 export async function fetchDatasDisponiveis(ano, mes) {
   try {
     const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
+    // Calcula o último dia real do mês (evita erro com meses de 30 dias ou fevereiro)
+    const ultimoDia = new Date(ano, mes, 0).getDate(); // mes já é 1-indexed aqui
+    const fimMes = `${mesStr}-${String(ultimoDia).padStart(2, "0")}`;
     const res = await sbGet(
-      `disponibilidades?data=gte.${mesStr}-01&data=lte.${mesStr}-31&select=data`
+      `disponibilidades?data=gte.${mesStr}-01&data=lte.${fimMes}&select=data`
     );
     return (res || []).map((d) => d.data);
   } catch (err) {

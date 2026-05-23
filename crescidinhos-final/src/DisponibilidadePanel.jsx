@@ -60,7 +60,10 @@ export default function DisponibilidadePanel() {
     setLoading(true);
     try {
       const mesStr = `${ano}-${String(mes + 1).padStart(2, "0")}`;
-      const res = await sb(`disponibilidades?data=gte.${mesStr}-01&data=lte.${mesStr}-31&select=data,horarios`);
+      // Calcula o último dia real do mês (evita erro com meses de 30 dias ou fevereiro)
+      const ultimoDia = new Date(ano, mes + 1, 0).getDate();
+      const fimMes = `${mesStr}-${String(ultimoDia).padStart(2, "0")}`;
+      const res = await sb(`disponibilidades?data=gte.${mesStr}-01&data=lte.${fimMes}&select=data,horarios`);
       const mapa = {};
       (res || []).forEach(d => { mapa[d.data] = d.horarios; });
       setDisponibilidades(mapa);
