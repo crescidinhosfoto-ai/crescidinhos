@@ -45,18 +45,19 @@ const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'
 const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
 const marcarValeUsado=(id)=>sb(`agendamentos?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'Utilizado'})});
 const MP_TOKEN='APP_USR-6587879092760162-052100-b495626cba5c1d859c2be43374d0fa23-3417831486';
-const criarLinkMercadoPago=async(titulo,valor,referencia)=>{
+// incluiBoleto=true para eventos (cliente paga em parcelas ao longo dos meses)
+const criarLinkMercadoPago=async(titulo,valor,referencia,incluiBoleto=false)=>{
   try{
+    const paymentMethods=incluiBoleto
+      ?{installments:12}// boleto + PIX + cartão
+      :{excluded_payment_types:[{id:'ticket'}],installments:12};// só PIX + cartão
     const r=await fetch('https://api.mercadopago.com/checkout/preferences',{
       method:'POST',
       headers:{'Authorization':`Bearer ${MP_TOKEN}`,'Content-Type':'application/json'},
       body:JSON.stringify({
         items:[{title:titulo,quantity:1,unit_price:Number(valor),currency_id:'BRL'}],
         external_reference:referencia,
-        payment_methods:{
-          excluded_payment_types:[{id:'ticket'}],// exclui boleto; mantém PIX e cartão
-          installments:12
-        },
+        payment_methods:paymentMethods,
         back_urls:{
           success:'https://app.crescidinhosfoto.com.br',
           failure:'https://app.crescidinhosfoto.com.br',
@@ -835,37 +836,41 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           {/* Status pagamento */}
           <Field label="Status do pagamento"><div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>{Object.keys(PAG_COLORS).map(s=><button key={s} onClick={()=>update(agendamento.id,{pagamento_status:s})} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,border:"2px solid "+((agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#e8e0d8"),background:(agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#fff",color:(agendamento.pagamento_status||"Pendente")===s?"#fff":"#666",cursor:"pointer"}}>{s}</button>)}</div></Field>
           {/* Gerar link Mercado Pago */}
-          {Number(agendamento.valor||0)>0&&(
-            <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #f0e8e0"}}>
-              <p style={{fontSize:11,color:"#aaa",margin:"0 0 10px",fontWeight:600}}>🔗 Gerar link de cobrança — Mercado Pago (PIX + Cartão)</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                {/* Entrada 30% */}
-                <button disabled={gerandoLink} onClick={async()=>{
-                  const entrada=Math.round(Number(agendamento.valor)*0.3*100)/100;
-                  setGerandoLink(true);
-                  const link=await criarLinkMercadoPago(`Entrada 30% — ${agendamento.servico}`,entrada,`ENTRADA-${agendamento.id}`);
-                  if(link){await update(agendamento.id,{pagamento_link:link});}
-                  else{alert('Erro ao gerar link. Verifique o token MP.');}
-                  setGerandoLink(false);
-                }} style={{padding:"12px 8px",borderRadius:10,background:gerandoLink?"#f0ece8":"#f5f0eb",border:"1.5px solid #e8e0d8",cursor:gerandoLink?"default":"pointer",textAlign:"center"}}>
-                  <p style={{fontSize:11,fontWeight:700,color:"#b8967e",margin:"0 0 3px"}}>Entrada 30%</p>
-                  <p style={{fontSize:16,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {(Math.round(Number(agendamento.valor)*0.3*100)/100).toFixed(2).replace(".",",")}</p>
-                </button>
-                {/* Pagamento total */}
-                <button disabled={gerandoLink} onClick={async()=>{
-                  setGerandoLink(true);
-                  const link=await criarLinkMercadoPago(`${agendamento.servico}${agendamento.modalidade?" — "+agendamento.modalidade:""} — Total`,Number(agendamento.valor),`TOTAL-${agendamento.id}`);
-                  if(link){await update(agendamento.id,{pagamento_link:link});}
-                  else{alert('Erro ao gerar link. Verifique o token MP.');}
-                  setGerandoLink(false);
-                }} style={{padding:"12px 8px",borderRadius:10,background:gerandoLink?"#f0ece8":"#e8f5e8",border:"1.5px solid #c8e6c9",cursor:gerandoLink?"default":"pointer",textAlign:"center"}}>
-                  <p style={{fontSize:11,fontWeight:700,color:"#2e7d32",margin:"0 0 3px"}}>Pagamento total</p>
-                  <p style={{fontSize:16,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(agendamento.valor||0).toFixed(2).replace(".",",")}</p>
-                </button>
+          {Number(agendamento.valor||0)>0&&(()=>{
+            const svcConfig=SERVICES.find(s=>s.id===agendamento.servico_id);
+            const isEvento=svcConfig?.grupo==="evento";
+            const valor=Number(agendamento.valor||0);
+            const entrada=Math.round(valor*0.3*100)/100;
+            const subtitulo=isEvento?"PIX + Cartão + Boleto (evento)":"PIX + Cartão";
+            const gerarLink=async(tipo)=>{
+              setGerandoLink(true);
+              const v=tipo==="entrada"?entrada:valor;
+              const ref=tipo==="entrada"?`ENTRADA-${agendamento.id}`:`TOTAL-${agendamento.id}`;
+              const titulo=tipo==="entrada"
+                ?`Entrada 30% — ${agendamento.servico}`
+                :`${agendamento.servico}${agendamento.modalidade?" — "+agendamento.modalidade:""} — Total`;
+              const link=await criarLinkMercadoPago(titulo,v,ref,isEvento);
+              if(link){await update(agendamento.id,{pagamento_link:link});}
+              else{alert('Erro ao gerar link. Verifique o token MP.');}
+              setGerandoLink(false);
+            };
+            return(
+              <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #f0e8e0"}}>
+                <p style={{fontSize:11,color:"#aaa",margin:"0 0 10px",fontWeight:600}}>🔗 Gerar link de cobrança — Mercado Pago ({subtitulo})</p>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <button disabled={gerandoLink} onClick={()=>gerarLink("entrada")} style={{padding:"12px 8px",borderRadius:10,background:gerandoLink?"#f0ece8":"#f5f0eb",border:"1.5px solid #e8e0d8",cursor:gerandoLink?"default":"pointer",textAlign:"center"}}>
+                    <p style={{fontSize:11,fontWeight:700,color:"#b8967e",margin:"0 0 3px"}}>Entrada 30%</p>
+                    <p style={{fontSize:16,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {entrada.toFixed(2).replace(".",",")}</p>
+                  </button>
+                  <button disabled={gerandoLink} onClick={()=>gerarLink("total")} style={{padding:"12px 8px",borderRadius:10,background:gerandoLink?"#f0ece8":"#e8f5e8",border:"1.5px solid #c8e6c9",cursor:gerandoLink?"default":"pointer",textAlign:"center"}}>
+                    <p style={{fontSize:11,fontWeight:700,color:"#2e7d32",margin:"0 0 3px"}}>Pagamento total</p>
+                    <p style={{fontSize:16,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {valor.toFixed(2).replace(".",",")}</p>
+                  </button>
+                </div>
+                {gerandoLink&&<p style={{fontSize:12,color:"#b8967e",textAlign:"center",margin:"10px 0 0"}}>⏳ Gerando link...</p>}
               </div>
-              {gerandoLink&&<p style={{fontSize:12,color:"#b8967e",textAlign:"center",margin:"10px 0 0"}}>⏳ Gerando link...</p>}
-            </div>
-          )}
+            );
+          })()}
           {/* Link gerado */}
           {agendamento.pagamento_link&&(
             <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #f0e8e0"}}>
