@@ -44,6 +44,26 @@ const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DEL
 const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'+Array.from({length:5},()=>c[Math.floor(Math.random()*c.length)]).join('');};
 const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
 const marcarValeUsado=(id)=>sb(`agendamentos?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'Utilizado'})});
+const MP_TOKEN='APP_USR-d6430866-6903-4606-8d3b-2cb3325c45f1';
+const criarLinkMercadoPago=async(titulo,valor,referencia)=>{
+  try{
+    const r=await fetch('https://api.mercadopago.com/checkout/preferences',{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${MP_TOKEN}`,'Content-Type':'application/json'},
+      body:JSON.stringify({
+        items:[{title:titulo,quantity:1,unit_price:Number(valor),currency_id:'BRL'}],
+        external_reference:referencia,
+        back_urls:{
+          success:'https://app.crescidinhosfoto.com.br',
+          failure:'https://app.crescidinhosfoto.com.br',
+          pending:'https://app.crescidinhosfoto.com.br'
+        }
+      })
+    });
+    const d=await r.json();
+    return d.init_point||null;
+  }catch(e){console.error('MP:',e);return null;}
+};
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
 
 // ─── SERVIÇOS QUE REQUEREM DADOS DE EVENTO/EXTERNO ───────────────
@@ -1486,6 +1506,7 @@ function ClientView() {
   const [loadingVale,setLoadingVale]=useState(false);
   const [erroVale,setErroVale]=useState('');
   const [codigoGerado,setCodigoGerado]=useState('');
+  const [linkPagamento,setLinkPagamento]=useState('');
 
   const cadastroSalvo=(()=>{try{return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}");}catch{return {};}})();
   const [cadastro,setCadastroRaw]=useState({
@@ -1567,20 +1588,25 @@ function ClientView() {
         const valor=Number(modality?.price||0);
         const servicoLabel=isLivre?'Vale Presente (Valor Livre)':service?.label||'Vale Presente';
         const modalidadeLabel=isLivre?'Valor livre':modality?.label||'';
+        const extrasStr=extras.length>0?`\nAdicionais: ${extras.map(e=>e.label).join(', ')}`:'';
+        const tituloMP=`Vale Presente Crescidinhos — ${servicoLabel}${modalidadeLabel?' ('+modalidadeLabel+')':''}`;
+        const linkMP=await criarLinkMercadoPago(tituloMP,valor,`VALE-${codigo}`);
         await criarAgendamento({
           cliente_id:cid,
           servico:servicoLabel,servico_id:isLivre?'vale':service?.id,
           modalidade:modalidadeLabel,modalidade_id:isLivre?'vale-livre':modality?.id,
           valor,status:"Ativo",pagamento_status:"Pendente",
           obs:`VALE:${codigo}`,
+          pagamento_link:linkMP||null,
         });
-        const extrasStr=extras.length>0?`\nAdicionais: ${extras.map(e=>e.label).join(', ')}`:'';
-        const msgFotografa=`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`;
-        const msgCompradora=`🎁 *Seu Vale Presente foi criado!*\n\nOlá, ${cadastro.nome_mae?.split(' ')[0]}! 🌸\n\nAqui estão os dados do vale que você presenteou:\n\n🎀 *Ensaio:* ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\n💰 *Valor:* R$ ${valor.toFixed(2).replace('.',',')}\n🔑 *Código:* ${codigo}\n\nEncaminhe este código para a presenteada — ela usará para resgatar o ensaio no app da Crescidinhos.\n\nAssim que o pagamento for confirmado, o vale estará ativo! 💛\n\n_Crescidinhos Fotografia_`;
+        const msgFotografa=`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}${linkMP?'\n\n💳 Link: '+linkMP:''}\n\nAguardando pagamento.`;
+        const linkTxt=linkMP?`\n\n💳 *Pague agora:* ${linkMP}`:'';
+        const msgCompradora=`🎁 *Seu Vale Presente foi criado!*\n\nOlá, ${cadastro.nome_mae?.split(' ')[0]}! 🌸\n\nAqui estão os dados do vale que você presenteou:\n\n🎀 *Ensaio:* ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\n💰 *Valor:* R$ ${valor.toFixed(2).replace('.',',')}\n🔑 *Código:* ${codigo}${linkTxt}\n\nEncaminhe este código para a presenteada — ela usará para resgatar o ensaio no app da Crescidinhos. 🌸\n\n_Crescidinhos Fotografia_`;
         await enviarWhatsApp("14996845521",msgFotografa);
         const telCompradora=tel.replace(/\D/g,'');
         if(telCompradora.length>=10) await enviarWhatsApp(telCompradora,msgCompradora).catch(()=>{});
         setCodigoGerado(codigo);
+        setLinkPagamento(linkMP||'');
         setLoading(false);limparSessao();setSubmitted(true);
         return;
       }
@@ -1636,8 +1662,15 @@ function ClientView() {
         <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:700,margin:"0 0 8px",letterSpacing:"6px"}}>{codigoGerado}</p>
         <p style={{fontSize:12,opacity:.7,margin:0}}>{service?.id==='vale'?'Valor livre':'Ensaio: '+service?.label+(modality?.label?' — '+modality.label:'')} · R$ {Number(modality?.price||0).toFixed(2).replace('.',',')}</p>
       </div>
+      {linkPagamento?(
+        <a href={linkPagamento} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:14,borderRadius:10,background:"#009EE3",color:"#fff",textDecoration:"none",fontSize:15,fontWeight:700,boxSizing:"border-box",marginBottom:10}}>
+          💳 Pagar agora com Mercado Pago →
+        </a>
+      ):(
+        <p style={{fontSize:12,color:"#aaa",marginBottom:10,lineHeight:1.6}}>⚠️ Aguardamos o pagamento para ativar o vale.</p>
+      )}
       <button onClick={()=>{try{navigator.clipboard.writeText(codigoGerado);}catch(e){}alert(`Código ${codigoGerado} copiado!`);}} style={{width:"100%",padding:13,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:12}}>📋 Copiar código</button>
-      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>⚠️ Aguardamos o pagamento para ativar o vale.<br/>Em breve a Crescidinhos entrará em contato.</p>
+      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Após o pagamento o vale estará ativo e pronto para resgatar. 🌸</p>
     </div>
   );
 
