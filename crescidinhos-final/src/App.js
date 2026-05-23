@@ -40,6 +40,10 @@ const atualizarAgendamento = (id, data) => sb(`agendamentos?id=eq.${id}`, { meth
 const deletarCliente       = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
 const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DELETE" });
+// Vale Presente
+const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'+Array.from({length:5},()=>c[Math.floor(Math.random()*c.length)]).join('');};
+const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
+const marcarValeUsado=(id)=>sb(`agendamentos?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'Utilizado'})});
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
 
 // ─── SERVIÇOS QUE REQUEREM DADOS DE EVENTO/EXTERNO ───────────────
@@ -373,7 +377,7 @@ function ExtrasPanel({ extras, selected, onChange, temDesconto, basePrice }) {
 }
 
 // ─── SERVICE SELECTOR ────────────────────────────────────────────
-function ServiceSelector({ onConfirm }) {
+function ServiceSelector({ onConfirm, onValeResgatar, excluirGrupos=[] }) {
   const [openId, setOpenId] = useState(null);
   const [openCatId, setOpenCatId] = useState(null);
   const [selService, setSelService] = useState(null);
@@ -381,8 +385,8 @@ function ServiceSelector({ onConfirm }) {
   const [selExtras, setSelExtras] = useState([]);
 
   // Agrupa Chamego e Afeto em categoria Acompanhamento
-  const catServices = SERVICES.filter(s => s.categoria === "acompanhamento");
-  const otherServices = SERVICES.filter(s => s.categoria !== "acompanhamento");
+  const catServices = SERVICES.filter(s => s.categoria === "acompanhamento" && !excluirGrupos.includes(s.grupo));
+  const otherServices = SERVICES.filter(s => s.categoria !== "acompanhamento" && !excluirGrupos.includes(s.grupo));
   const groupedItems = [
     { type:"categoria", id:"acompanhamento", icon:"📆", label:"Acompanhamento", services: catServices },
     ...otherServices.map(s => ({ type:"service", ...s }))
@@ -480,10 +484,11 @@ function ServiceSelector({ onConfirm }) {
               </div>
               {isOpen&&(
                 <div style={{borderTop:"1px solid #f0e8e0",padding:"12px 16px 16px"}}>
-                  {s.tipo==="vale"?(
-                    <div style={{padding:"12px 14px",borderRadius:10,background:"#e6f4ea",border:"2px solid #a5d6a7"}}>
-                      <p style={{fontSize:13,color:"#2e7d32",fontWeight:700,margin:"0 0 4px"}}>🎁 Vale Presente</p>
-                      <p style={{fontSize:12,color:"#555",margin:0,lineHeight:1.6}}>{s.modalities[0].detail}</p>
+                  {s.grupo==="vale"?(
+                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                      <button onClick={()=>handleModality(s,s.modalities[0])} style={{padding:'13px 14px',borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600,fontFamily:"'Cormorant Garamond',serif",textAlign:'left'}}>🎁 Comprar um vale presente</button>
+                      {onValeResgatar&&<button onClick={onValeResgatar} style={{padding:'13px 14px',borderRadius:10,background:'#fff',color:'#1a1a1a',border:'1.5px solid #1a1a1a',cursor:'pointer',fontSize:14,fontWeight:600,fontFamily:"'Cormorant Garamond',serif",textAlign:'left'}}>🔑 Resgatar um vale presente</button>}
+                      <p style={{fontSize:11,color:'#999',margin:'4px 0 0',lineHeight:1.5}}>{s.modalities[0].detail}</p>
                     </div>
                   ) : s.modalities.length===1?(
                     <div style={{padding:"12px 14px",borderRadius:10,background:"#e6f4ea",border:"2px solid #a5d6a7"}}>
@@ -1366,8 +1371,8 @@ function ClientePanel() {
 
       {tab==="vale"&&(
         <div>
-          {agendamentos.filter(a=>a.servico_id==="vale-presente").length>0?(
-            agendamentos.filter(a=>a.servico_id==="vale-presente").map(a=>(
+          {agendamentos.filter(a=>a.servico_id==="vale"||(a.obs||'').includes('VALE:')).length>0?(
+            agendamentos.filter(a=>a.servico_id==="vale"||(a.obs||'').includes('VALE:')).map(a=>(
               <div key={a.id} style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:14,padding:18,marginBottom:12,color:"#fff"}}>
                 <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:700,margin:"0 0 4px"}}>Vale Presente</p>
                 <p style={{fontSize:24,fontWeight:700,margin:"0 0 8px"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
@@ -1471,6 +1476,14 @@ function ClientView() {
   const [loading,setLoading]=useState(false);
   const [clienteExistente,setClienteExistente]=useState(null);
   const [verificando,setVerificando]=useState(false);
+  // Vale Presente
+  const [resgatandoVale,setResgatandoVale]=useState(false);
+  const [valeCodeInput,setValeCodeInput]=useState('');
+  const [valeEncontrado,setValeEncontrado]=useState(null);
+  const [loadingVale,setLoadingVale]=useState(false);
+  const [erroVale,setErroVale]=useState('');
+  const [codigoGerado,setCodigoGerado]=useState('');
+  const [valeValorInput,setValeValorInput]=useState('');
 
   const cadastroSalvo=(()=>{try{return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}");}catch{return {};}})();
   const [cadastro,setCadastroRaw]=useState({
@@ -1509,6 +1522,21 @@ function ClientView() {
   const removeFilho=(i)=>setFilhos(f=>f.filter((_,idx)=>idx!==i));
   const updateFilho=(i,data)=>setFilhos(f=>f.map((x,idx)=>idx===i?data:x));
 
+  const validarVale=async()=>{
+    const code=valeCodeInput.trim().toUpperCase();
+    if(!code){setErroVale('Digite o código do vale');return;}
+    setLoadingVale(true);setErroVale('');
+    try{
+      const r=await buscarValeByCode(code);
+      if(r&&r.length>0){
+        setValeEncontrado(r[0]);
+      } else {
+        setErroVale('Código não encontrado ou vale já utilizado. Verifique e tente novamente.');
+      }
+    }catch(e){setErroVale('Erro ao validar. Tente novamente.');}
+    setLoadingVale(false);
+  };
+
   const handleSubmit=async()=>{
     setLoading(true);
     try{
@@ -1526,10 +1554,47 @@ function ClientView() {
         const nc=await criarCliente({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
         cid=nc[0].id;
       }
-      // Nome da criança: retornante usa seleção/campo simples; novo cliente usa anamnese
       const nomeCrianca=clienteExistente
         ?(cadastro.nomeCriancaSel&&cadastro.nomeCriancaSel!=="__nova"?cadastro.nomeCriancaSel:cadastro.nomeCriancaNova||"")
         :(anamnese.nome_crianca||"");
+
+      // ── COMPRAR vale presente ──
+      if(service?.grupo==="vale"&&!resgatandoVale){
+        const codigo=gerarCodigoVale();
+        const valor=parseFloat(valeValorInput.replace(',','.'))||0;
+        await criarAgendamento({
+          cliente_id:cid,servico:"Vale Presente",servico_id:"vale",
+          modalidade:"Valor livre",modalidade_id:"vale-livre",
+          valor,status:"Ativo",pagamento_status:"Pendente",
+          obs:`VALE:${codigo}`,
+        });
+        await enviarWhatsApp("14996845521",`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`);
+        setCodigoGerado(codigo);
+        setLoading(false);limparSessao();setSubmitted(true);
+        return;
+      }
+
+      // ── RESGATAR vale presente ──
+      if(resgatandoVale&&valeEncontrado){
+        const valorVale=Number(valeEncontrado.valor||0);
+        const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
+        await criarAgendamento({
+          cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
+          modalidade:modality?.label,modalidade_id:modality?.id||null,
+          duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
+          data:date,hora:time,valor:calc.total||null,
+          status:"Pendente",pagamento_status:valorVale>=(calc.total||0)?"Pago":"Pendente",
+          obs:`Resgate do vale ${valeCodeInput.toUpperCase()}`,
+          dados_evento:precisaDadosEvento?dadosEvento:null,
+        });
+        await marcarValeUsado(valeEncontrado.id);
+        const dataFmt=date?`${date.split("-").reverse().join("/")}`:"-";
+        await enviarWhatsApp("14996845521",`🎁 *Vale Presente resgatado!*\n\nPresenteada: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nCódigo: ${valeCodeInput.toUpperCase()}\n\nAcesse o painel para confirmar.`);
+        setLoading(false);limparSessao();setSubmitted(true);
+        return;
+      }
+
+      // ── Agendamento normal ──
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
@@ -1549,6 +1614,32 @@ function ClientView() {
 
   const Btn=({disabled,onClick,label})=><button disabled={disabled} onClick={onClick} style={{flex:2,padding:"13px",borderRadius:10,background:!disabled?"#1a1a1a":"#e8e0d8",color:!disabled?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:!disabled?"pointer":"default"}}>{label}</button>;
   const Back=({onClick})=><button onClick={onClick} style={{flex:1,padding:"12px",borderRadius:10,background:"#fff",border:"2px solid #e8e0d8",cursor:"pointer",fontSize:14,color:"#666"}}>← Voltar</button>;
+
+  if(submitted&&codigoGerado)return(
+    <div style={{textAlign:"center",padding:"48px 16px"}}>
+      <div style={{fontSize:52,marginBottom:16}}>🎁</div>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Vale criado com sucesso!</h2>
+      <p style={{color:"#888",fontSize:13,lineHeight:1.7,marginBottom:24}}>Compartilhe o código abaixo com a presenteada. Ela usará para resgatar o ensaio. 🌸</p>
+      <div style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:16,padding:24,marginBottom:20,color:"#fff"}}>
+        <p style={{fontSize:12,letterSpacing:"2px",textTransform:"uppercase",margin:"0 0 8px",opacity:.8}}>Código do Vale</p>
+        <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:700,margin:"0 0 8px",letterSpacing:"6px"}}>{codigoGerado}</p>
+        <p style={{fontSize:12,opacity:.7,margin:0}}>Valor: R$ {parseFloat(valeValorInput||0).toFixed(2).replace('.',',')}</p>
+      </div>
+      <button onClick={()=>{try{navigator.clipboard.writeText(codigoGerado);}catch(e){}alert(`Código ${codigoGerado} copiado!`);}} style={{width:"100%",padding:13,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:12}}>📋 Copiar código</button>
+      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>⚠️ Aguardamos o pagamento para ativar o vale.<br/>Em breve a Crescidinhos entrará em contato.</p>
+    </div>
+  );
+
+  if(submitted&&resgatandoVale)return(
+    <div style={{textAlign:"center",padding:"48px 16px"}}>
+      <div style={{fontSize:52,marginBottom:16}}>🌸</div>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Vale resgatado!</h2>
+      <p style={{color:"#888",fontSize:14,lineHeight:1.7,marginBottom:20}}>Em breve a <strong>Crescidinhos</strong> confirmará seu horário pelo WhatsApp. 🤍</p>
+      <div style={{padding:16,background:"#faf8f5",borderRadius:12,textAlign:"left"}}>
+        {[["Serviço",service?.label],["Modalidade",modality?.label],["Data",formatDateBR(date)],["Horário",time],["Nome",cadastro.nome_mae],["Vale utilizado",valeCodeInput.toUpperCase()]].filter(([,v])=>v).map(([k,v])=><p key={k} style={{fontSize:13,color:"#666",margin:"0 0 5px"}}><strong>{k}:</strong> {v}</p>)}
+      </div>
+    </div>
+  );
 
   if(submitted)return(
     <div style={{textAlign:"center",padding:"48px 16px"}}>
@@ -1642,10 +1733,53 @@ function ClientView() {
         </div>
       )}
 
-      {step===2&&(
+      {step===2&&!resgatandoVale&&(
         <div>
-          <ServiceSelector onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}/>
+          <ServiceSelector
+            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
+            onValeResgatar={()=>{setResgatandoVale(true);setValeCodeInput('');setValeEncontrado(null);setErroVale('');}}
+          />
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
+        </div>
+      )}
+
+      {step===2&&resgatandoVale&&!valeEncontrado&&(
+        <div style={{textAlign:'center',padding:'8px 0'}}>
+          <div style={{fontSize:44,marginBottom:12}}>🔑</div>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>Resgatar Vale Presente</h3>
+          <p style={{fontSize:13,color:'#888',marginBottom:24,lineHeight:1.6}}>Digite o código que você recebeu</p>
+          <div style={{background:'#fff',border:'1.5px solid #e8e0d8',borderRadius:14,padding:20,textAlign:'left',marginBottom:16}}>
+            <Field label="Código do vale">
+              <input style={{...inp,textTransform:'uppercase',letterSpacing:'3px',fontSize:18,fontWeight:700,textAlign:'center'}}
+                placeholder="Ex: C7X3KP"
+                value={valeCodeInput}
+                onChange={e=>{setValeCodeInput(e.target.value.toUpperCase());setErroVale('');}}
+                onKeyDown={e=>e.key==='Enter'&&validarVale()}
+                maxLength={8}
+              />
+            </Field>
+            {erroVale&&<p style={{fontSize:12,color:'#c62828',margin:'-8px 0 12px',textAlign:'center'}}>{erroVale}</p>}
+            <button onClick={validarVale} disabled={loadingVale||!valeCodeInput} style={{width:'100%',padding:13,borderRadius:10,background:valeCodeInput?'#1a1a1a':'#e8e0d8',color:valeCodeInput?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:valeCodeInput?'pointer':'default'}}>
+              {loadingVale?'Validando...':'Validar código →'}
+            </button>
+          </div>
+          <Back onClick={()=>{setResgatandoVale(false);setValeCodeInput('');setErroVale('');}}/>
+        </div>
+      )}
+
+      {step===2&&resgatandoVale&&valeEncontrado&&(
+        <div>
+          <div style={{background:'linear-gradient(135deg,#72243E,#b8967e)',borderRadius:12,padding:16,marginBottom:20,color:'#fff',textAlign:'center'}}>
+            <p style={{fontSize:11,letterSpacing:'1px',textTransform:'uppercase',margin:'0 0 4px',opacity:.8}}>Vale encontrado ✅</p>
+            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:'0 0 2px'}}>R$ {Number(valeEncontrado.valor||0).toFixed(2).replace('.',',')}</p>
+            <p style={{fontSize:11,opacity:.7,margin:0}}>Código: {valeCodeInput.toUpperCase()}</p>
+          </div>
+          <p style={{fontSize:13,color:'#888',marginBottom:16,fontWeight:600}}>Agora escolha o ensaio que deseja:</p>
+          <ServiceSelector
+            excluirGrupos={['vale','cofrinho']}
+            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
+          />
+          <div style={{marginTop:12}}><Back onClick={()=>{setValeEncontrado(null);setValeCodeInput('');setErroVale('');setResgatandoVale(true);}}/></div>
         </div>
       )}
 
@@ -1695,8 +1829,24 @@ function ClientView() {
 
       {(step===4||(step===3&&semAgenda))&&(
         <div>
-          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Confirmar agendamento</h3>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>
+            {service?.grupo==="vale"&&!resgatandoVale?'Confirmar vale presente':'Confirmar agendamento'}
+          </h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
+          {service?.grupo==="vale"&&!resgatandoVale&&(
+            <div style={{background:'#fff',border:'1.5px solid #e8e0d8',borderRadius:12,padding:16,marginBottom:16}}>
+              <p style={{fontSize:11,color:'#b8967e',fontWeight:700,margin:'0 0 12px',letterSpacing:'1px',textTransform:'uppercase'}}>💰 Valor do vale</p>
+              <p style={{fontSize:12,color:'#888',margin:'0 0 10px',lineHeight:1.5}}>Qual valor você quer presentear? A presenteada escolherá o ensaio.</p>
+              <input style={{...inp,fontSize:18,fontWeight:700,textAlign:'center'}} type="number" min="1" step="0.01" placeholder="Ex: 350,00" value={valeValorInput} onChange={e=>setValeValorInput(e.target.value)}/>
+              {valeValorInput&&<p style={{fontSize:13,color:'#2e7d32',fontWeight:600,textAlign:'center',margin:'-4px 0 0'}}>✅ Vale de R$ {parseFloat(valeValorInput).toFixed(2).replace('.',',')}</p>}
+            </div>
+          )}
+          {resgatandoVale&&valeEncontrado&&(
+            <div style={{background:'linear-gradient(135deg,#72243E,#b8967e)',borderRadius:10,padding:12,marginBottom:16,color:'#fff',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div><p style={{fontSize:11,opacity:.8,margin:'0 0 2px'}}>Vale sendo resgatado</p><p style={{fontSize:16,fontWeight:700,margin:0}}>R$ {Number(valeEncontrado.valor||0).toFixed(2).replace('.',',')} · {valeCodeInput.toUpperCase()}</p></div>
+              <span style={{fontSize:24}}>🎁</span>
+            </div>
+          )}
           <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:16}}>
             <p style={{fontSize:11,color:"#b8967e",fontWeight:700,margin:"0 0 10px",letterSpacing:"1px",textTransform:"uppercase"}}>Resumo</p>
             {[
@@ -1727,7 +1877,7 @@ function ClientView() {
           </div>
           <div style={{display:"flex",gap:10}}>
             <Back onClick={()=>setStep(semAgenda?2:3)}/>
-            <Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
+            <Btn disabled={loading||(service?.grupo==="vale"&&!resgatandoVale&&!valeValorInput)} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
           </div>
         </div>
       )}
