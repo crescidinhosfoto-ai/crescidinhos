@@ -1595,7 +1595,7 @@ function ClientView() {
           cliente_id:cid,
           servico:servicoLabel,servico_id:isLivre?'vale':service?.id,
           modalidade:modalidadeLabel,modalidade_id:isLivre?'vale-livre':modality?.id,
-          valor,status:"Ativo",pagamento_status:"Pendente",
+          valor,status:"Ativo",pagamento_status:"Pago",
           obs:`VALE:${codigo}`,
           pagamento_link:linkMP||null,
         });
@@ -1670,7 +1670,7 @@ function ClientView() {
         <p style={{fontSize:12,color:"#aaa",marginBottom:10,lineHeight:1.6}}>⚠️ Aguardamos o pagamento para ativar o vale.</p>
       )}
       <button onClick={()=>{try{navigator.clipboard.writeText(codigoGerado);}catch(e){}alert(`Código ${codigoGerado} copiado!`);}} style={{width:"100%",padding:13,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:12}}>📋 Copiar código</button>
-      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Após o pagamento o vale estará ativo e pronto para resgatar. 🌸</p>
+      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Envie o código para a presenteada — ela usa no app para resgatar o ensaio. 🌸</p>
     </div>
   );
 
@@ -1783,7 +1783,7 @@ function ClientView() {
           <ServiceSelector
             onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
             onValeResgatar={()=>{setResgatandoVale(true);setValeCodeInput('');setValeEncontrado(null);setErroVale('');}}
-            onValeComprar={()=>{setValeComprando(true);setValeValorLivreMode(false);setValeValorLivreInput('');setService(null);setModality(null);}}
+            onValeComprar={()=>{setValeComprando(true);setValeValorLivreMode(false);setValeValorLivreInput('');setService(null);setModality(null);window.scrollTo({top:0,behavior:'smooth'});}}
           />
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
