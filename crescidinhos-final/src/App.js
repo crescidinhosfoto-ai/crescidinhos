@@ -1575,7 +1575,11 @@ function ClientView() {
           obs:`VALE:${codigo}`,
         });
         const extrasStr=extras.length>0?`\nAdicionais: ${extras.map(e=>e.label).join(', ')}`:'';
-        await enviarWhatsApp("14996845521",`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`);
+        const msgFotografa=`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`;
+        const msgCompradora=`🎁 *Seu Vale Presente foi criado!*\n\nOlá, ${cadastro.nome_mae?.split(' ')[0]}! 🌸\n\nAqui estão os dados do vale que você presenteou:\n\n🎀 *Ensaio:* ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\n💰 *Valor:* R$ ${valor.toFixed(2).replace('.',',')}\n🔑 *Código:* ${codigo}\n\nEncaminhe este código para a presenteada — ela usará para resgatar o ensaio no app da Crescidinhos.\n\nAssim que o pagamento for confirmado, o vale estará ativo! 💛\n\n_Crescidinhos Fotografia_`;
+        await enviarWhatsApp("14996845521",msgFotografa);
+        const telCompradora=tel.replace(/\D/g,'');
+        if(telCompradora.length>=10) await enviarWhatsApp(telCompradora,msgCompradora).catch(()=>{});
         setCodigoGerado(codigo);
         setLoading(false);limparSessao();setSubmitted(true);
         return;
