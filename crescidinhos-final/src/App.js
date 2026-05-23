@@ -1000,7 +1000,7 @@ function EstudioView() {
 
 // ─── PAINEL DO CLIENTE ────────────────────────────────────────────
 function ClientePanel() {
-  const [email,setEmail]=useState("");
+  // ── Estado principal ──
   const [logado,setLogado]=useState(null);
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(false);
@@ -1010,34 +1010,282 @@ function ClientePanel() {
   const [perfilForm,setPerfilForm]=useState({});
   const [salvandoPerfil,setSalvandoPerfil]=useState(false);
 
-  const entrar=async()=>{if(!email)return;setLoading(true);try{const r=await getClienteByEmail(email);if(r&&r.length>0){const cl=r[0];setLogado(cl);const ags=await getAgendamentosByCliente(cl.id);setAgendamentos(ags||[]);}else{alert("E-mail não encontrado. Verifique ou fale com a Crescidinhos para cadastro.");}}catch(e){console.error(e);}setLoading(false);};
+  // ── Estado de autenticação ──
+  const [authTela,setAuthTela]=useState('verificando');
+  // valores: 'verificando','email','pin','bio','setup','setup-pin','setup-bio'
+  const [email,setEmail]=useState('');
+  const [pinInput,setPinInput]=useState('');
+  const [bioDisponivel,setBioDisponivel]=useState(false);
+  const [temPIN,setTemPIN]=useState(false);
+  const [temBio,setTemBio]=useState(false);
+  const [erroAuth,setErroAuth]=useState('');
+  const [setupPinStep,setSetupPinStep]=useState(1);
+  const [setupPin1,setSetupPin1]=useState('');
 
-  // Recarrega agendamentos frescos ao trocar de aba (garante status atualizado)
-  const recarregarAgs = async () => {
-    if(!logado) return;
-    try { const ags=await getAgendamentosByCliente(logado.id); setAgendamentos(ags||[]); } catch(e){}
+  // ── Init ──
+  useEffect(()=>{
+    if(window.PublicKeyCredential){
+      PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+        .then(ok=>setBioDisponivel(ok)).catch(()=>setBioDisponivel(false));
+    }
+    verificarSessao();
+  },[]);
+
+  const verificarSessao=async()=>{
+    try{
+      const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
+      if(sess&&sess.expires>Date.now()&&sess.email){
+        const em=sess.email;
+        setEmail(em);
+        const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
+        const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
+        setTemPIN(hasPIN);setTemBio(hasBio);
+        if(hasBio){setAuthTela('bio');}
+        else if(hasPIN){setAuthTela('pin');}
+        else{await loginComEmail(em);return;}
+      } else {setAuthTela('email');}
+    }catch(e){setAuthTela('email');}
   };
-  useEffect(()=>{ if(logado&&(tab==="agendamentos"||tab==="contratos")) recarregarAgs(); },[tab,logado?.id]);
 
-  const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
+  const hashPIN=async(pin)=>{
+    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pin));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  };
 
-  if(!logado)return(
-    <div style={{textAlign:"center",padding:"48px 16px"}}>
-      <div style={{fontSize:48,marginBottom:16}}>🐘</div>
-      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
-      <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Acesse seus agendamentos, contratos e Cofrinho 🌸</p>
-      <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:16}}>
-        <Field label="Seu e-mail cadastrado">
-          <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&entrar()}/>
-        </Field>
-        <button onClick={entrar} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
-          {loading?"Verificando...":"Acessar minha área →"}
-        </button>
+  const loginComEmail=async(emailParam)=>{
+    const em=emailParam||email;
+    if(!em)return;
+    setLoading(true);setErroAuth('');
+    try{
+      const r=await getClienteByEmail(em);
+      if(r&&r.length>0){
+        const cl=r[0];
+        setLogado(cl);
+        const ags=await getAgendamentosByCliente(cl.id);
+        setAgendamentos(ags||[]);
+        localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
+        const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
+        const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
+        setTemPIN(hasPIN);setTemBio(hasBio);
+        if(!hasPIN&&!hasBio){setAuthTela('setup');}
+      } else {setErroAuth('E-mail não encontrado. Verifique ou fale com a Crescidinhos.');}
+    }catch(e){setErroAuth('Erro ao verificar. Tente novamente.');}
+    setLoading(false);
+  };
+
+  const loginComPIN=async()=>{
+    if(pinInput.length<4){setErroAuth('PIN deve ter 4 a 6 dígitos');return;}
+    setLoading(true);setErroAuth('');
+    try{
+      const h=await hashPIN(pinInput);
+      const savedH=localStorage.getItem(`cresci_pin_${email}`);
+      if(h===savedH){await loginComEmail(email);}
+      else{setErroAuth('PIN incorreto');setPinInput('');}
+    }catch(e){setErroAuth('Erro ao verificar PIN');}
+    setLoading(false);
+  };
+
+  const loginComBio=async()=>{
+    setLoading(true);setErroAuth('');
+    try{
+      const credIdB64=localStorage.getItem('cresci_bio_credId');
+      if(!credIdB64){setErroAuth('Biometria não configurada');setLoading(false);return;}
+      const credId=Uint8Array.from(atob(credIdB64),c=>c.charCodeAt(0));
+      const challenge=crypto.getRandomValues(new Uint8Array(32));
+      const rpId=window.location.hostname==='localhost'?'localhost':window.location.hostname;
+      await navigator.credentials.get({publicKey:{challenge,rpId,allowCredentials:[{type:'public-key',id:credId}],userVerification:'required',timeout:60000}});
+      const bioEmail=localStorage.getItem('cresci_bio_email');
+      await loginComEmail(bioEmail);
+    }catch(e){
+      if(e.name==='NotAllowedError'){setErroAuth('Biometria cancelada ou não reconhecida');}
+      else{setErroAuth('Erro na biometria. Tente outra forma.');}
+    }
+    setLoading(false);
+  };
+
+  const configurarPIN=async()=>{
+    if(pinInput.length<4){setErroAuth('Use 4 a 6 dígitos');return;}
+    if(setupPinStep===1){setSetupPin1(pinInput);setPinInput('');setSetupPinStep(2);setErroAuth('');return;}
+    if(pinInput!==setupPin1){setErroAuth('PINs não coincidem. Tente novamente.');setPinInput('');setSetupPinStep(1);return;}
+    setLoading(true);
+    const h=await hashPIN(pinInput);
+    localStorage.setItem(`cresci_pin_${logado.email}`,h);
+    setTemPIN(true);setSetupPinStep(1);setPinInput('');setSetupPin1('');
+    if(bioDisponivel){setAuthTela('setup-bio');}else{setAuthTela(null);}
+    setLoading(false);
+  };
+
+  const configurarBio=async()=>{
+    setLoading(true);setErroAuth('');
+    try{
+      const challenge=crypto.getRandomValues(new Uint8Array(32));
+      const userId=new TextEncoder().encode(logado.id.toString());
+      const rpId=window.location.hostname==='localhost'?'localhost':window.location.hostname;
+      const cred=await navigator.credentials.create({publicKey:{challenge,rp:{name:'Crescidinhos Fotografia',id:rpId},user:{id:userId,name:logado.email,displayName:logado.nome_mae},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},timeout:60000}});
+      const credIdB64=btoa(String.fromCharCode(...new Uint8Array(cred.rawId)));
+      localStorage.setItem('cresci_bio_credId',credIdB64);
+      localStorage.setItem('cresci_bio_email',logado.email);
+      setTemBio(true);setAuthTela(null);
+    }catch(e){
+      if(e.name==='NotAllowedError'){setErroAuth('Biometria cancelada.');}
+      else{setErroAuth('Erro: '+e.message);}
+    }
+    setLoading(false);
+  };
+
+  const sair=()=>{
+    const em=logado?.email||email;
+    setLogado(null);setPinInput('');setErroAuth('');
+    localStorage.removeItem('cresci_session');
+    const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
+    const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
+    setEmail(em);
+    if(hasBio){setAuthTela('bio');}else if(hasPIN){setAuthTela('pin');}else{setEmail('');setAuthTela('email');}
+  };
+
+  // ── Teclado PIN ──
+  const PINKeypad=({valor,onChange,onConfirm})=>(
+    <div>
+      <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:28}}>
+        {Array.from({length:6}).map((_,i)=>(
+          <div key={i} style={{width:14,height:14,borderRadius:'50%',background:i<valor.length?'#1a1a1a':'#e8e0d8',border:'2px solid '+(i<valor.length?'#1a1a1a':'#ccc'),transition:'all .15s'}}/>
+        ))}
       </div>
-      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro?<br/>Faça um agendamento e a Crescidinhos cria seu perfil 🤍</p>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,maxWidth:240,margin:'0 auto'}}>
+        {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((d,i)=>(
+          <button key={i} onClick={()=>{
+            if(d==='⌫'){onChange(valor.slice(0,-1));setErroAuth('');}
+            else if(d===''){}
+            else if(valor.length<6){onChange(valor+d);}
+          }} style={{padding:'16px 0',borderRadius:12,border:'1.5px solid #e8e0d8',background:d===''?'transparent':'#fff',fontSize:d==='⌫'?18:20,fontWeight:600,color:'#1a1a1a',cursor:d===''?'default':'pointer',boxShadow:d===''?'none':'0 1px 3px rgba(0,0,0,0.06)'}}>{d}</button>
+        ))}
+      </div>
+      {valor.length>=4&&(
+        <button onClick={onConfirm} disabled={loading} style={{width:'100%',padding:13,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer',marginTop:16,maxWidth:240,display:'block',margin:'16px auto 0'}}>
+          {loading?'Verificando...':'Confirmar →'}
+        </button>
+      )}
     </div>
   );
 
+  const recarregarAgs=async()=>{
+    if(!logado)return;
+    try{const ags=await getAgendamentosByCliente(logado.id);setAgendamentos(ags||[]);}catch(e){}
+  };
+  useEffect(()=>{if(logado&&(tab==="agendamentos"||tab==="contratos"))recarregarAgs();},[tab,logado?.id]);
+
+  const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
+
+  // ── Telas de autenticação ──
+  if(!logado||authTela==='setup'||authTela==='setup-pin'||authTela==='setup-bio'){
+
+    if(authTela==='verificando'){
+      return <div style={{textAlign:'center',padding:'80px 16px'}}><div style={{fontSize:48}}>🐘</div><p style={{color:'#aaa',marginTop:12,fontSize:13}}>Carregando...</p></div>;
+    }
+
+    if(authTela==='email'||(!authTela&&!logado)){
+      return(
+        <div style={{textAlign:"center",padding:"48px 16px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>🐘</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Acesse seus agendamentos, contratos e Cofrinho 🌸</p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:16}}>
+            <Field label="Seu e-mail cadastrado">
+              <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>{setEmail(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&loginComEmail()}/>
+            </Field>
+            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'-8px 0 12px',textAlign:'center'}}>{erroAuth}</p>}
+            <button onClick={()=>loginComEmail()} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
+              {loading?"Verificando...":"Acessar minha área →"}
+            </button>
+          </div>
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro?<br/>Faça um agendamento e a Crescidinhos cria seu perfil 🤍</p>
+        </div>
+      );
+    }
+
+    if(authTela==='pin'){
+      return(
+        <div style={{textAlign:'center',padding:'40px 16px'}}>
+          <div style={{fontSize:44,marginBottom:12}}>🔐</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>Digite seu PIN</h2>
+          <p style={{fontSize:12,color:'#888',marginBottom:28}}>Confirme seu PIN para entrar</p>
+          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:16}}>{erroAuth}</p>}
+          <PINKeypad valor={pinInput} onChange={v=>{setPinInput(v);setErroAuth('');}} onConfirm={loginComPIN}/>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:20,flexWrap:'wrap'}}>
+            {temBio&&<button onClick={()=>{setAuthTela('bio');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>👆 Usar digital</button>}
+            <button onClick={()=>{setAuthTela('email');setErroAuth('');setPinInput('');setEmail('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#888'}}>📧 Usar e-mail</button>
+          </div>
+        </div>
+      );
+    }
+
+    if(authTela==='bio'){
+      return(
+        <div style={{textAlign:'center',padding:'48px 16px'}}>
+          <div style={{fontSize:64,marginBottom:16}}>👆</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:8}}>Acesso rápido</h2>
+          <p style={{fontSize:13,color:'#888',marginBottom:32,lineHeight:1.6}}>Use sua digital ou reconhecimento facial para entrar.</p>
+          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:16}}>{erroAuth}</p>}
+          <button onClick={loginComBio} disabled={loading} style={{width:'100%',padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer',marginBottom:12}}>
+            {loading?'Verificando...':'👆 Entrar com biometria'}
+          </button>
+          <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:8,flexWrap:'wrap'}}>
+            {temPIN&&<button onClick={()=>{setAuthTela('pin');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>🔢 Usar PIN</button>}
+            <button onClick={()=>{setAuthTela('email');setErroAuth('');setPinInput('');setEmail('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#888'}}>📧 Usar e-mail</button>
+          </div>
+        </div>
+      );
+    }
+
+    if(authTela==='setup'){
+      return(
+        <div style={{padding:'32px 16px',textAlign:'center'}}>
+          <div style={{fontSize:48,marginBottom:12}}>🔒</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:8}}>Proteja sua conta</h2>
+          <p style={{fontSize:13,color:'#888',marginBottom:28,lineHeight:1.6}}>Adicione uma camada de segurança para próximos acessos. 🌸</p>
+          <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
+            <button onClick={()=>{setSetupPinStep(1);setPinInput('');setSetupPin1('');setAuthTela('setup-pin');}} style={{padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:'pointer'}}>🔢 Criar PIN</button>
+            {bioDisponivel&&<button onClick={()=>setAuthTela('setup-bio')} style={{padding:14,borderRadius:10,background:'#fff',color:'#1a1a1a',border:'1.5px solid #1a1a1a',fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:'pointer'}}>👆 Ativar digital / Face ID</button>}
+            <button onClick={()=>setAuthTela(null)} style={{padding:12,borderRadius:10,background:'transparent',color:'#aaa',border:'none',fontSize:13,cursor:'pointer'}}>Agora não</button>
+          </div>
+        </div>
+      );
+    }
+
+    if(authTela==='setup-pin'){
+      return(
+        <div style={{textAlign:'center',padding:'32px 16px'}}>
+          <div style={{fontSize:44,marginBottom:12}}>🔢</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>
+            {setupPinStep===1?'Crie seu PIN':'Confirme seu PIN'}
+          </h2>
+          <p style={{fontSize:12,color:'#888',marginBottom:28}}>
+            {setupPinStep===1?'Digite de 4 a 6 números':'Digite novamente para confirmar'}
+          </p>
+          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:12}}>{erroAuth}</p>}
+          <PINKeypad valor={pinInput} onChange={v=>{setPinInput(v);setErroAuth('');}} onConfirm={configurarPIN}/>
+          <button onClick={()=>{setAuthTela('setup');setPinInput('');setSetupPinStep(1);setErroAuth('');}} style={{marginTop:16,padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#aaa'}}>← Voltar</button>
+        </div>
+      );
+    }
+
+    if(authTela==='setup-bio'){
+      return(
+        <div style={{textAlign:'center',padding:'48px 16px'}}>
+          <div style={{fontSize:64,marginBottom:16}}>👆</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:8}}>Ativar digital / Face ID</h2>
+          <p style={{fontSize:13,color:'#888',marginBottom:32,lineHeight:1.6}}>Seu celular pedirá confirmação biométrica para cadastrar.</p>
+          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:16}}>{erroAuth}</p>}
+          <button onClick={configurarBio} disabled={loading} style={{width:'100%',padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer',marginBottom:12}}>
+            {loading?'Aguardando...':'👆 Ativar biometria'}
+          </button>
+          <button onClick={()=>setAuthTela(null)} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#aaa'}}>Pular por agora</button>
+        </div>
+      );
+    }
+  }
+
+  // ── Painel principal ──
   const cofrinho=logado.cofrinho;
   const endereco=logado.endereco||{};
 
@@ -1046,7 +1294,7 @@ function ClientePanel() {
       <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"14px 16px",marginBottom:20,display:"flex",alignItems:"center",gap:12}}>
         <div style={{fontSize:36}}>🐘</div>
         <div><p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,color:"#1a1a1a"}}>Olá, {logado.nome_mae?.split(" ")[0]}! 🌸</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{logado.email}</p></div>
-        <button onClick={()=>{setLogado(null);setEmail("");}} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
+        <button onClick={sair} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
         {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],["cofrinho","💰 Cofrinho"],["vale","🎁 Vale"],["estudio","🐘 Estúdio"],["perfil","👤 Perfil"]].map(([t,l])=>
@@ -1173,7 +1421,7 @@ function ClientePanel() {
             )}
           </div>
           {logado.filhos?.length>0&&(
-            <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16}}>
+            <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
               <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>👶 Filhos</p>
               {logado.filhos.map((f,i)=>(
                 <div key={i} style={{padding:"10px 0",borderBottom:"1px solid #f0e8e0"}}>
@@ -1183,6 +1431,25 @@ function ClientePanel() {
               ))}
             </div>
           )}
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16}}>
+            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 14px"}}>🔒 Segurança</p>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+              <div>
+                <p style={{margin:0,fontSize:13,fontWeight:600}}>🔢 PIN</p>
+                <p style={{margin:'2px 0 0',fontSize:11,color:temPIN?'#2e7d32':'#aaa'}}>{temPIN?'✅ Configurado':'Não configurado'}</p>
+              </div>
+              <button onClick={()=>{setSetupPinStep(1);setPinInput('');setSetupPin1('');setAuthTela('setup-pin');}} style={{padding:'6px 12px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>{temPIN?'Alterar':'Ativar'}</button>
+            </div>
+            {bioDisponivel&&(
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:12,borderTop:'1px solid #f0e8e0'}}>
+                <div>
+                  <p style={{margin:0,fontSize:13,fontWeight:600}}>👆 Digital / Face ID</p>
+                  <p style={{margin:'2px 0 0',fontSize:11,color:temBio?'#2e7d32':'#aaa'}}>{temBio?'✅ Configurado':'Não configurado'}</p>
+                </div>
+                <button onClick={()=>setAuthTela('setup-bio')} style={{padding:'6px 12px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>{temBio?'Reconfigurar':'Ativar'}</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
