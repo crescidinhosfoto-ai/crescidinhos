@@ -69,8 +69,8 @@ const FOTOGRAFO2 = { id: "fotografo2", label: "+1 Fotógrafo",       price: 450 
 const MAKINGOFF  = { id: "makingoff",  label: "Making off",         price: 400 };
 const HORA_EXTRA = { id: "hora-extra", label: "Hora adicional",     price: 275 };
 const BALOES     = { id: "baloes",     label: "Balões",             price: 160 };
-const ENSAIO_DUO = { id: "extra-duo",  label: "Ensaio Duo",         price: 280 };
-const SMASH_BAS  = { id: "extra-smash",label: "Smash Básico",       price: 380 };
+const ENSAIO_DUO = { id: "extra-duo",  label: "Ensaio Duo",         price: 280, precisaAgenda: true, duracao_min: 60 };
+const SMASH_BAS  = { id: "extra-smash",label: "Smash Básico",       price: 380, precisaAgenda: true, duracao_min: 60 };
 
 export const SERVICES = [
   // ─── CHAMEGO (Acompanhamento básico) ────────────────────────────
@@ -245,9 +245,9 @@ export const SERVICES = [
         detail: "Cobertura completa 6h", duracao: "6h", duracao_min: 360 },
     ],
     extras: [
-      { id: "15-studio-life", label: "Ensaio Estúdio — Life (20 fotos)", price: 380 },
-      { id: "15-studio-plus", label: "Ensaio Estúdio — Plus (30 fotos)", price: 480 },
-      { id: "15-externo",     label: "Ensaio Externo (40 fotos)",         price: 580 },
+      { id: "15-studio-life", label: "Ensaio Estúdio — Life (20 fotos)", price: 380, precisaAgenda: true, duracao_min: 120 },
+      { id: "15-studio-plus", label: "Ensaio Estúdio — Plus (30 fotos)", price: 480, precisaAgenda: true, duracao_min: 120 },
+      { id: "15-externo",     label: "Ensaio Externo (40 fotos)",         price: 580, precisaAgenda: true, duracao_min: 120 },
       ALBUM, QUADRO, FOTOGRAFO2, MAKINGOFF, HORA_EXTRA,
     ],
   },

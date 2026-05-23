@@ -1587,6 +1587,11 @@ function ClientView() {
   const [time,setTime]=useState(null);
   const [horariosDisponiveis,setHorariosDisponiveis]=useState([]);
   const [datasDisponiveis,setDatasDisponiveis]=useState(null);
+  // Ensaio vinculado a evento
+  const [dataEnsaio,setDataEnsaio]=useState(null);
+  const [horaEnsaio,setHoraEnsaio]=useState(null);
+  const [horariosEnsaio,setHorariosEnsaio]=useState([]);
+  const [datasEnsaio,setDatasEnsaio]=useState(null);
   const [dadosEvento,setDadosEvento]=useState({});
   const [submitted,setSubmitted]=useState(false);
   const [loading,setLoading]=useState(false);
@@ -1620,6 +1625,7 @@ function ClientView() {
 
   const semAgenda=service?.grupo==="cofrinho"||service?.grupo==="vale"||valeComprando;
   const precisaDadosEvento=service&&requerDadosEvento(service.id);
+  const extraComEnsaio=extras.find(e=>e.precisaAgenda)||null;
   const STEPS=semAgenda?["Cadastro","Serviço","Confirmar"]:["Cadastro","Serviço","Data","Confirmar"];
 
   const verificarCliente=async(telefone)=>{
@@ -1736,11 +1742,26 @@ function ClientView() {
         data:date,hora:time,valor:calc.total||modality?.price||null,
         status:"Pendente",pagamento_status:"Pendente",
         dados_evento:precisaDadosEvento?dadosEvento:null,
+        obs:extraComEnsaio?`Inclui ${extraComEnsaio.label} em ${dataEnsaio} às ${horaEnsaio}`:null,
       });
+      // ── Segundo agendamento: ensaio vinculado ao evento ──
+      if(extraComEnsaio&&dataEnsaio&&horaEnsaio){
+        await criarAgendamento({
+          cliente_id:cid,
+          servico:extraComEnsaio.label,servico_id:extraComEnsaio.id,
+          modalidade:"Vinculado ao "+service?.label,modalidade_id:null,
+          duracao_min:extraComEnsaio.duracao_min||60,nome_crianca:nomeCrianca||null,
+          data:dataEnsaio,hora:horaEnsaio,valor:extraComEnsaio.price||null,
+          status:"Pendente",pagamento_status:"Pendente",
+          obs:`Ensaio vinculado ao evento: ${service?.label} em ${date} às ${time}`,
+        });
+      }
       const dataFmt=date?`${date.split("-").reverse().join("/")}`:"-";
+      const dataEnsaioFmt=dataEnsaio?`${dataEnsaio.split("-").reverse().join("/")}`:"-";
       const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}${dadosEvento.local_nome?"\nLocal: "+dadosEvento.local_nome:""}`: "";
-      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nWhatsApp: ${cadastro.telefone}${msgEvento}\n\nAcesse o painel para confirmar.`);
-      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,duracao_min:modality?.duracao_min||60,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento})}).catch(()=>{});
+      const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:"";
+      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nWhatsApp: ${cadastro.telefone}${msgEvento}${msgEnsaio}\n\nAcesse o painel para confirmar.`);
+      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,duracao_min:modality?.duracao_min||60,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false);limparSessao();setSubmitted(true);
   };
@@ -2018,7 +2039,10 @@ function ClientView() {
             <DadosEventoForm serviceId={service.id} data={dadosEvento} onChange={setDadosEvento}/>
           )}
 
-          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>Escolha a data e horário</h3>
+          {/* ── Data do evento ── */}
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a",marginBottom:4}}>
+            {extraComEnsaio?"🎉 Data e horário do evento":"Escolha a data e horário"}
+          </h3>
           <p style={{fontSize:12,color:"#999",marginBottom:14}}>Selecione uma data verde disponível</p>
           <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisponiveis} onDatasChange={setDatasDisponiveis} duracaoMin={modality?.duracao_min||60}/>
           {!date&&datasDisponiveis!==null&&datasDisponiveis.length===0&&(
@@ -2041,9 +2065,42 @@ function ClientView() {
               )}
             </div>
           )}
+
+          {/* ── Segunda data: ensaio vinculado ── */}
+          {extraComEnsaio&&date&&time&&(
+            <div style={{marginTop:24,paddingTop:20,borderTop:"2px dashed #e8e0d8"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"10px 14px",background:"#f5f0eb",borderRadius:10}}>
+                <span style={{fontSize:22}}>📸</span>
+                <div>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{extraComEnsaio.label} — escolha outro dia</p>
+                  <p style={{margin:"2px 0 0",fontSize:11,color:"#b8967e"}}>Sessão de fotos em estúdio — data separada do evento</p>
+                </div>
+              </div>
+              <Calendar
+                selectedDate={dataEnsaio}
+                onSelectDate={d=>{setDataEnsaio(d);setHoraEnsaio(null);}}
+                onHorariosChange={setHorariosEnsaio}
+                onDatasChange={setDatasEnsaio}
+                duracaoMin={extraComEnsaio.duracao_min||60}
+              />
+              {dataEnsaio&&(
+                <div style={{marginTop:14}}>
+                  <p style={{fontSize:12,color:"#999",marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(dataEnsaio)}</strong>:</p>
+                  {horariosEnsaio.length===0?(
+                    <p style={{fontSize:12,color:"#f57c00",background:"#fff8e1",padding:"10px 12px",borderRadius:8}}>⚠️ Nenhum horário disponível nesta data.</p>
+                  ):(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                      {horariosEnsaio.map(t=><button key={t} onClick={()=>setHoraEnsaio(t)} style={{padding:"8px 14px",borderRadius:8,fontSize:13,border:horaEnsaio===t?"2px solid #b8967e":"2px solid #e8e0d8",background:horaEnsaio===t?"#b8967e":"#fff",color:horaEnsaio===t?"#fff":"#1a1a1a",cursor:"pointer"}}>{t}</button>)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <div style={{display:"flex",gap:10,marginTop:20}}>
             <Back onClick={()=>setStep(2)}/>
-            <Btn disabled={!date||!time} onClick={()=>setStep(4)} label="Continuar →"/>
+            <Btn disabled={!date||!time||(extraComEnsaio&&(!dataEnsaio||!horaEnsaio))} onClick={()=>setStep(4)} label="Continuar →"/>
           </div>
         </div>
       )}
@@ -2072,7 +2129,8 @@ function ClientView() {
             {[
               ["Serviço",`${service?.icon} ${service?.label}`],
               ["Modalidade",modality?.label],
-              !semAgenda?["Data",`${formatDateBR(date)} às ${time}`]:null,
+              !semAgenda?["Data do evento",`${formatDateBR(date)} às ${time}`]:null,
+              extraComEnsaio&&dataEnsaio?["📸 Ensaio — "+extraComEnsaio.label,`${formatDateBR(dataEnsaio)} às ${horaEnsaio}`]:null,
               ["Nome",cadastro.nome_mae],
               ["E-mail",cadastro.email],
               extras.length>0?["Adicionais",extras.map(e=>e.label).join(", ")]:null,
