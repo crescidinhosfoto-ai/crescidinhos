@@ -377,7 +377,7 @@ function ExtrasPanel({ extras, selected, onChange, temDesconto, basePrice }) {
 }
 
 // ─── SERVICE SELECTOR ────────────────────────────────────────────
-function ServiceSelector({ onConfirm, onValeResgatar, excluirGrupos=[] }) {
+function ServiceSelector({ onConfirm, onValeResgatar, onValeComprar, excluirGrupos=[] }) {
   const [openId, setOpenId] = useState(null);
   const [openCatId, setOpenCatId] = useState(null);
   const [selService, setSelService] = useState(null);
@@ -486,7 +486,7 @@ function ServiceSelector({ onConfirm, onValeResgatar, excluirGrupos=[] }) {
                 <div style={{borderTop:"1px solid #f0e8e0",padding:"12px 16px 16px"}}>
                   {s.grupo==="vale"?(
                     <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                      <button onClick={()=>handleModality(s,s.modalities[0])} style={{padding:'13px 14px',borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600,fontFamily:"'Cormorant Garamond',serif",textAlign:'left'}}>🎁 Comprar um vale presente</button>
+                      <button onClick={()=>onValeComprar?onValeComprar():handleModality(s,s.modalities[0])} style={{padding:'13px 14px',borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',cursor:'pointer',fontSize:14,fontWeight:600,fontFamily:"'Cormorant Garamond',serif",textAlign:'left'}}>🎁 Comprar um vale presente</button>
                       {onValeResgatar&&<button onClick={onValeResgatar} style={{padding:'13px 14px',borderRadius:10,background:'#fff',color:'#1a1a1a',border:'1.5px solid #1a1a1a',cursor:'pointer',fontSize:14,fontWeight:600,fontFamily:"'Cormorant Garamond',serif",textAlign:'left'}}>🔑 Resgatar um vale presente</button>}
                       <p style={{fontSize:11,color:'#999',margin:'4px 0 0',lineHeight:1.5}}>{s.modalities[0].detail}</p>
                     </div>
@@ -1478,12 +1478,14 @@ function ClientView() {
   const [verificando,setVerificando]=useState(false);
   // Vale Presente
   const [resgatandoVale,setResgatandoVale]=useState(false);
+  const [valeComprando,setValeComprando]=useState(false);
+  const [valeValorLivreMode,setValeValorLivreMode]=useState(false);
+  const [valeValorLivreInput,setValeValorLivreInput]=useState('');
   const [valeCodeInput,setValeCodeInput]=useState('');
   const [valeEncontrado,setValeEncontrado]=useState(null);
   const [loadingVale,setLoadingVale]=useState(false);
   const [erroVale,setErroVale]=useState('');
   const [codigoGerado,setCodigoGerado]=useState('');
-  const [valeValorInput,setValeValorInput]=useState('');
 
   const cadastroSalvo=(()=>{try{return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}");}catch{return {};}})();
   const [cadastro,setCadastroRaw]=useState({
@@ -1499,7 +1501,7 @@ function ClientView() {
   const setCad=(k,v)=>setCadastro(p=>({...p,[k]:v}));
   const limparSessao=()=>{try{sessionStorage.removeItem("cres_cadastro");sessionStorage.removeItem("cres_filhos");}catch{}};
 
-  const semAgenda=service?.grupo==="cofrinho"||service?.grupo==="vale";
+  const semAgenda=service?.grupo==="cofrinho"||service?.grupo==="vale"||valeComprando;
   const precisaDadosEvento=service&&requerDadosEvento(service.id);
   const STEPS=semAgenda?["Cadastro","Serviço","Confirmar"]:["Cadastro","Serviço","Data","Confirmar"];
 
@@ -1559,16 +1561,21 @@ function ClientView() {
         :(anamnese.nome_crianca||"");
 
       // ── COMPRAR vale presente ──
-      if(service?.grupo==="vale"&&!resgatandoVale){
+      if(valeComprando){
         const codigo=gerarCodigoVale();
-        const valor=parseFloat(valeValorInput.replace(',','.'))||0;
+        const isLivre=service?.id==='vale'||modality?.id==='vale-livre';
+        const valor=Number(modality?.price||0);
+        const servicoLabel=isLivre?'Vale Presente (Valor Livre)':service?.label||'Vale Presente';
+        const modalidadeLabel=isLivre?'Valor livre':modality?.label||'';
         await criarAgendamento({
-          cliente_id:cid,servico:"Vale Presente",servico_id:"vale",
-          modalidade:"Valor livre",modalidade_id:"vale-livre",
+          cliente_id:cid,
+          servico:servicoLabel,servico_id:isLivre?'vale':service?.id,
+          modalidade:modalidadeLabel,modalidade_id:isLivre?'vale-livre':modality?.id,
           valor,status:"Ativo",pagamento_status:"Pendente",
           obs:`VALE:${codigo}`,
         });
-        await enviarWhatsApp("14996845521",`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`);
+        const extrasStr=extras.length>0?`\nAdicionais: ${extras.map(e=>e.label).join(', ')}`:'';
+        await enviarWhatsApp("14996845521",`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}\n\nAguardando pagamento.`);
         setCodigoGerado(codigo);
         setLoading(false);limparSessao();setSubmitted(true);
         return;
@@ -1623,7 +1630,7 @@ function ClientView() {
       <div style={{background:"linear-gradient(135deg,#72243E,#b8967e)",borderRadius:16,padding:24,marginBottom:20,color:"#fff"}}>
         <p style={{fontSize:12,letterSpacing:"2px",textTransform:"uppercase",margin:"0 0 8px",opacity:.8}}>Código do Vale</p>
         <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:40,fontWeight:700,margin:"0 0 8px",letterSpacing:"6px"}}>{codigoGerado}</p>
-        <p style={{fontSize:12,opacity:.7,margin:0}}>Valor: R$ {parseFloat(valeValorInput||0).toFixed(2).replace('.',',')}</p>
+        <p style={{fontSize:12,opacity:.7,margin:0}}>{service?.id==='vale'?'Valor livre':'Ensaio: '+service?.label+(modality?.label?' — '+modality.label:'')} · R$ {Number(modality?.price||0).toFixed(2).replace('.',',')}</p>
       </div>
       <button onClick={()=>{try{navigator.clipboard.writeText(codigoGerado);}catch(e){}alert(`Código ${codigoGerado} copiado!`);}} style={{width:"100%",padding:13,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:12}}>📋 Copiar código</button>
       <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>⚠️ Aguardamos o pagamento para ativar o vale.<br/>Em breve a Crescidinhos entrará em contato.</p>
@@ -1733,16 +1740,71 @@ function ClientView() {
         </div>
       )}
 
-      {step===2&&!resgatandoVale&&(
+      {/* ── Step 2: seleção normal de serviço ── */}
+      {step===2&&!resgatandoVale&&!valeComprando&&(
         <div>
           <ServiceSelector
             onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
             onValeResgatar={()=>{setResgatandoVale(true);setValeCodeInput('');setValeEncontrado(null);setErroVale('');}}
+            onValeComprar={()=>{setValeComprando(true);setValeValorLivreMode(false);setValeValorLivreInput('');setService(null);setModality(null);}}
           />
           <div style={{marginTop:12}}><Back onClick={()=>setStep(1)}/></div>
         </div>
       )}
 
+      {/* ── Step 2: COMPRAR VALE — catálogo de serviços ── */}
+      {step===2&&valeComprando&&!valeValorLivreMode&&(
+        <div>
+          <div style={{background:'linear-gradient(135deg,#72243E,#b8967e)',borderRadius:12,padding:'14px 16px',marginBottom:20,color:'#fff',display:'flex',alignItems:'center',gap:12}}>
+            <span style={{fontSize:28}}>🎁</span>
+            <div>
+              <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700}}>Comprando um Vale Presente</p>
+              <p style={{margin:'2px 0 0',fontSize:12,opacity:.85}}>Escolha o ensaio que você quer presentear</p>
+            </div>
+          </div>
+          <ServiceSelector
+            excluirGrupos={['vale','cofrinho']}
+            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
+          />
+          {/* Valor Livre */}
+          <div style={{marginTop:10,borderRadius:14,border:'2px solid #e8e0d8',background:'#fff',overflow:'hidden'}}>
+            <div onClick={()=>setValeValorLivreMode(true)} style={{padding:'15px 16px',cursor:'pointer',display:'flex',alignItems:'center',gap:14}}>
+              <span style={{fontSize:26,flexShrink:0}}>💝</span>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:'#1a1a1a',margin:0}}>Valor Livre</p>
+                <p style={{fontSize:12,color:'#999',margin:'4px 0 0',lineHeight:1.5}}>Contribua com qualquer valor — a presenteada desconta em qualquer ensaio</p>
+              </div>
+              <span style={{fontSize:13,color:'#b8967e',flexShrink:0,fontWeight:700}}>→</span>
+            </div>
+          </div>
+          <div style={{marginTop:12}}><Back onClick={()=>{setValeComprando(false);setService(null);setModality(null);}}/></div>
+        </div>
+      )}
+
+      {/* ── Step 2: COMPRAR VALE — valor livre ── */}
+      {step===2&&valeComprando&&valeValorLivreMode&&(
+        <div style={{textAlign:'center',padding:'8px 0'}}>
+          <div style={{fontSize:44,marginBottom:12}}>💝</div>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>Valor Livre</h3>
+          <p style={{fontSize:13,color:'#888',marginBottom:24,lineHeight:1.6}}>Escolha o valor que deseja presentear.<br/>A presenteada usará como desconto em qualquer ensaio.</p>
+          <div style={{background:'#fff',border:'1.5px solid #e8e0d8',borderRadius:14,padding:20,textAlign:'left',marginBottom:16}}>
+            <Field label="Valor do vale (R$)">
+              <input style={{...inp,fontSize:20,fontWeight:700,textAlign:'center'}} type="number" min="1" step="0.01" placeholder="Ex: 200,00" value={valeValorLivreInput} onChange={e=>{setValeValorLivreInput(e.target.value);}}/>
+            </Field>
+            {valeValorLivreInput&&<p style={{fontSize:13,color:'#2e7d32',fontWeight:600,textAlign:'center',margin:'-8px 0 12px'}}>✅ Vale de R$ {parseFloat(valeValorLivreInput).toFixed(2).replace('.',',')}</p>}
+            <button onClick={()=>{
+              setService({id:'vale',label:'Vale Presente',grupo:'vale',icon:'💝'});
+              setModality({id:'vale-livre',label:'Valor livre',price:parseFloat(valeValorLivreInput)||0});
+              setStep(3);
+            }} disabled={!valeValorLivreInput||parseFloat(valeValorLivreInput)<=0} style={{width:'100%',padding:13,borderRadius:10,background:valeValorLivreInput?'#1a1a1a':'#e8e0d8',color:valeValorLivreInput?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:valeValorLivreInput?'pointer':'default'}}>
+              Continuar com valor livre →
+            </button>
+          </div>
+          <Back onClick={()=>setValeValorLivreMode(false)}/>
+        </div>
+      )}
+
+      {/* ── Step 2: RESGATAR — digitar código ── */}
       {step===2&&resgatandoVale&&!valeEncontrado&&(
         <div style={{textAlign:'center',padding:'8px 0'}}>
           <div style={{fontSize:44,marginBottom:12}}>🔑</div>
@@ -1767,18 +1829,44 @@ function ClientView() {
         </div>
       )}
 
+      {/* ── Step 2: RESGATAR — código validado, escolher ensaio ── */}
       {step===2&&resgatandoVale&&valeEncontrado&&(
         <div>
           <div style={{background:'linear-gradient(135deg,#72243E,#b8967e)',borderRadius:12,padding:16,marginBottom:20,color:'#fff',textAlign:'center'}}>
             <p style={{fontSize:11,letterSpacing:'1px',textTransform:'uppercase',margin:'0 0 4px',opacity:.8}}>Vale encontrado ✅</p>
-            <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:'0 0 2px'}}>R$ {Number(valeEncontrado.valor||0).toFixed(2).replace('.',',')}</p>
-            <p style={{fontSize:11,opacity:.7,margin:0}}>Código: {valeCodeInput.toUpperCase()}</p>
+            {valeEncontrado.servico_id==='vale'?(
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,fontWeight:700,margin:'0 0 2px'}}>💝 R$ {Number(valeEncontrado.valor||0).toFixed(2).replace('.',',')} — Valor Livre</p>
+            ):(
+              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,fontWeight:700,margin:'0 0 2px'}}>{valeEncontrado.servico} — {valeEncontrado.modalidade}</p>
+            )}
+            <p style={{fontSize:11,opacity:.7,margin:'4px 0 0'}}>Código: {valeCodeInput.toUpperCase()} · R$ {Number(valeEncontrado.valor||0).toFixed(2).replace('.',',')}</p>
           </div>
-          <p style={{fontSize:13,color:'#888',marginBottom:16,fontWeight:600}}>Agora escolha o ensaio que deseja:</p>
-          <ServiceSelector
-            excluirGrupos={['vale','cofrinho']}
-            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
-          />
+          {valeEncontrado.servico_id==='vale'?(
+            <>
+              <p style={{fontSize:13,color:'#888',marginBottom:16,fontWeight:600}}>Escolha o ensaio que deseja usar seu vale:</p>
+              <ServiceSelector
+                excluirGrupos={['vale','cofrinho']}
+                onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setStep(3);}}
+              />
+            </>
+          ):(
+            <>
+              <div style={{background:'#faf8f5',border:'1.5px solid #e8e0d8',borderRadius:12,padding:16,marginBottom:16}}>
+                <p style={{fontSize:11,color:'#b8967e',fontWeight:700,margin:'0 0 8px',textTransform:'uppercase',letterSpacing:'1px'}}>Ensaio incluído no vale</p>
+                <p style={{fontSize:15,fontWeight:700,color:'#1a1a1a',margin:'0 0 2px'}}>{valeEncontrado.servico}</p>
+                <p style={{fontSize:13,color:'#888',margin:0}}>{valeEncontrado.modalidade}</p>
+              </div>
+              <button onClick={()=>{
+                const svc=SERVICES.find(s=>s.id===valeEncontrado.servico_id);
+                const mod=svc?.modalities?.find(m=>m.id===valeEncontrado.modalidade_id)||{id:valeEncontrado.modalidade_id,label:valeEncontrado.modalidade,price:valeEncontrado.valor};
+                setService(svc||{id:valeEncontrado.servico_id,label:valeEncontrado.servico,icon:'🎁',grupo:'ensaio'});
+                setModality(mod);setExtras([]);
+                setStep(3);
+              }} style={{width:'100%',padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer'}}>
+                Agendar este ensaio →
+              </button>
+            </>
+          )}
           <div style={{marginTop:12}}><Back onClick={()=>{setValeEncontrado(null);setValeCodeInput('');setErroVale('');setResgatandoVale(true);}}/></div>
         </div>
       )}
@@ -1833,12 +1921,11 @@ function ClientView() {
             {service?.grupo==="vale"&&!resgatandoVale?'Confirmar vale presente':'Confirmar agendamento'}
           </h3>
           <p style={{fontSize:12,color:"#999",marginBottom:16}}>Verifique os dados antes de enviar</p>
-          {service?.grupo==="vale"&&!resgatandoVale&&(
-            <div style={{background:'#fff',border:'1.5px solid #e8e0d8',borderRadius:12,padding:16,marginBottom:16}}>
-              <p style={{fontSize:11,color:'#b8967e',fontWeight:700,margin:'0 0 12px',letterSpacing:'1px',textTransform:'uppercase'}}>💰 Valor do vale</p>
-              <p style={{fontSize:12,color:'#888',margin:'0 0 10px',lineHeight:1.5}}>Qual valor você quer presentear? A presenteada escolherá o ensaio.</p>
-              <input style={{...inp,fontSize:18,fontWeight:700,textAlign:'center'}} type="number" min="1" step="0.01" placeholder="Ex: 350,00" value={valeValorInput} onChange={e=>setValeValorInput(e.target.value)}/>
-              {valeValorInput&&<p style={{fontSize:13,color:'#2e7d32',fontWeight:600,textAlign:'center',margin:'-4px 0 0'}}>✅ Vale de R$ {parseFloat(valeValorInput).toFixed(2).replace('.',',')}</p>}
+          {valeComprando&&(
+            <div style={{background:'linear-gradient(135deg,#72243E,#b8967e)',borderRadius:10,padding:14,marginBottom:16,color:'#fff'}}>
+              <p style={{fontSize:11,opacity:.8,margin:'0 0 4px',textTransform:'uppercase',letterSpacing:'1px'}}>🎁 Vale sendo criado</p>
+              <p style={{fontSize:15,fontWeight:700,margin:'0 0 2px'}}>{service?.id==='vale'?'Valor Livre':service?.label+' — '+modality?.label}</p>
+              <p style={{fontSize:14,fontWeight:700,margin:0}}>R$ {Number(modality?.price||0).toFixed(2).replace('.',',')}</p>
             </div>
           )}
           {resgatandoVale&&valeEncontrado&&(
@@ -1877,7 +1964,7 @@ function ClientView() {
           </div>
           <div style={{display:"flex",gap:10}}>
             <Back onClick={()=>setStep(semAgenda?2:3)}/>
-            <Btn disabled={loading||(service?.grupo==="vale"&&!resgatandoVale&&!valeValorInput)} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
+            <Btn disabled={loading} onClick={handleSubmit} label={loading?"Enviando...":"Enviar solicitação 🌸"}/>
           </div>
         </div>
       )}
