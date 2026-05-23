@@ -719,6 +719,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [confirmDeleteCliente,setConfirmDeleteCliente]=useState(false);
   const [salvandoEditCliente,setSalvandoEditCliente]=useState(false);
   const [gerandoLink,setGerandoLink]=useState(false);
+  const [parcelaForm,setParcelaForm]=useState(null);// null=fechado | {valor:'',num:'',total:''}
+  const [parcelaGerada,setParcelaGerada]=useState(null);// {link, label}
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
@@ -868,6 +870,50 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
                   </button>
                 </div>
                 {gerandoLink&&<p style={{fontSize:12,color:"#b8967e",textAlign:"center",margin:"10px 0 0"}}>⏳ Gerando link...</p>}
+                {/* Parcela personalizada */}
+                {!parcelaForm&&(
+                  <button onClick={()=>{setParcelaForm({valor:'',num:'',total:''});setParcelaGerada(null);}} style={{width:'100%',marginTop:8,padding:"10px",borderRadius:10,background:"#fff",border:"1.5px dashed #e8e0d8",cursor:"pointer",fontSize:12,fontWeight:600,color:"#999"}}>
+                    ➕ Gerar parcela personalizada
+                  </button>
+                )}
+                {parcelaForm&&(
+                  <div style={{marginTop:10,padding:14,background:"#faf8f5",borderRadius:10,border:"1.5px solid #e8e0d8"}}>
+                    <p style={{fontSize:11,fontWeight:700,color:"#b8967e",margin:"0 0 12px",textTransform:"uppercase",letterSpacing:"1px"}}>📦 Parcela personalizada</p>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div>
+                        <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Nº da parcela</label>
+                        <input style={{...inp,fontSize:14,fontWeight:700,textAlign:"center"}} type="number" min="1" placeholder="Ex: 2" value={parcelaForm.num} onChange={e=>setParcelaForm(f=>({...f,num:e.target.value}))}/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Total de parcelas</label>
+                        <input style={{...inp,fontSize:14,fontWeight:700,textAlign:"center"}} type="number" min="1" placeholder="Ex: 3" value={parcelaForm.total} onChange={e=>setParcelaForm(f=>({...f,total:e.target.value}))}/>
+                      </div>
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Valor desta parcela (R$)</label>
+                      <input style={{...inp,fontSize:18,fontWeight:700,textAlign:"center"}} type="number" min="0.01" step="0.01" placeholder="0,00" value={parcelaForm.valor} onChange={e=>setParcelaForm(f=>({...f,valor:e.target.value}))}/>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>{setParcelaForm(null);setParcelaGerada(null);}} style={{flex:1,padding:"9px",borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:12,color:"#999",fontWeight:600}}>Cancelar</button>
+                      <button disabled={gerandoLink||!parcelaForm.valor||!parcelaForm.num||!parcelaForm.total} onClick={async()=>{
+                        const v=Math.round(parseFloat(parcelaForm.valor)*100)/100;
+                        if(!v||v<=0)return;
+                        setGerandoLink(true);
+                        const label=`Parcela ${parcelaForm.num}/${parcelaForm.total} — ${agendamento.servico}`;
+                        const ref=`PARCELA${parcelaForm.num}-${agendamento.id}`;
+                        const link=await criarLinkMercadoPago(label,v,ref,isEvento);
+                        if(link){
+                          setParcelaGerada({link,label,valor:v});
+                          await update(agendamento.id,{pagamento_link:link});
+                          setParcelaForm(null);
+                        }else{alert('Erro ao gerar link. Verifique o token MP.');}
+                        setGerandoLink(false);
+                      }} style={{flex:2,padding:"9px",borderRadius:8,background:(!parcelaForm.valor||!parcelaForm.num||!parcelaForm.total)?"#e8e0d8":"#1a1a1a",color:(!parcelaForm.valor||!parcelaForm.num||!parcelaForm.total)?"#aaa":"#fff",border:"none",cursor:"pointer",fontSize:12,fontWeight:700}}>
+                        {gerandoLink?"⏳ Gerando...":"💳 Gerar link"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
