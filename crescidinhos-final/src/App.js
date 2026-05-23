@@ -44,7 +44,7 @@ const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DEL
 const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'+Array.from({length:5},()=>c[Math.floor(Math.random()*c.length)]).join('');};
 const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
 const marcarValeUsado=(id)=>sb(`agendamentos?id=eq.${id}`,{method:'PATCH',body:JSON.stringify({status:'Utilizado'})});
-const MP_TOKEN='APP_USR-d6430866-6903-4606-8d3b-2cb3325c45f1';
+const MP_TOKEN='APP_USR-6587879092760162-052100-b495626cba5c1d859c2be43374d0fa23-3417831486';
 const criarLinkMercadoPago=async(titulo,valor,referencia)=>{
   try{
     const r=await fetch('https://api.mercadopago.com/checkout/preferences',{
