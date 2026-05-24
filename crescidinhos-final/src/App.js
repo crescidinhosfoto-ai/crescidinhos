@@ -1120,7 +1120,7 @@ function EstudioView() {
 }
 
 // ─── PAINEL DO CLIENTE ────────────────────────────────────────────
-function ClientePanel() {
+function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null }) {
   // ── Estado principal ──
   const [logado,setLogado]=useState(null);
   const [agendamentos,setAgendamentos]=useState([]);
@@ -1149,7 +1149,14 @@ function ClientePanel() {
       PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
         .then(ok=>setBioDisponivel(ok)).catch(()=>setBioDisponivel(false));
     }
-    verificarSessao();
+    if(clienteInicial){
+      // Auto-login direto do cadastro
+      setLogado(clienteInicial);
+      getAgendamentosByCliente(clienteInicial.id).then(r=>setAgendamentos(r||[])).catch(()=>{});
+      if(onLoaded)onLoaded();
+    } else {
+      verificarSessao();
+    }
   },[]);
 
   const verificarSessao=async()=>{
@@ -1319,7 +1326,7 @@ function ClientePanel() {
               {loading?"Verificando...":"Acessar minha área →"}
             </button>
           </div>
-          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro?<br/>Faça um agendamento e a Crescidinhos cria seu perfil 🤍</p>
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
         </div>
       );
     }
@@ -1417,11 +1424,24 @@ function ClientePanel() {
         <div><p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,color:"#1a1a1a"}}>Olá, {logado.nome_mae?.split(" ")[0]}! 🌸</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888"}}>{logado.email}</p></div>
         <button onClick={sair} style={{marginLeft:"auto",padding:"6px 12px",borderRadius:8,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>Sair</button>
       </div>
+      {/* Botão de destaque: Marcar nova sessão */}
+      <button onClick={()=>setTab("sessao")} style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,width:"100%",padding:"14px",borderRadius:12,background:`linear-gradient(135deg,${P.ardosia},${P.ardosiaClaro})`,border:"none",cursor:"pointer",marginBottom:14,boxShadow:"0 2px 8px rgba(105,132,148,.3)"}}>
+        <span style={{fontSize:20}}>📸</span>
+        <span style={{fontFamily:"'Cormorant Garamond',serif",fontSize:17,fontWeight:700,color:"#fff"}}>Marcar nova sessão</span>
+      </button>
       <div style={{display:"flex",gap:6,marginBottom:20,overflowX:"auto"}}>
         {[["agendamentos","📅 Ensaios"],["contratos","📄 Contratos"],["cofrinho","💰 Cofrinho"],["vale","🎁 Vale"],["estudio","🐘 Estúdio"],["perfil","👤 Perfil"]].map(([t,l])=>
-          <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
+          <button key={t} onClick={()=>setTab(t)} style={{flex:"0 0 auto",padding:"9px 14px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?P.ardosia:"#fff",color:tab===t?"#fff":"#666",border:`2px solid ${tab===t?P.ardosia:"#e8e0d8"}`,cursor:"pointer",whiteSpace:"nowrap"}}>{l}</button>
         )}
       </div>
+
+      {/* ── Marcar nova sessão (inline) ── */}
+      {tab==="sessao"&&(
+        <CatalogView
+          clientePreenchido={logado}
+          onVoltar={()=>setTab("agendamentos")}
+        />
+      )}
 
       {tab==="agendamentos"&&(
         <div>
@@ -2208,6 +2228,363 @@ function PhotographerPanel({ auth, onLogout }) {
   );
 }
 
+// ─── PALETA CRESCIDINHOS ──────────────────────────────────────────
+const P={
+  rosa:'#D9A7B4',rosaClaro:'#E7C8D0',rosaPale:'#F0E0E4',
+  ardosia:'#698494',ardosiaClaro:'#90A0AD',cinza:'#B2B2B2',
+  vinho:'#72243E',texto:'#3d2b1f',muted:'#a09080',
+};
+
+// ─── CATALOG VIEW (agendamento simplificado) ──────────────────────
+function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=null }) {
+  const [fase,setFase]=useState('servico');
+  const [service,setService]=useState(null);
+  const [modality,setModality]=useState(null);
+  const [extras,setExtras]=useState([]);
+  const [date,setDate]=useState(null);
+  const [time,setTime]=useState(null);
+  const [horariosDisp,setHorariosDisp]=useState([]);
+  const [datasDisp,setDatasDisp]=useState(null);
+  const [dadosEvento,setDadosEvento]=useState({});
+  const [whatsapp,setWhatsapp]=useState('');
+  const [cliente,setCliente]=useState(clientePreenchido);
+  const [buscando,setBuscando]=useState(false);
+  const [erroCl,setErroCl]=useState('');
+  const [paraFilho,setParaFilho]=useState(false);
+  const [filhoNome,setFilhoNome]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [submitted,setSubmitted]=useState(false);
+  // Ensaio vinculado
+  const extraComEnsaio=extras.find(e=>e.precisaAgenda)||null;
+  const [dataEnsaio,setDataEnsaio]=useState(null);
+  const [horaEnsaio,setHoraEnsaio]=useState(null);
+  const [horariosEnsaio,setHorariosEnsaio]=useState([]);
+  const [datasEnsaio,setDatasEnsaio]=useState(null);
+
+  const semAgenda=service?.grupo==="cofrinho"||service?.grupo==="vale";
+  const precisaDadosEvento=service&&requerDadosEvento(service.id);
+
+  const buscarCliente=async()=>{
+    const tel=whatsapp.replace(/\D/g,'');
+    if(tel.length<10){setErroCl('Digite um WhatsApp válido com DDD');return;}
+    setBuscando(true);setErroCl('');
+    try{
+      const r=await getClienteByTelefone(tel);
+      if(r&&r.length>0){
+        const cl=r[0];
+        setCliente(cl);
+        const filhos=cl.filhos||[];
+        if(filhos.length>0){setParaFilho(true);setFilhoNome(filhos[0].nome_crianca||'');}
+      } else {
+        setErroCl('Cadastro não encontrado. Clique em "Cadastre-se" para criar seu perfil.');
+      }
+    }catch(e){setErroCl('Erro ao buscar. Tente novamente.');}
+    setBuscando(false);
+  };
+
+  const handleSubmit=async()=>{
+    setLoading(true);
+    try{
+      const cid=cliente.id;
+      const nomeCrianca=paraFilho?filhoNome:'';
+      const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
+      await criarAgendamento({
+        cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
+        modalidade:modality?.label,modalidade_id:modality?.id||null,
+        duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
+        data:date,hora:time,valor:calc.total||modality?.price||null,
+        status:"Pendente",pagamento_status:"Pendente",
+        dados_evento:precisaDadosEvento?dadosEvento:null,
+        obs:extraComEnsaio&&dataEnsaio?`Inclui ${extraComEnsaio.label} em ${dataEnsaio} às ${horaEnsaio}`:null,
+      });
+      if(extraComEnsaio&&dataEnsaio&&horaEnsaio){
+        await criarAgendamento({
+          cliente_id:cid,servico:extraComEnsaio.label,servico_id:extraComEnsaio.id,
+          modalidade:"Vinculado ao "+service?.label,modalidade_id:null,
+          duracao_min:extraComEnsaio.duracao_min||60,nome_crianca:nomeCrianca||null,
+          data:dataEnsaio,hora:horaEnsaio,valor:extraComEnsaio.price||null,
+          status:"Pendente",pagamento_status:"Pendente",
+          obs:`Ensaio vinculado ao evento: ${service?.label} em ${date} às ${time}`,
+        });
+      }
+      const dataFmt=date?date.split('-').reverse().join('/'):'-';
+      const dataEnsaioFmt=dataEnsaio?dataEnsaio.split('-').reverse().join('/'):null;
+      const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:'';
+      const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}`:'';
+      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cliente.nome_mae}\nServiço: ${service?.label}${modality?.label?' — '+modality.label:''}\nData: ${dataFmt} às ${time||'-'}\nWhatsApp: ${cliente.telefone}${msgEvento}${msgEnsaio}\n\nAcesse o painel para confirmar.`);
+      await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cliente.nome_mae,email:cliente.email,phone:cliente.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,grupo:service?.grupo,data:date,hora:time,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
+      setSubmitted(true);
+    }catch(e){console.error(e);alert('Erro ao enviar. Tente novamente.');}
+    setLoading(false);
+  };
+
+  if(submitted)return(
+    <div style={{textAlign:'center',padding:'48px 16px'}}>
+      <div style={{fontSize:52,marginBottom:16}}>🌸</div>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:P.vinho,marginBottom:8}}>Solicitação enviada!</h2>
+      <p style={{color:'#888',fontSize:14,lineHeight:1.7,marginBottom:24}}>Em breve a <strong>Crescidinhos</strong> confirmará seu horário pelo WhatsApp. 🤍</p>
+      <div style={{padding:16,background:'#faf8f5',borderRadius:12,textAlign:'left',marginBottom:20}}>
+        {[['Serviço',`${service?.icon} ${service?.label}`],['Modalidade',modality?.label],['Data',date?`${formatDateBR(date)} às ${time}`:null],['Nome',cliente?.nome_mae]].filter(([,v])=>v).map(([k,v])=><p key={k} style={{fontSize:13,color:'#666',margin:'0 0 6px'}}><strong>{k}:</strong> {v}</p>)}
+      </div>
+      {onVoltar&&<button onClick={onVoltar} style={{padding:'12px 24px',borderRadius:10,background:P.ardosia,color:'#fff',border:'none',fontSize:14,fontWeight:600,cursor:'pointer'}}>← Voltar à minha área</button>}
+    </div>
+  );
+
+  return(
+    <div>
+      {/* Serviço */}
+      {fase==='servico'&&(
+        <div>
+          <ServiceSelector
+            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setFase(semAgenda?'contato':'data');}}
+          />
+          {onVoltar&&<div style={{marginTop:12}}><button onClick={onVoltar} style={{padding:'10px 16px',borderRadius:8,background:'#fff',border:'1.5px solid #e8e0d8',cursor:'pointer',fontSize:13,color:'#888'}}>← Voltar</button></div>}
+        </div>
+      )}
+
+      {/* Data do evento */}
+      {fase==='data'&&(
+        <div>
+          <div style={{padding:'10px 12px',background:'#faf8f5',border:`1.5px solid ${P.rosaClaro}`,borderRadius:10,marginBottom:18,display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:20}}>{service?.icon}</span>
+            <div style={{flex:1}}>
+              <p style={{margin:0,fontSize:13,fontWeight:700,color:P.texto}}>{service?.label} — {modality?.label}</p>
+              {extras.length>0&&<p style={{margin:'2px 0 0',fontSize:11,color:P.muted}}>+ {extras.map(e=>e.label).join(', ')}</p>}
+            </div>
+          </div>
+          {precisaDadosEvento&&<DadosEventoForm serviceId={service.id} data={dadosEvento} onChange={setDadosEvento}/>}
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:P.texto,marginBottom:4}}>{extraComEnsaio?'🎉 Data do evento':'Escolha a data e horário'}</h3>
+          <p style={{fontSize:12,color:'#999',marginBottom:14}}>Selecione uma data verde disponível</p>
+          <Calendar selectedDate={date} onSelectDate={d=>{setDate(d);setTime(null);}} onHorariosChange={setHorariosDisp} onDatasChange={setDatasDisp} duracaoMin={modality?.duracao_min||60}/>
+          {!date&&datasDisp!==null&&datasDisp.length===0&&(
+            <div style={{marginTop:12,padding:'10px 14px',background:'#fff8e1',border:'1.5px solid #ffe082',borderRadius:10}}>
+              <p style={{fontSize:12,color:'#f57c00',margin:'0 0 6px',fontWeight:600}}>⚠️ Nenhuma data liberada neste mês.</p>
+              <a href={`https://wa.me/${PHOTOGRAPHER.whatsapp}?text=Olá! Quero agendar um ${service?.label} e não encontrei datas disponíveis no app.`} target="_blank" rel="noreferrer" style={{fontSize:12,color:'#25D366',fontWeight:600}}>💬 Falar pelo WhatsApp →</a>
+            </div>
+          )}
+          {date&&(
+            <div style={{marginTop:14}}>
+              <p style={{fontSize:12,color:'#999',marginBottom:10}}>Horários disponíveis em <strong>{formatDateBR(date)}</strong>:</p>
+              {horariosDisp.length===0?<p style={{fontSize:12,color:'#f57c00',background:'#fff8e1',padding:'10px 12px',borderRadius:8}}>⚠️ Nenhum horário disponível.</p>:(
+                <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                  {horariosDisp.map(t=><button key={t} onClick={()=>setTime(t)} style={{padding:'8px 14px',borderRadius:8,fontSize:13,border:time===t?`2px solid ${P.ardosia}`:'2px solid #e8e0d8',background:time===t?P.ardosia:'#fff',color:time===t?'#fff':P.texto,cursor:'pointer'}}>{t}</button>)}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Segunda data: ensaio */}
+          {extraComEnsaio&&date&&time&&(
+            <div style={{marginTop:24,paddingTop:20,borderTop:'2px dashed #e8e0d8'}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,padding:'10px 14px',background:P.rosaPale,borderRadius:10}}>
+                <span style={{fontSize:22}}>📸</span>
+                <div><p style={{margin:0,fontSize:13,fontWeight:700,color:P.texto}}>{extraComEnsaio.label} — data do ensaio</p><p style={{margin:'2px 0 0',fontSize:11,color:P.muted}}>Sessão de fotos — data separada do evento</p></div>
+              </div>
+              <Calendar selectedDate={dataEnsaio} onSelectDate={d=>{setDataEnsaio(d);setHoraEnsaio(null);}} onHorariosChange={setHorariosEnsaio} onDatasChange={setDatasEnsaio} duracaoMin={extraComEnsaio.duracao_min||60}/>
+              {dataEnsaio&&(
+                <div style={{marginTop:14}}>
+                  <p style={{fontSize:12,color:'#999',marginBottom:10}}>Horários em <strong>{formatDateBR(dataEnsaio)}</strong>:</p>
+                  {horariosEnsaio.length===0?<p style={{fontSize:12,color:'#f57c00',background:'#fff8e1',padding:'10px 12px',borderRadius:8}}>⚠️ Nenhum horário disponível.</p>:(
+                    <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+                      {horariosEnsaio.map(t=><button key={t} onClick={()=>setHoraEnsaio(t)} style={{padding:'8px 14px',borderRadius:8,fontSize:13,border:horaEnsaio===t?`2px solid ${P.rosa}`:'2px solid #e8e0d8',background:horaEnsaio===t?P.rosa:'#fff',color:horaEnsaio===t?'#fff':P.texto,cursor:'pointer'}}>{t}</button>)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{display:'flex',gap:10,marginTop:20}}>
+            <button onClick={()=>setFase('servico')} style={{flex:1,padding:12,borderRadius:10,background:'#fff',border:'2px solid #e8e0d8',cursor:'pointer',fontSize:14,color:'#666'}}>← Voltar</button>
+            <button disabled={!date||!time||(extraComEnsaio&&(!dataEnsaio||!horaEnsaio))} onClick={()=>setFase(clientePreenchido?'confirmar':'contato')} style={{flex:2,padding:13,borderRadius:10,background:(!date||!time)?'#e8e0d8':P.ardosia,color:(!date||!time)?'#aaa':'#fff',border:'none',fontSize:16,fontFamily:"'Cormorant Garamond',serif",cursor:(!date||!time)?'default':'pointer'}}>Continuar →</button>
+          </div>
+        </div>
+      )}
+
+      {/* Contato / WhatsApp */}
+      {fase==='contato'&&!cliente&&(
+        <div style={{textAlign:'center',padding:'8px 0'}}>
+          <div style={{fontSize:44,marginBottom:12}}>📱</div>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:P.texto,marginBottom:4}}>Qual é o seu WhatsApp?</h3>
+          <p style={{fontSize:13,color:'#888',marginBottom:24,lineHeight:1.6}}>Vamos buscar seu perfil para confirmar o agendamento</p>
+          <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:14,padding:20,marginBottom:16,textAlign:'left'}}>
+            <Field label="WhatsApp com DDD">
+              <input style={{...inp,fontSize:16,textAlign:'center',letterSpacing:1}} type="tel" placeholder="(14) 99999-9999" value={whatsapp} onChange={e=>{setWhatsapp(e.target.value);setErroCl('');}} onKeyDown={e=>e.key==='Enter'&&buscarCliente()}/>
+            </Field>
+            {erroCl&&<p style={{fontSize:12,color:'#c62828',margin:'-8px 0 12px',textAlign:'center'}}>{erroCl}</p>}
+            <button onClick={buscarCliente} disabled={buscando||!whatsapp} style={{width:'100%',padding:13,borderRadius:10,background:whatsapp?P.ardosia:'#e8e0d8',color:whatsapp?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:whatsapp?'pointer':'default'}}>
+              {buscando?'Buscando...':'Buscar meu perfil →'}
+            </button>
+          </div>
+          {erroCl&&erroCl.includes('Cadastre-se')&&onPrecisaCadastro&&(
+            <button onClick={onPrecisaCadastro} style={{padding:'10px 24px',borderRadius:10,background:P.rosa,color:'#fff',border:'none',fontSize:14,fontWeight:600,cursor:'pointer',marginBottom:12}}>✨ Cadastrar-me agora</button>
+          )}
+          <button onClick={()=>setFase(semAgenda?'servico':'data')} style={{padding:'10px 16px',borderRadius:8,background:'#fff',border:'1.5px solid #e8e0d8',cursor:'pointer',fontSize:13,color:'#888'}}>← Voltar</button>
+        </div>
+      )}
+
+      {/* Perfil encontrado */}
+      {fase==='contato'&&cliente&&(
+        <div>
+          <div style={{background:`linear-gradient(135deg,${P.vinho},${P.rosa})`,borderRadius:12,padding:20,marginBottom:20,color:'#fff',textAlign:'center'}}>
+            <div style={{fontSize:40,marginBottom:8}}>👤</div>
+            <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:'0 0 4px'}}>{cliente.nome_mae}</h3>
+            <p style={{fontSize:13,opacity:.85,margin:0}}>{cliente.email}</p>
+          </div>
+          {/* Para criança? */}
+          {(cliente.filhos?.length>0||cliente.anamnese?.nome_crianca)&&(
+            <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:12,padding:16,marginBottom:16}}>
+              <p style={{fontSize:12,color:P.muted,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 12px'}}>Este ensaio é para uma criança?</p>
+              <div style={{display:'flex',gap:8,marginBottom:paraFilho?14:0}}>
+                {[['Sim',true],['Não',false]].map(([l,v])=>(
+                  <button key={l} onClick={()=>setParaFilho(v)} style={{flex:1,padding:'10px',borderRadius:8,border:`2px solid ${paraFilho===v?P.ardosia:'#e8e0d8'}`,background:paraFilho===v?P.ardosia:'#fff',color:paraFilho===v?'#fff':P.texto,fontWeight:600,fontSize:14,cursor:'pointer'}}>{l}</button>
+                ))}
+              </div>
+              {paraFilho&&(()=>{
+                const filhos=cliente.filhos?.filter(f=>f.nome_crianca)||[];
+                if(filhos.length===0&&cliente.anamnese?.nome_crianca){filhos.push(cliente.anamnese);}
+                if(filhos.length===0)return null;
+                return(
+                  <div>
+                    <p style={{fontSize:11,color:P.muted,margin:'0 0 8px'}}>Selecione a criança:</p>
+                    <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                      {filhos.map((f,i)=>(
+                        <button key={i} onClick={()=>setFilhoNome(f.nome_crianca||'')} style={{padding:'10px 14px',borderRadius:8,border:`2px solid ${filhoNome===f.nome_crianca?P.rosa:'#e8e0d8'}`,background:filhoNome===f.nome_crianca?P.rosaPale:'#fff',textAlign:'left',cursor:'pointer',fontSize:13,fontWeight:filhoNome===f.nome_crianca?700:400,color:P.texto}}>
+                          👶 {f.nome_crianca}{f.data_nascimento?' · '+f.data_nascimento:''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={()=>{setCliente(null);setParaFilho(false);setFilhoNome('');}} style={{flex:1,padding:12,borderRadius:10,background:'#fff',border:'2px solid #e8e0d8',cursor:'pointer',fontSize:13,color:'#666'}}>← Corrigir</button>
+            <button onClick={()=>setFase('confirmar')} style={{flex:2,padding:13,borderRadius:10,background:P.ardosia,color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer'}}>Confirmar →</button>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmar */}
+      {fase==='confirmar'&&(
+        <div>
+          <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:P.texto,marginBottom:4}}>Confirmar agendamento</h3>
+          <p style={{fontSize:12,color:'#999',marginBottom:16}}>Verifique os dados antes de enviar</p>
+          <div style={{background:'#faf8f5',border:`1.5px solid ${P.rosaClaro}`,borderRadius:12,padding:16,marginBottom:16}}>
+            <p style={{fontSize:11,color:P.rosa,fontWeight:700,margin:'0 0 10px',letterSpacing:'1px',textTransform:'uppercase'}}>Resumo</p>
+            {[
+              ['Serviço',`${service?.icon} ${service?.label}`],
+              ['Modalidade',modality?.label],
+              !semAgenda?['Data do evento',`${formatDateBR(date)} às ${time}`]:null,
+              extraComEnsaio&&dataEnsaio?['📸 '+extraComEnsaio.label,`${formatDateBR(dataEnsaio)} às ${horaEnsaio}`]:null,
+              ['Nome',cliente?.nome_mae],
+              paraFilho&&filhoNome?['Criança',filhoNome]:null,
+              extras.length>0?['Adicionais',extras.map(e=>e.label).join(', ')]:null,
+              modality?.price?['Valor estimado',`R$ ${calcularTotal(modality.price,extras,!!service?.descontoExtras).total.toLocaleString('pt-BR')}`]:null,
+            ].filter(Boolean).map(([k,v])=>(
+              <div key={k} style={{display:'flex',justifyContent:'space-between',marginBottom:8,paddingBottom:8,borderBottom:'1px solid #f0e8e0'}}>
+                <span style={{fontSize:12,color:P.muted}}>{k}</span>
+                <span style={{fontSize:12,fontWeight:600,color:P.texto,textAlign:'right',maxWidth:'60%'}}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{display:'flex',gap:10}}>
+            <button onClick={()=>setFase(clientePreenchido?'data':'contato')} style={{flex:1,padding:12,borderRadius:10,background:'#fff',border:'2px solid #e8e0d8',cursor:'pointer',fontSize:13,color:'#666'}}>← Voltar</button>
+            <button disabled={loading} onClick={handleSubmit} style={{flex:2,padding:13,borderRadius:10,background:loading?'#ccc':P.ardosia,color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:loading?'default':'pointer'}}>{loading?'Enviando...':'Confirmar agendamento ✓'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── CADASTRO VIEW ─────────────────────────────────────────────────
+function CadastroView({ onCadastrado, onJaTenho }) {
+  const [step,setStep]=useState(1);
+  const [form,setForm]=useState({nome_mae:'',email:'',telefone:'',cpf:'',temFilho:'',endereco_cidade:'Bauru'});
+  const [filhos,setFilhosRaw]=useState([{}]);
+  const setFilhos=fn=>setFilhosRaw(prev=>typeof fn==='function'?fn(prev):fn);
+  const setF=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const addFilho=()=>setFilhos(f=>[...f,{}]);
+  const removeFilho=i=>setFilhos(f=>f.filter((_,idx)=>idx!==i));
+  const updateFilho=(i,d)=>setFilhos(f=>f.map((x,idx)=>idx===i?d:x));
+  const [loading,setLoading]=useState(false);
+  const [erro,setErro]=useState('');
+
+  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.temFilho&&(form.temFilho!=='Sim'||filhos.some(f=>f.nome_crianca));
+
+  const handleCadastrar=async()=>{
+    setLoading(true);setErro('');
+    try{
+      const tel=form.telefone.replace(/\D/g,'');
+      const filhosData=form.temFilho==='Sim'?filhos:[];
+      const anamnese=filhosData[0]||{};
+      const ex=await getClienteByTelefone(tel);
+      let cl;
+      if(ex&&ex.length>0){
+        await atualizarCliente(ex[0].id,{nome_mae:form.nome_mae,email:form.email,cpf_mae:form.cpf||null,updated_at:new Date().toISOString()});
+        const r=await getClienteByTelefone(tel);
+        cl=r[0];
+      }else{
+        const nc=await criarCliente({nome_mae:form.nome_mae,email:form.email,telefone:tel,cpf_mae:form.cpf||null,atipico:anamnese.atipico==='Sim',filhos:filhosData,anamnese});
+        cl=nc[0];
+      }
+      // Sessão automática
+      localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
+      onCadastrado(cl);
+    }catch(e){setErro('Erro ao salvar. Tente novamente.');}
+    setLoading(false);
+  };
+
+  return(
+    <div>
+      <div style={{textAlign:'center',marginBottom:24}}>
+        <div style={{width:48,height:48,borderRadius:'50%',background:`linear-gradient(135deg,${P.vinho},${P.rosa})`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px',fontSize:22}}>✨</div>
+        <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:P.vinho,margin:'0 0 4px'}}>Criar meu perfil</h2>
+        <p style={{fontSize:13,color:P.muted,margin:0}}>Seus dados ficam salvos para próximos agendamentos 🌸</p>
+      </div>
+
+      {/* Dados pessoais */}
+      <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:14,padding:16,marginBottom:16}}>
+        <p style={{fontSize:11,color:P.rosa,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 14px'}}>👤 Dados pessoais</p>
+        <Field label="Nome completo"><input style={inp} placeholder="Seu nome" value={form.nome_mae} onChange={e=>setF('nome_mae',e.target.value)}/></Field>
+        <Field label="E-mail"><input style={inp} type="email" placeholder="seu@email.com" value={form.email} onChange={e=>setF('email',e.target.value)}/></Field>
+        <Field label="WhatsApp com DDD"><input style={inp} type="tel" placeholder="(14) 99999-9999" value={form.telefone} onChange={e=>setF('telefone',e.target.value)}/></Field>
+        <Field label="CPF (opcional)"><input style={inp} placeholder="000.000.000-00" value={form.cpf} onChange={e=>setF('cpf',e.target.value)}/></Field>
+      </div>
+
+      {/* Crianças */}
+      <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:14,padding:16,marginBottom:16}}>
+        <p style={{fontSize:11,color:P.rosa,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 14px'}}>👶 Crianças</p>
+        <Field label="Tem filho(s)?">
+          <div style={{display:'flex',gap:8}}>
+            {['Sim','Não'].map(v=><button key={v} onClick={()=>setF('temFilho',v)} style={{flex:1,padding:'10px',borderRadius:8,border:`2px solid ${form.temFilho===v?P.ardosia:'#e8e0d8'}`,background:form.temFilho===v?P.ardosia:'#fff',color:form.temFilho===v?'#fff':P.texto,fontWeight:600,fontSize:14,cursor:'pointer'}}>{v}</button>)}
+          </div>
+        </Field>
+        {form.temFilho==='Sim'&&filhos.map((f,i)=>(
+          <div key={i} style={{background:'#faf8f5',borderRadius:10,padding:12,marginBottom:10,border:`1px solid ${P.rosaClaro}`}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
+              {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>}
+            </div>
+            <Field label="Nome da criança"><input style={inp} placeholder="Nome" value={f.nome_crianca||''} onChange={e=>updateFilho(i,{...f,nome_crianca:e.target.value})}/></Field>
+            <Field label="Data de nascimento"><input style={inp} type="date" value={f.data_nascimento||''} onChange={e=>updateFilho(i,{...f,data_nascimento:e.target.value})}/></Field>
+            <Field label="Desenvolvimento">
+              <div style={{display:'flex',gap:8}}>
+                {['Típico','Atípico'].map(v=><button key={v} onClick={()=>updateFilho(i,{...f,atipico:v==='Atípico'?'Sim':'Não'})} style={{flex:1,padding:'8px',borderRadius:8,border:`2px solid ${(f.atipico==='Sim'?'Atípico':'Típico')===v?P.ardosia:'#e8e0d8'}`,background:(f.atipico==='Sim'?'Atípico':'Típico')===v?P.ardosia:'#fff',color:(f.atipico==='Sim'?'Atípico':'Típico')===v?'#fff':P.texto,fontSize:12,fontWeight:600,cursor:'pointer'}}>{v}</button>}
+              </div>
+            </Field>
+          </div>
+        ))}
+        {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:`1.5px dashed ${P.rosa}`,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer'}}>+ Adicionar outra criança</button>}
+      </div>
+
+      {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'-8px 0 12px'}}>{erro}</p>}
+      <button disabled={!cadastroOk||loading} onClick={handleCadastrar} style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?'pointer':'default',marginBottom:12}}>{loading?'Salvando...':'Criar meu perfil e entrar →'}</button>
+      <p style={{fontSize:12,color:P.muted,textAlign:'center'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
+    </div>
+  );
+}
+
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
   if(window.location.pathname.startsWith("/contrato/")){
@@ -2215,49 +2592,69 @@ export default function App() {
   }
   const [view,setView]=useState("home");
   const [auth,setAuth]=useState(null);
-  const btnBase={display:"flex",alignItems:"center",gap:16,width:"100%",padding:"20px 22px",borderRadius:16,cursor:"pointer",border:"2px solid #e8e0d8",background:"#fff",textAlign:"left",transition:"all .15s"};
+  const [clienteAutoLogin,setClienteAutoLogin]=useState(null);
+
+  const Btn4=({onClick,bg,cor,emoji,titulo,sub,borda})=>(
+    <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:16,width:"100%",padding:"18px 20px",borderRadius:16,cursor:"pointer",border:`2px solid ${borda||bg}`,background:bg,textAlign:"left"}}>
+      <span style={{fontSize:30,flexShrink:0}}>{emoji}</span>
+      <div>
+        <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:19,fontWeight:700,color:cor}}>{titulo}</p>
+        <p style={{margin:"3px 0 0",fontSize:12,color:cor,opacity:.75}}>{sub}</p>
+      </div>
+    </button>
+  );
+
   return(
-    <div style={{fontFamily:"'Lato',sans-serif",background:"#f5f0eb",minHeight:"100vh",paddingBottom:48}}>
-      <div style={{background:"#fff",padding:"20px 24px 14px",borderBottom:"1px solid #e8e0d8",marginBottom:24,textAlign:"center"}}>
-        <h1 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,margin:0,color:"#1a1a1a",cursor:"pointer"}} onClick={()=>setView("home")}>crescidinhos</h1>
-        <p style={{fontSize:10,color:"#b8967e",margin:"2px 0 0",letterSpacing:"3px",textTransform:"uppercase"}}>fotografia</p>
+    <div style={{fontFamily:"'Lato',sans-serif",background:P.rosaPale,minHeight:"100vh",paddingBottom:48}}>
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg,${P.vinho},${P.rosa})`,padding:"22px 24px 16px",marginBottom:24,textAlign:"center",boxShadow:"0 2px 8px rgba(114,36,62,.15)"}}>
+        <h1 onClick={()=>setView("home")} style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,margin:0,color:"#fff",cursor:"pointer",letterSpacing:2}}>crescidinhos</h1>
+        <p style={{fontSize:10,color:"rgba(255,255,255,.7)",margin:"3px 0 0",letterSpacing:"4px",textTransform:"uppercase"}}>fotografia</p>
         {view!=="home"&&(
-          <div style={{marginTop:14,display:"inline-flex",background:"#f5f0eb",borderRadius:8,padding:3}}>
-            <button onClick={()=>setView("home")} style={{padding:"7px 14px",borderRadius:6,fontSize:11,fontWeight:600,background:"transparent",color:"#888",border:"none",cursor:"pointer"}}>← Início</button>
-          </div>
+          <button onClick={()=>setView("home")} style={{marginTop:12,padding:"6px 16px",borderRadius:20,background:"rgba(255,255,255,.2)",border:"1px solid rgba(255,255,255,.4)",color:"#fff",fontSize:12,cursor:"pointer",fontWeight:600}}>← Início</button>
         )}
       </div>
+
       <div style={{maxWidth:480,margin:"0 auto",padding:"0 18px"}}>
+        {/* ── HOME ── */}
         {view==="home"&&(
           <div>
-            <p style={{fontSize:14,color:"#888",marginBottom:24,lineHeight:1.7,textAlign:"center"}}>Bem-vinda! Como posso te ajudar hoje? 🌸</p>
-            <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <button onClick={()=>setView("client")} style={{...btnBase,background:"#1a1a1a",border:"2px solid #1a1a1a"}}>
-                <span style={{fontSize:32,flexShrink:0}}>📸</span>
-                <div>
-                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#fff"}}>Agendar Ensaio</p>
-                  <p style={{margin:"4px 0 0",fontSize:12,color:"#aaa"}}>Escolha seu serviço e data</p>
-                </div>
-              </button>
-              <button onClick={()=>setView("minha-area")} style={{...btnBase}}>
-                <span style={{fontSize:32,flexShrink:0}}>👤</span>
-                <div>
-                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#1a1a1a"}}>Minha Área</p>
-                  <p style={{margin:"4px 0 0",fontSize:12,color:"#888"}}>Agendamentos, contratos e fotos</p>
-                </div>
-              </button>
-              <button onClick={()=>setView("photographer")} style={{...btnBase,background:"#f5f0eb"}}>
-                <span style={{fontSize:32,flexShrink:0}}>🗂</span>
-                <div>
-                  <p style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,fontWeight:700,color:"#1a1a1a"}}>Área da Fotógrafa</p>
-                  <p style={{margin:"4px 0 0",fontSize:12,color:"#888"}}>Painel de gerenciamento</p>
-                </div>
-              </button>
+            <p style={{fontSize:14,color:P.muted,marginBottom:24,lineHeight:1.8,textAlign:"center"}}>Bem-vinda! O que você gostaria de fazer? 🌸</p>
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+              <Btn4 onClick={()=>setView("catalogo")} bg={P.ardosia} cor="#fff" borda={P.ardosia} emoji="📸" titulo="Catálogo e Serviços" sub="Veja os ensaios e escolha sua data"/>
+              <Btn4 onClick={()=>setView("cadastro")} bg={P.rosa} cor="#fff" borda={P.rosa} emoji="✨" titulo="Cadastre-se" sub="Crie seu perfil e acesse sua área"/>
+              <Btn4 onClick={()=>setView("minha-area")} bg="#fff" cor={P.texto} borda={P.rosaClaro} emoji="👤" titulo="Área do Cliente" sub="Agendamentos, contratos e fotos"/>
+              <Btn4 onClick={()=>setView("photographer")} bg={P.rosaPale} cor={P.muted} borda={P.rosaClaro} emoji="🗂" titulo="Área da Fotógrafa" sub="Painel de gerenciamento"/>
             </div>
           </div>
         )}
-        {view==="client"&&<ClientView/>}
-        {view==="minha-area"&&<ClientePanel/>}
+
+        {/* ── CATÁLOGO ── */}
+        {view==="catalogo"&&(
+          <CatalogView
+            onVoltar={()=>setView("home")}
+            onPrecisaCadastro={()=>setView("cadastro")}
+          />
+        )}
+
+        {/* ── CADASTRO ── */}
+        {view==="cadastro"&&(
+          <CadastroView
+            onCadastrado={(cl)=>{setClienteAutoLogin(cl);setView("minha-area");}}
+            onJaTenho={()=>setView("minha-area")}
+          />
+        )}
+
+        {/* ── ÁREA DO CLIENTE ── */}
+        {view==="minha-area"&&(
+          <ClientePanel
+            clienteInicial={clienteAutoLogin}
+            onLoaded={()=>setClienteAutoLogin(null)}
+            onIrCatalogo={()=>setView("catalogo")}
+          />
+        )}
+
+        {/* ── FOTÓGRAFA ── */}
         {view==="photographer"&&!auth&&<PhotographerLogin onLogin={setAuth}/>}
         {view==="photographer"&&auth&&<PhotographerPanel auth={auth} onLogout={()=>{setAuth(null);setView("home");}}/>}
       </div>
