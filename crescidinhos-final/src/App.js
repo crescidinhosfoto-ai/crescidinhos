@@ -2528,6 +2528,33 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
   );
 }
 
+// verifica se a anamnese de um filho está 100% preenchida
+function anamneseCompleta(f) {
+  if(!f.nome_crianca||!f.data_nascimento||!f.atipico) return false;
+  if(f.atipico==='Sim'){
+    if(!f.transtorno) return false;
+    if(!f.tempo_transtorno) return false;
+    if(!f.fazTerapia) return false;
+    if(f.fazTerapia==='Sim'&&!f.desc_terapias) return false;
+    if(!f.prevenir_crises) return false;
+    if(!f.contornar) return false;
+    if(!f.social_atip) return false;
+    if(!f.comunicacao) return false;
+    if(!f.ensaio_atip) return false;
+    if(!f.eca_atip) return false;
+    if(f.eca_atip==='Sim'&&!f.postar_transtorno) return false;
+  }
+  if(f.atipico==='Não'){
+    if(!f.esquecer_mundo) return false;
+    if(!f.personagem) return false;
+    if(!f.toque) return false;
+    if(!f.tempo_amb_tip) return false;
+    if(!f.ensaio_tip) return false;
+    if(!f.eca_tip) return false;
+  }
+  return true;
+}
+
 // ─── CADASTRO VIEW ─────────────────────────────────────────────────
 function CadastroView({ onCadastrado, onJaTenho }) {
   const [form,setForm]=useState({
@@ -2546,7 +2573,11 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const [buscandoCep,setBuscandoCep]=useState(false);
   const [erro,setErro]=useState('');
 
-  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.telefone_fixo&&form.data_nascimento&&form.rg&&form.cpf&&form.cep&&form.rua&&form.bairro&&form.cidade&&form.temFilho&&(form.temFilho!=='Sim'||filhos.every(f=>f.nome_crianca&&f.data_nascimento&&f.atipico));
+  // telefone_fixo é opcional
+  const dadosPessoaisOk=form.nome_mae&&form.email&&form.telefone&&form.data_nascimento&&form.rg&&form.cpf;
+  const enderecoOk=form.cep&&form.rua&&form.bairro&&form.cidade;
+  const filhosOk=form.temFilho&&(form.temFilho==='Não'||filhos.every(anamneseCompleta));
+  const cadastroOk=dadosPessoaisOk&&enderecoOk&&filhosOk;
 
   const buscarCep=async()=>{
     const cep=form.cep.replace(/\D/g,'');
@@ -2565,19 +2596,22 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const handleCadastrar=async()=>{
     if(!cadastroOk){
       const faltam=[];
-      if(!form.nome_mae)faltam.push('Nome completo');
-      if(!form.email)faltam.push('E-mail');
-      if(!form.telefone)faltam.push('Celular');
-      if(!form.telefone_fixo)faltam.push('Telefone fixo');
-      if(!form.data_nascimento)faltam.push('Data de nascimento');
-      if(!form.rg)faltam.push('RG');
-      if(!form.cpf)faltam.push('CPF');
-      if(!form.cep)faltam.push('CEP');
-      if(!form.rua)faltam.push('Rua');
-      if(!form.bairro)faltam.push('Bairro');
-      if(!form.cidade)faltam.push('Cidade');
-      if(!form.temFilho)faltam.push('Tem filho(s)?');
-      if(form.temFilho==='Sim'&&!filhos.every(f=>f.nome_crianca&&f.data_nascimento&&f.atipico))faltam.push('Dados da criança (nome, data de nascimento e desenvolvimento)');
+      if(!dadosPessoaisOk){
+        if(!form.nome_mae)faltam.push('Nome completo');
+        if(!form.email)faltam.push('E-mail');
+        if(!form.telefone)faltam.push('Celular');
+        if(!form.data_nascimento)faltam.push('Sua data de nascimento');
+        if(!form.rg)faltam.push('RG');
+        if(!form.cpf)faltam.push('CPF');
+      }
+      if(!enderecoOk){
+        if(!form.cep)faltam.push('CEP');
+        if(!form.rua)faltam.push('Rua');
+        if(!form.bairro)faltam.push('Bairro');
+        if(!form.cidade)faltam.push('Cidade');
+      }
+      if(!form.temFilho)faltam.push('Informe se tem filho(s)');
+      if(form.temFilho==='Sim'&&!filhos.every(anamneseCompleta))faltam.push('Ficha da criança incompleta — role para baixo e responda todas as perguntas da anamnese');
       setErro('Faltam: '+faltam.join(' · '));
       return;
     }
@@ -2672,21 +2706,37 @@ function CadastroView({ onCadastrado, onJaTenho }) {
             })}
           </div>
         </Field>
-        {form.temFilho==='Sim'&&filhos.map((f,i)=>(
-          <div key={i} style={{position:'relative',marginTop:12}}>
-            {filhos.length>1&&(
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
-                <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
-                <button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>
-              </div>
-            )}
-            <AnamneseForm
-              data={f}
-              onChange={data=>updateFilho(i,data)}
-              titulo={filhos.length===1?'📋 Ficha da criança':'📋 Criança '+(i+1)}
-            />
+        {form.temFilho==='Sim'&&(
+          <div style={{background:'linear-gradient(135deg,'+P.vinho+','+P.ardosia+')',borderRadius:12,padding:'14px 16px',margin:'12px 0',color:'#fff'}}>
+            <p style={{fontWeight:700,fontSize:14,margin:'0 0 6px'}}>📋 Atenção — Ficha da criança obrigatória</p>
+            <p style={{fontSize:12,margin:0,lineHeight:1.6,opacity:.92}}>
+              Para garantir o melhor ensaio para o seu filho(a), precisamos que você responda <strong>todas</strong> as perguntas da ficha abaixo. Essas informações são essenciais para que a fotógrafa se prepare com carinho para receber sua criança. O botão "Salvar" só será liberado após o preenchimento completo. 🌸
+            </p>
           </div>
-        ))}
+        )}
+        {form.temFilho==='Sim'&&filhos.map((f,i)=>{
+          const completa=anamneseCompleta(f);
+          return(
+            <div key={i} style={{position:'relative',marginTop:12}}>
+              {filhos.length>1&&(
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                  <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
+                  <button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>
+                </div>
+              )}
+              <AnamneseForm
+                data={f}
+                onChange={data=>updateFilho(i,data)}
+                titulo={filhos.length===1?'📋 Ficha da criança':'📋 Criança '+(i+1)}
+              />
+              {!completa&&f.atipico&&(
+                <div style={{background:'#fff8e1',border:'1.5px solid #ffe082',borderRadius:8,padding:'10px 12px',marginTop:-8,marginBottom:8}}>
+                  <p style={{fontSize:12,color:'#f57c00',margin:0,fontWeight:600}}>⚠️ Ainda faltam perguntas para responder — role para cima na ficha e complete tudo.</p>
+                </div>
+              )}
+            </div>
+          );
+        })}
         {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:'1.5px dashed '+P.rosa,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer',marginTop:8}}>+ Adicionar outra criança</button>}
       </div>
 
@@ -2694,12 +2744,31 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       <div style={{height:100}}/>
 
       {/* Barra fixa de salvar */}
-      <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:999,background:'#fff',borderTop:'1.5px solid '+P.rosaClaro,padding:'12px 18px 20px',boxShadow:'0 -4px 20px rgba(0,0,0,.08)'}}>
-        {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'0 0 8px'}}>{erro}</p>}
-        {!cadastroOk&&!erro&&<p style={{fontSize:11,color:P.muted,textAlign:'center',margin:'0 0 8px'}}>Preencha todos os campos para salvar</p>}
+      <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:999,background:'#fff',borderTop:'1.5px solid '+P.rosaClaro,padding:'10px 18px 20px',boxShadow:'0 -4px 20px rgba(0,0,0,.10)'}}>
+        {erro&&<p style={{fontSize:11,color:'#c62828',textAlign:'center',margin:'0 0 8px',lineHeight:1.5}}>{erro}</p>}
+        {!cadastroOk&&!erro&&(
+          <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:8,flexWrap:'wrap'}}>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,background:dadosPessoaisOk?'#e8f5e9':'#fce4ec',color:dadosPessoaisOk?'#388e3c':'#c62828',fontWeight:600}}>
+              {dadosPessoaisOk?'✓':'○'} Dados pessoais
+            </span>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,background:enderecoOk?'#e8f5e9':'#fce4ec',color:enderecoOk?'#388e3c':'#c62828',fontWeight:600}}>
+              {enderecoOk?'✓':'○'} Endereço
+            </span>
+            {form.temFilho==='Sim'&&(
+              <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,background:filhosOk?'#e8f5e9':'#fce4ec',color:filhosOk?'#388e3c':'#c62828',fontWeight:600}}>
+                {filhosOk?'✓':'○'} Ficha da criança
+              </span>
+            )}
+            {!form.temFilho&&(
+              <span style={{fontSize:11,padding:'3px 8px',borderRadius:20,background:'#fce4ec',color:'#c62828',fontWeight:600}}>
+                ○ Tem filho(s)?
+              </span>
+            )}
+          </div>
+        )}
         <button onClick={handleCadastrar} disabled={loading}
-          style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#999',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:'pointer',fontWeight:600}}>
-          {loading?'Salvando...':(cadastroOk?'Salvar e entrar na minha área →':'Salvar e entrar na minha área →')}
+          style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#999',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:'pointer',fontWeight:600,transition:'background .3s'}}>
+          {loading?'Salvando...':'Salvar e entrar na minha área →'}
         </button>
         <p style={{fontSize:12,color:P.muted,textAlign:'center',margin:'8px 0 0'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
       </div>
