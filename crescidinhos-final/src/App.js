@@ -289,7 +289,8 @@ function AnamneseForm({ data, onChange, titulo }) {
     <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"16px 14px",marginBottom:12}}>
       {titulo && <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:700,color:"#b8967e",margin:"0 0 12px"}}>{titulo}</p>}
       <Field label="Nome da criança" required><input style={inp} value={data.nome_crianca||""} onChange={e=>set("nome_crianca",e.target.value)} placeholder="Nome da criança"/></Field>
-      <Field label="Idade" required><input style={inp} value={data.idade||""} onChange={e=>set("idade",e.target.value)} placeholder="Ex: 2 anos e 3 meses"/></Field>
+      <Field label="Data de nascimento" required><input style={inp} type="date" value={data.data_nascimento||""} onChange={e=>set("data_nascimento",e.target.value)}/></Field>
+      <Field label="Idade"><input style={inp} value={data.idade||""} onChange={e=>set("idade",e.target.value)} placeholder="Ex: 2 anos e 3 meses"/></Field>
       <Field label="Seu filho é atípico? (TEA, TDAH, Síndrome de Down...)" required>
         <Radio options={["Sim","Não"]} value={data.atipico} onChange={v=>set("atipico",v)}/>
       </Field>
@@ -2515,7 +2516,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const [buscandoCep,setBuscandoCep]=useState(false);
   const [erro,setErro]=useState('');
 
-  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.telefone_fixo&&form.data_nascimento&&form.rg&&form.cpf&&form.cep&&form.rua&&form.bairro&&form.cidade&&form.temFilho&&(form.temFilho!=='Sim'||filhos.some(f=>f.nome_crianca&&f.data_nascimento));
+  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.telefone_fixo&&form.data_nascimento&&form.rg&&form.cpf&&form.cep&&form.rua&&form.bairro&&form.cidade&&form.temFilho&&(form.temFilho!=='Sim'||filhos.every(f=>f.nome_crianca&&f.data_nascimento&&f.atipico));
 
   const buscarCep=async()=>{
     const cep=form.cep.replace(/\D/g,'');
@@ -2560,7 +2561,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       }
       localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
       onCadastrado(cl);
-    }catch(e){setErro('Erro ao salvar. Tente novamente.');}
+    }catch(e){setErro('Erro ao salvar: '+(e.message||'Tente novamente.'));}
     setLoading(false);
   };
 
@@ -2610,7 +2611,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       {/* Crianças */}
       <div style={secBox}>
         <p style={secTitle}>👶 Crianças</p>
-        <Field label="Tem filho(s)? *">
+        <Field label="Tem filho(s)?">
           <div style={{display:'flex',gap:8}}>
             {['Sim','Não'].map(v=>{
               const ativo=form.temFilho===v;
@@ -2624,31 +2625,21 @@ function CadastroView({ onCadastrado, onJaTenho }) {
           </div>
         </Field>
         {form.temFilho==='Sim'&&filhos.map((f,i)=>(
-          <div key={i} style={{background:'#faf8f5',borderRadius:10,padding:12,marginBottom:10,border:'1px solid '+P.rosaClaro}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
-              <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
-              {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>}
-            </div>
-            <Field label="Nome da criança"><input style={inp} placeholder="Nome" value={f.nome_crianca||''} onChange={e=>updateFilho(i,{...f,nome_crianca:e.target.value})}/></Field>
-            <Field label="Data de nascimento"><input style={inp} type="date" value={f.data_nascimento||''} onChange={e=>updateFilho(i,{...f,data_nascimento:e.target.value})}/></Field>
-            <Field label="Desenvolvimento">
-              <div style={{display:'flex',gap:8}}>
-                {['Típico','Atípico'].map(v=>{
-                  const atipicoLabel=f.atipico==='Sim'?'Atípico':'Típico';
-                  const ativo=atipicoLabel===v;
-                  const novoAtipico=v==='Atípico'?'Sim':'Não';
-                  return(
-                    <button key={v} onClick={()=>updateFilho(i,{...f,atipico:novoAtipico})}
-                      style={{flex:1,padding:'8px',borderRadius:8,border:'2px solid '+(ativo?P.ardosia:'#e8e0d8'),background:ativo?P.ardosia:'#fff',color:ativo?'#fff':P.texto,fontSize:12,fontWeight:600,cursor:'pointer'}}>
-                      {v}
-                    </button>
-                  );
-                })}
+          <div key={i} style={{position:'relative',marginTop:12}}>
+            {filhos.length>1&&(
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
+                <button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>
               </div>
-            </Field>
+            )}
+            <AnamneseForm
+              data={f}
+              onChange={data=>updateFilho(i,data)}
+              titulo={filhos.length===1?'📋 Ficha da criança':'📋 Criança '+(i+1)}
+            />
           </div>
         ))}
-        {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:'1.5px dashed '+P.rosa,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer'}}>+ Adicionar outra criança</button>}
+        {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:'1.5px dashed '+P.rosa,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer',marginTop:8}}>+ Adicionar outra criança</button>}
       </div>
 
       {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'-8px 0 12px'}}>{erro}</p>}
