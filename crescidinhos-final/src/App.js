@@ -297,15 +297,30 @@ const ANAMNESE_LABELS = {
   extra_tip:"Informações extras",eca_tip:"Concordou com ECA",
 };
 
+function calcIdade(dataNasc) {
+  if(!dataNasc) return "";
+  const nasc = new Date(dataNasc+"T12:00:00");
+  const hoje = new Date();
+  let anos = hoje.getFullYear() - nasc.getFullYear();
+  let meses = hoje.getMonth() - nasc.getMonth();
+  if(meses < 0){ anos--; meses += 12; }
+  if(anos === 0) return meses <= 1 ? meses+" mês" : meses+" meses";
+  if(meses === 0) return anos === 1 ? "1 ano" : anos+" anos";
+  return anos+(anos===1?" ano":" anos")+" e "+meses+(meses===1?" mês":" meses");
+}
+
 function AnamneseForm({ data, onChange, titulo }) {
   const set = (k,v) => onChange({...data,[k]:v});
   const atipico = data.atipico;
+  const idadeCalculada = calcIdade(data.data_nascimento);
   return (
     <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"16px 14px",marginBottom:12}}>
       {titulo && <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:16,fontWeight:700,color:"#b8967e",margin:"0 0 12px"}}>{titulo}</p>}
       <Field label="Nome da criança" required><input style={inp} value={data.nome_crianca||""} onChange={e=>set("nome_crianca",e.target.value)} placeholder="Nome da criança"/></Field>
-      <Field label="Data de nascimento" required><input style={inp} type="date" value={data.data_nascimento||""} onChange={e=>set("data_nascimento",e.target.value)}/></Field>
-      <Field label="Idade"><input style={inp} value={data.idade||""} onChange={e=>set("idade",e.target.value)} placeholder="Ex: 2 anos e 3 meses"/></Field>
+      <Field label="Data de nascimento" required>
+        <input style={inp} type="date" value={data.data_nascimento||""} onChange={e=>{const v=e.target.value;set("data_nascimento",v);onChange({...data,data_nascimento:v,idade:calcIdade(v)});}}/>
+        {idadeCalculada&&<p style={{fontSize:12,color:"#b8967e",margin:"4px 0 0",fontWeight:600}}>{idadeCalculada}</p>}
+      </Field>
       <Field label="Seu filho é atípico? (TEA, TDAH, Síndrome de Down...)" required>
         <Radio options={["Sim","Não"]} value={data.atipico} onChange={v=>set("atipico",v)}/>
       </Field>
