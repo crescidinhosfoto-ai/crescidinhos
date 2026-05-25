@@ -2336,7 +2336,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
       {fase==='servico'&&(
         <div>
           <ServiceSelector
-            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setFase(semAgenda?'contato':'data');}}
+            onConfirm={(s,m,ex)=>{setService(s);setModality(m);setExtras(ex||[]);setDadosEvento({});setFase(s?.grupo==="cofrinho"||s?.grupo==="vale"?'contato':'data');}}
           />
           {onVoltar&&<div style={{marginTop:12}}><button onClick={onVoltar} style={{padding:'10px 16px',borderRadius:8,background:'#fff',border:'1.5px solid #e8e0d8',cursor:'pointer',fontSize:13,color:'#888'}}>← Voltar</button></div>}
         </div>
@@ -2587,12 +2587,13 @@ function CadastroView({ onCadastrado, onJaTenho }) {
 
 // ─── APP ROOT ─────────────────────────────────────────────────────
 export default function App() {
-  if(window.location.pathname.startsWith("/contrato/")){
-    return <ContractPage/>;
-  }
   const [view,setView]=useState("home");
   const [auth,setAuth]=useState(null);
   const [clienteAutoLogin,setClienteAutoLogin]=useState(null);
+
+  if(window.location.pathname.startsWith("/contrato/")){
+    return <ContractPage/>;
+  }
 
   const Btn4=({onClick,bg,cor,emoji,titulo,sub,borda})=>(
     <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:16,width:"100%",padding:"18px 20px",borderRadius:16,cursor:"pointer",border:`2px solid ${borda||bg}`,background:bg,textAlign:"left"}}>
