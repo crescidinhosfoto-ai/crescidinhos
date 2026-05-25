@@ -2515,7 +2515,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const [buscandoCep,setBuscandoCep]=useState(false);
   const [erro,setErro]=useState('');
 
-  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.temFilho&&(form.temFilho!=='Sim'||filhos.some(f=>f.nome_crianca));
+  const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.telefone_fixo&&form.data_nascimento&&form.rg&&form.cpf&&form.cep&&form.rua&&form.bairro&&form.cidade&&form.temFilho&&(form.temFilho!=='Sim'||filhos.some(f=>f.nome_crianca&&f.data_nascimento));
 
   const buscarCep=async()=>{
     const cep=form.cep.replace(/\D/g,'');
@@ -2578,9 +2578,9 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       {/* Dados pessoais */}
       <div style={secBox}>
         <p style={secTitle}>👤 Dados pessoais</p>
-        <Field label="Nome completo *"><input style={inp} placeholder="Nome completo" value={form.nome_mae} onChange={e=>setF('nome_mae',e.target.value)}/></Field>
-        <Field label="E-mail *"><input style={inp} type="email" placeholder="seu@email.com" value={form.email} onChange={e=>setF('email',e.target.value)}/></Field>
-        <Field label="Celular * (com DDD)"><input style={inp} type="tel" placeholder="(14) 99999-9999" value={form.telefone} onChange={e=>setF('telefone',e.target.value)}/></Field>
+        <Field label="Nome completo"><input style={inp} placeholder="Nome completo" value={form.nome_mae} onChange={e=>setF('nome_mae',e.target.value)}/></Field>
+        <Field label="E-mail"><input style={inp} type="email" placeholder="seu@email.com" value={form.email} onChange={e=>setF('email',e.target.value)}/></Field>
+        <Field label="Celular (com DDD)"><input style={inp} type="tel" placeholder="(14) 99999-9999" value={form.telefone} onChange={e=>setF('telefone',e.target.value)}/></Field>
         <Field label="Telefone fixo"><input style={inp} type="tel" placeholder="(14) 3333-3333" value={form.telefone_fixo} onChange={e=>setF('telefone_fixo',e.target.value)}/></Field>
         <Field label="Data de nascimento"><input style={inp} type="date" value={form.data_nascimento} onChange={e=>setF('data_nascimento',e.target.value)}/></Field>
         <Field label="RG"><input style={inp} placeholder="00.000.000-0" value={form.rg} onChange={e=>setF('rg',e.target.value)}/></Field>
@@ -2602,7 +2602,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
           </div>
         </Field>
         <Field label="Rua"><input style={inp} placeholder="Nome da rua" value={form.rua} onChange={e=>setF('rua',e.target.value)}/></Field>
-        <Field label="Complemento"><input style={inp} placeholder="Apto, bloco, casa..." value={form.complemento} onChange={e=>setF('complemento',e.target.value)}/></Field>
+        <Field label="Complemento (opcional)"><input style={inp} placeholder="Apto, bloco, casa..." value={form.complemento} onChange={e=>setF('complemento',e.target.value)}/></Field>
         <Field label="Bairro"><input style={inp} placeholder="Bairro" value={form.bairro} onChange={e=>setF('bairro',e.target.value)}/></Field>
         <Field label="Cidade"><input style={inp} placeholder="Cidade" value={form.cidade} onChange={e=>setF('cidade',e.target.value)}/></Field>
       </div>
@@ -2652,7 +2652,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       </div>
 
       {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'-8px 0 12px'}}>{erro}</p>}
-      <p style={{fontSize:11,color:P.muted,textAlign:'right',margin:'-8px 0 12px'}}>* campos obrigatórios</p>
+      {!cadastroOk&&<p style={{fontSize:12,color:P.muted,textAlign:'center',margin:'0 0 12px',lineHeight:1.5}}>Preencha todos os campos para continuar. Os dados são necessários para geração do contrato.</p>}
       <button disabled={!cadastroOk||loading} onClick={handleCadastrar} style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?'pointer':'default',marginBottom:12}}>{loading?'Salvando...':'Criar meu perfil e entrar →'}</button>
       <p style={{fontSize:12,color:P.muted,textAlign:'center'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
     </div>
