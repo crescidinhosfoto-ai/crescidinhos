@@ -353,7 +353,7 @@ function AnamneseForm({ data, onChange, titulo }) {
           <Field label="Já fez ensaios?"><Radio options={["Sim","Não"]} value={data.ensaio_atip} onChange={v=>set("ensaio_atip",v)}/></Field>
           {data.ensaio_atip==="Sim"&&<Field label="Como foi?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.desc_ensaio_atip||""} onChange={e=>set("desc_ensaio_atip",e.target.value)}/></Field>}
           <Field label="Outros eventos com fotógrafo?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.outros_eventos||""} onChange={e=>set("outros_eventos",e.target.value)}/></Field>
-          <Field label="Mais alguma informação importante?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.extra_atip||""} onChange={e=>set("extra_atip",e.target.value)}/></Field>
+          <Field label="Mais alguma informação importante? Escreva aqui o perfil dele — o que para você, mãe, é essencial falar quando você fala sobre seu filho."><textarea style={{...inp,resize:"vertical"}} rows={4} value={data.extra_atip||""} onChange={e=>set("extra_atip",e.target.value)}/></Field>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:10,padding:14,marginTop:10}}>
             <p style={{fontSize:12,fontWeight:700,color:"#1a1a1a",margin:"0 0 8px"}}>🔒 ECA Digital e LGPD</p>
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
@@ -374,7 +374,7 @@ function AnamneseForm({ data, onChange, titulo }) {
           <Field label="Precisa de tempo para se adaptar?" required><Radio options={["Melhor ter um tempo para se adaptar","Ele é tranquilo, vai que vai!"]} value={data.tempo_amb_tip} onChange={v=>set("tempo_amb_tip",v)}/></Field>
           <Field label="Já fez ensaios?"><Radio options={["Sim","Não"]} value={data.ensaio_tip} onChange={v=>set("ensaio_tip",v)}/></Field>
           {data.ensaio_tip==="Sim"&&<Field label="Como foi?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.desc_ensaio_tip||""} onChange={e=>set("desc_ensaio_tip",e.target.value)}/></Field>}
-          <Field label="Mais alguma informação?"><textarea style={{...inp,resize:"vertical"}} rows={3} value={data.extra_tip||""} onChange={e=>set("extra_tip",e.target.value)}/></Field>
+          <Field label="Mais alguma informação importante? Escreva aqui o perfil dele — o que para você, mãe, é essencial falar quando você fala sobre seu filho."><textarea style={{...inp,resize:"vertical"}} rows={4} value={data.extra_tip||""} onChange={e=>set("extra_tip",e.target.value)}/></Field>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:10,padding:14,marginTop:10}}>
             <p style={{fontSize:12,fontWeight:700,color:"#1a1a1a",margin:"0 0 8px"}}>🔒 ECA Digital e LGPD</p>
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
@@ -2633,7 +2633,7 @@ function CadastroView({ onCadastrado, onJaTenho }) {
         rg:form.rg||null,cpf_mae:form.cpf||null,
         cep:form.cep||null,rua:form.rua||null,
         complemento:form.complemento||null,bairro:form.bairro||null,
-        endereco_cidade:form.cidade||null,
+        cidade:form.cidade||null,
         atipico:anamnese.atipico==='Sim',filhos:filhosData,anamnese,
         updated_at:new Date().toISOString()
       };
