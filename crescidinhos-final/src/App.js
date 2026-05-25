@@ -2499,8 +2499,12 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
 
 // ─── CADASTRO VIEW ─────────────────────────────────────────────────
 function CadastroView({ onCadastrado, onJaTenho }) {
-  const [step,setStep]=useState(1);
-  const [form,setForm]=useState({nome_mae:'',email:'',telefone:'',cpf:'',temFilho:'',endereco_cidade:'Bauru'});
+  const [form,setForm]=useState({
+    nome_mae:'',email:'',telefone_fixo:'',telefone:'',
+    data_nascimento:'',rg:'',cpf:'',
+    cep:'',rua:'',complemento:'',bairro:'',cidade:'',
+    temFilho:''
+  });
   const [filhos,setFilhosRaw]=useState([{}]);
   const setFilhos=fn=>setFilhosRaw(prev=>typeof fn==='function'?fn(prev):fn);
   const setF=(k,v)=>setForm(p=>({...p,[k]:v}));
@@ -2508,9 +2512,24 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const removeFilho=i=>setFilhos(f=>f.filter((_,idx)=>idx!==i));
   const updateFilho=(i,d)=>setFilhos(f=>f.map((x,idx)=>idx===i?d:x));
   const [loading,setLoading]=useState(false);
+  const [buscandoCep,setBuscandoCep]=useState(false);
   const [erro,setErro]=useState('');
 
   const cadastroOk=form.nome_mae&&form.email&&form.telefone&&form.temFilho&&(form.temFilho!=='Sim'||filhos.some(f=>f.nome_crianca));
+
+  const buscarCep=async()=>{
+    const cep=form.cep.replace(/\D/g,'');
+    if(cep.length!==8)return;
+    setBuscandoCep(true);
+    try{
+      const r=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
+      const d=await r.json();
+      if(!d.erro){
+        setForm(p=>({...p,rua:d.logradouro||p.rua,bairro:d.bairro||p.bairro,cidade:d.localidade||p.cidade}));
+      }
+    }catch(e){}
+    setBuscandoCep(false);
+  };
 
   const handleCadastrar=async()=>{
     setLoading(true);setErro('');
@@ -2518,50 +2537,94 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       const tel=form.telefone.replace(/\D/g,'');
       const filhosData=form.temFilho==='Sim'?filhos:[];
       const anamnese=filhosData[0]||{};
+      const payload={
+        nome_mae:form.nome_mae,email:form.email,telefone:tel,
+        telefone_fixo:form.telefone_fixo||null,
+        data_nascimento:form.data_nascimento||null,
+        rg:form.rg||null,cpf_mae:form.cpf||null,
+        cep:form.cep||null,rua:form.rua||null,
+        complemento:form.complemento||null,bairro:form.bairro||null,
+        endereco_cidade:form.cidade||null,
+        atipico:anamnese.atipico==='Sim',filhos:filhosData,anamnese,
+        updated_at:new Date().toISOString()
+      };
       const ex=await getClienteByTelefone(tel);
       let cl;
       if(ex&&ex.length>0){
-        await atualizarCliente(ex[0].id,{nome_mae:form.nome_mae,email:form.email,cpf_mae:form.cpf||null,updated_at:new Date().toISOString()});
+        await atualizarCliente(ex[0].id,payload);
         const r=await getClienteByTelefone(tel);
         cl=r[0];
       }else{
-        const nc=await criarCliente({nome_mae:form.nome_mae,email:form.email,telefone:tel,cpf_mae:form.cpf||null,atipico:anamnese.atipico==='Sim',filhos:filhosData,anamnese});
+        const nc=await criarCliente(payload);
         cl=nc[0];
       }
-      // Sessão automática
       localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
       onCadastrado(cl);
     }catch(e){setErro('Erro ao salvar. Tente novamente.');}
     setLoading(false);
   };
 
+  const secBox={background:'#fff',border:'1.5px solid '+P.rosaClaro,borderRadius:14,padding:16,marginBottom:16};
+  const secTitle={fontSize:11,color:P.rosa,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 14px'};
+
   return(
     <div>
       <div style={{textAlign:'center',marginBottom:24}}>
-        <div style={{width:48,height:48,borderRadius:'50%',background:`linear-gradient(135deg,${P.vinho},${P.rosa})`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px',fontSize:22}}>✨</div>
+        <div style={{width:48,height:48,borderRadius:'50%',background:'linear-gradient(135deg,'+P.vinho+','+P.rosa+')',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 12px',fontSize:22}}>✨</div>
         <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:P.vinho,margin:'0 0 4px'}}>Criar meu perfil</h2>
         <p style={{fontSize:13,color:P.muted,margin:0}}>Seus dados ficam salvos para próximos agendamentos 🌸</p>
       </div>
 
       {/* Dados pessoais */}
-      <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:14,padding:16,marginBottom:16}}>
-        <p style={{fontSize:11,color:P.rosa,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 14px'}}>👤 Dados pessoais</p>
-        <Field label="Nome completo"><input style={inp} placeholder="Seu nome" value={form.nome_mae} onChange={e=>setF('nome_mae',e.target.value)}/></Field>
-        <Field label="E-mail"><input style={inp} type="email" placeholder="seu@email.com" value={form.email} onChange={e=>setF('email',e.target.value)}/></Field>
-        <Field label="WhatsApp com DDD"><input style={inp} type="tel" placeholder="(14) 99999-9999" value={form.telefone} onChange={e=>setF('telefone',e.target.value)}/></Field>
-        <Field label="CPF (opcional)"><input style={inp} placeholder="000.000.000-00" value={form.cpf} onChange={e=>setF('cpf',e.target.value)}/></Field>
+      <div style={secBox}>
+        <p style={secTitle}>👤 Dados pessoais</p>
+        <Field label="Nome completo *"><input style={inp} placeholder="Nome completo" value={form.nome_mae} onChange={e=>setF('nome_mae',e.target.value)}/></Field>
+        <Field label="E-mail *"><input style={inp} type="email" placeholder="seu@email.com" value={form.email} onChange={e=>setF('email',e.target.value)}/></Field>
+        <Field label="Celular * (com DDD)"><input style={inp} type="tel" placeholder="(14) 99999-9999" value={form.telefone} onChange={e=>setF('telefone',e.target.value)}/></Field>
+        <Field label="Telefone fixo"><input style={inp} type="tel" placeholder="(14) 3333-3333" value={form.telefone_fixo} onChange={e=>setF('telefone_fixo',e.target.value)}/></Field>
+        <Field label="Data de nascimento"><input style={inp} type="date" value={form.data_nascimento} onChange={e=>setF('data_nascimento',e.target.value)}/></Field>
+        <Field label="RG"><input style={inp} placeholder="00.000.000-0" value={form.rg} onChange={e=>setF('rg',e.target.value)}/></Field>
+        <Field label="CPF"><input style={inp} placeholder="000.000.000-00" value={form.cpf} onChange={e=>setF('cpf',e.target.value)}/></Field>
+      </div>
+
+      {/* Endereço */}
+      <div style={secBox}>
+        <p style={secTitle}>🏠 Endereço residencial</p>
+        <Field label="CEP">
+          <div style={{display:'flex',gap:8}}>
+            <input style={{...inp,flex:1}} placeholder="00000-000" value={form.cep}
+              onChange={e=>setF('cep',e.target.value)}
+              onBlur={buscarCep}/>
+            <button onClick={buscarCep} disabled={buscandoCep}
+              style={{padding:'8px 14px',borderRadius:8,background:P.ardosia,color:'#fff',border:'none',fontSize:12,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}>
+              {buscandoCep?'...' :'Buscar'}
+            </button>
+          </div>
+        </Field>
+        <Field label="Rua"><input style={inp} placeholder="Nome da rua" value={form.rua} onChange={e=>setF('rua',e.target.value)}/></Field>
+        <Field label="Complemento"><input style={inp} placeholder="Apto, bloco, casa..." value={form.complemento} onChange={e=>setF('complemento',e.target.value)}/></Field>
+        <Field label="Bairro"><input style={inp} placeholder="Bairro" value={form.bairro} onChange={e=>setF('bairro',e.target.value)}/></Field>
+        <Field label="Cidade"><input style={inp} placeholder="Cidade" value={form.cidade} onChange={e=>setF('cidade',e.target.value)}/></Field>
       </div>
 
       {/* Crianças */}
-      <div style={{background:'#fff',border:`1.5px solid ${P.rosaClaro}`,borderRadius:14,padding:16,marginBottom:16}}>
-        <p style={{fontSize:11,color:P.rosa,fontWeight:700,textTransform:'uppercase',letterSpacing:'1px',margin:'0 0 14px'}}>👶 Crianças</p>
-        <Field label="Tem filho(s)?">
+      <div style={secBox}>
+        <p style={secTitle}>👶 Crianças</p>
+        <Field label="Tem filho(s)? *">
           <div style={{display:'flex',gap:8}}>
-            {['Sim','Não'].map(v=><button key={v} onClick={()=>setF('temFilho',v)} style={{flex:1,padding:'10px',borderRadius:8,border:`2px solid ${form.temFilho===v?P.ardosia:'#e8e0d8'}`,background:form.temFilho===v?P.ardosia:'#fff',color:form.temFilho===v?'#fff':P.texto,fontWeight:600,fontSize:14,cursor:'pointer'}}>{v}</button>)}
+            {['Sim','Não'].map(v=>{
+              const ativo=form.temFilho===v;
+              return(
+                <button key={v} onClick={()=>setF('temFilho',v)}
+                  style={{flex:1,padding:'10px',borderRadius:8,border:'2px solid '+(ativo?P.ardosia:'#e8e0d8'),background:ativo?P.ardosia:'#fff',color:ativo?'#fff':P.texto,fontWeight:600,fontSize:14,cursor:'pointer'}}>
+                  {v}
+                </button>
+              );
+            })}
           </div>
         </Field>
         {form.temFilho==='Sim'&&filhos.map((f,i)=>(
-          <div key={i} style={{background:'#faf8f5',borderRadius:10,padding:12,marginBottom:10,border:`1px solid ${P.rosaClaro}`}}>
+          <div key={i} style={{background:'#faf8f5',borderRadius:10,padding:12,marginBottom:10,border:'1px solid '+P.rosaClaro}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
               <p style={{fontSize:12,fontWeight:700,color:P.muted,margin:0}}>Criança {i+1}</p>
               {filhos.length>1&&<button onClick={()=>removeFilho(i)} style={{background:'none',border:'none',color:'#c62828',cursor:'pointer',fontSize:18,padding:0}}>×</button>}
@@ -2585,10 +2648,11 @@ function CadastroView({ onCadastrado, onJaTenho }) {
             </Field>
           </div>
         ))}
-        {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:`1.5px dashed ${P.rosa}`,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer'}}>+ Adicionar outra criança</button>}
+        {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:'1.5px dashed '+P.rosa,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer'}}>+ Adicionar outra criança</button>}
       </div>
 
       {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'-8px 0 12px'}}>{erro}</p>}
+      <p style={{fontSize:11,color:P.muted,textAlign:'right',margin:'-8px 0 12px'}}>* campos obrigatórios</p>
       <button disabled={!cadastroOk||loading} onClick={handleCadastrar} style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?'pointer':'default',marginBottom:12}}>{loading?'Salvando...':'Criar meu perfil e entrar →'}</button>
       <p style={{fontSize:12,color:P.muted,textAlign:'center'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
     </div>
