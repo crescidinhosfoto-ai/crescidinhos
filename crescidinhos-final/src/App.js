@@ -2563,6 +2563,24 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   };
 
   const handleCadastrar=async()=>{
+    if(!cadastroOk){
+      const faltam=[];
+      if(!form.nome_mae)faltam.push('Nome completo');
+      if(!form.email)faltam.push('E-mail');
+      if(!form.telefone)faltam.push('Celular');
+      if(!form.telefone_fixo)faltam.push('Telefone fixo');
+      if(!form.data_nascimento)faltam.push('Data de nascimento');
+      if(!form.rg)faltam.push('RG');
+      if(!form.cpf)faltam.push('CPF');
+      if(!form.cep)faltam.push('CEP');
+      if(!form.rua)faltam.push('Rua');
+      if(!form.bairro)faltam.push('Bairro');
+      if(!form.cidade)faltam.push('Cidade');
+      if(!form.temFilho)faltam.push('Tem filho(s)?');
+      if(form.temFilho==='Sim'&&!filhos.every(f=>f.nome_crianca&&f.data_nascimento&&f.atipico))faltam.push('Dados da criança (nome, data de nascimento e desenvolvimento)');
+      setErro('Faltam: '+faltam.join(' · '));
+      return;
+    }
     setLoading(true);setErro('');
     try{
       const tel=form.telefone.replace(/\D/g,'');
@@ -2672,10 +2690,19 @@ function CadastroView({ onCadastrado, onJaTenho }) {
         {form.temFilho==='Sim'&&<button onClick={addFilho} style={{width:'100%',padding:'9px',borderRadius:8,background:P.rosaPale,border:'1.5px dashed '+P.rosa,color:P.vinho,fontSize:13,fontWeight:600,cursor:'pointer',marginTop:8}}>+ Adicionar outra criança</button>}
       </div>
 
-      {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'-8px 0 12px'}}>{erro}</p>}
-      {!cadastroOk&&<p style={{fontSize:12,color:P.muted,textAlign:'center',margin:'0 0 12px',lineHeight:1.5}}>Preencha todos os campos para continuar. Os dados são necessários para geração do contrato.</p>}
-      <button disabled={!cadastroOk||loading} onClick={handleCadastrar} style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#aaa',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:cadastroOk?'pointer':'default',marginBottom:12}}>{loading?'Salvando...':'Criar meu perfil e entrar →'}</button>
-      <p style={{fontSize:12,color:P.muted,textAlign:'center'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
+      {/* espaço para a barra fixa não cobrir conteúdo */}
+      <div style={{height:100}}/>
+
+      {/* Barra fixa de salvar */}
+      <div style={{position:'fixed',bottom:0,left:0,right:0,zIndex:999,background:'#fff',borderTop:'1.5px solid '+P.rosaClaro,padding:'12px 18px 20px',boxShadow:'0 -4px 20px rgba(0,0,0,.08)'}}>
+        {erro&&<p style={{fontSize:12,color:'#c62828',textAlign:'center',margin:'0 0 8px'}}>{erro}</p>}
+        {!cadastroOk&&!erro&&<p style={{fontSize:11,color:P.muted,textAlign:'center',margin:'0 0 8px'}}>Preencha todos os campos para salvar</p>}
+        <button onClick={handleCadastrar} disabled={loading}
+          style={{width:'100%',padding:14,borderRadius:10,background:cadastroOk?P.ardosia:'#e8e0d8',color:cadastroOk?'#fff':'#999',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:17,cursor:'pointer',fontWeight:600}}>
+          {loading?'Salvando...':(cadastroOk?'Salvar e entrar na minha área →':'Salvar e entrar na minha área →')}
+        </button>
+        <p style={{fontSize:12,color:P.muted,textAlign:'center',margin:'8px 0 0'}}>Já tem cadastro? <button onClick={onJaTenho} style={{background:'none',border:'none',color:P.ardosia,fontWeight:600,cursor:'pointer',fontSize:12}}>Acessar minha área</button></p>
+      </div>
     </div>
   );
 }
