@@ -2570,7 +2570,17 @@ function CadastroView({ onCadastrado, onJaTenho }) {
             <Field label="Data de nascimento"><input style={inp} type="date" value={f.data_nascimento||''} onChange={e=>updateFilho(i,{...f,data_nascimento:e.target.value})}/></Field>
             <Field label="Desenvolvimento">
               <div style={{display:'flex',gap:8}}>
-                {['Típico','Atípico'].map(v=><button key={v} onClick={()=>updateFilho(i,{...f,atipico:v==='Atípico'?'Sim':'Não'})} style={{flex:1,padding:'8px',borderRadius:8,border:`2px solid ${(f.atipico==='Sim'?'Atípico':'Típico')===v?P.ardosia:'#e8e0d8'}`,background:(f.atipico==='Sim'?'Atípico':'Típico')===v?P.ardosia:'#fff',color:(f.atipico==='Sim'?'Atípico':'Típico')===v?'#fff':P.texto,fontSize:12,fontWeight:600,cursor:'pointer'}}>{v}</button>}
+                {['Típico','Atípico'].map(v=>{
+                  const atipicoLabel=f.atipico==='Sim'?'Atípico':'Típico';
+                  const ativo=atipicoLabel===v;
+                  const novoAtipico=v==='Atípico'?'Sim':'Não';
+                  return(
+                    <button key={v} onClick={()=>updateFilho(i,{...f,atipico:novoAtipico})}
+                      style={{flex:1,padding:'8px',borderRadius:8,border:'2px solid '+(ativo?P.ardosia:'#e8e0d8'),background:ativo?P.ardosia:'#fff',color:ativo?'#fff':P.texto,fontSize:12,fontWeight:600,cursor:'pointer'}}>
+                      {v}
+                    </button>
+                  );
+                })}
               </div>
             </Field>
           </div>
