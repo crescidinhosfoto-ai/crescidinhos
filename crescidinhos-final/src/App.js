@@ -148,7 +148,22 @@ function Check({ options, values=[], onChange }) {
 // ─── FORMULÁRIO DE DADOS DO EVENTO/EXTERNO ───────────────────────
 function DadosEventoForm({ serviceId, data, onChange }) {
   const set = (k,v) => onChange({...data,[k]:v});
+  const isAniversario = serviceId === "aniversario";
   const isEvento = SERVICOS_EVENTO.includes(serviceId);
+  if(isAniversario) return (
+    <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"16px 14px",marginBottom:16}}>
+      <p style={{...sec,marginTop:0}}>🎂 Dados do aniversário</p>
+      <Field label="Nome do aniversariante" required>
+        <input style={inp} value={data.nome_aniversariante||""} onChange={e=>set("nome_aniversariante",e.target.value)} placeholder="Nome da criança"/>
+      </Field>
+      <Field label="Data de aniversário" required>
+        <input style={inp} type="date" value={data.data_aniversario||""} onChange={e=>set("data_aniversario",e.target.value)}/>
+      </Field>
+      <Field label="Número aproximado de convidados">
+        <input style={inp} type="number" value={data.num_convidados||""} onChange={e=>set("num_convidados",e.target.value)} placeholder="Ex: 80"/>
+      </Field>
+    </div>
+  );
   return (
     <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"16px 14px",marginBottom:16}}>
       <p style={{...sec,marginTop:0}}>📍 Dados do {isEvento?"evento":"local externo"}</p>
