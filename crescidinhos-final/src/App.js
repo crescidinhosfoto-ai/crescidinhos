@@ -2579,8 +2579,8 @@ function CadastroView({ onCadastrado, onJaTenho }) {
   const filhosOk=form.temFilho&&(form.temFilho==='Não'||filhos.every(anamneseCompleta));
   const cadastroOk=dadosPessoaisOk&&enderecoOk&&filhosOk;
 
-  const buscarCep=async()=>{
-    const cep=form.cep.replace(/\D/g,'');
+  const buscarCep=async(valorCep)=>{
+    const cep=(valorCep||form.cep).replace(/\D/g,'');
     if(cep.length!==8)return;
     setBuscandoCep(true);
     try{
@@ -2591,6 +2591,12 @@ function CadastroView({ onCadastrado, onJaTenho }) {
       }
     }catch(e){}
     setBuscandoCep(false);
+  };
+
+  const handleCepChange=e=>{
+    const val=e.target.value;
+    setF('cep',val);
+    if(val.replace(/\D/g,'').length===8) buscarCep(val);
   };
 
   const handleCadastrar=async()=>{
@@ -2676,13 +2682,13 @@ function CadastroView({ onCadastrado, onJaTenho }) {
         <Field label="CEP">
           <div style={{display:'flex',gap:8}}>
             <input style={{...inp,flex:1}} placeholder="00000-000" value={form.cep}
-              onChange={e=>setF('cep',e.target.value)}
-              onBlur={buscarCep}/>
-            <button onClick={buscarCep} disabled={buscandoCep}
+              onChange={handleCepChange}/>
+            <button onClick={()=>buscarCep(form.cep)} disabled={buscandoCep}
               style={{padding:'8px 14px',borderRadius:8,background:P.ardosia,color:'#fff',border:'none',fontSize:12,fontWeight:600,cursor:'pointer',whiteSpace:'nowrap'}}>
-              {buscandoCep?'...' :'Buscar'}
+              {buscandoCep?'Buscando...' :'Buscar'}
             </button>
           </div>
+          {buscandoCep&&<p style={{fontSize:11,color:P.muted,margin:'4px 0 0'}}>Buscando endereço...</p>}
         </Field>
         <Field label="Rua"><input style={inp} placeholder="Nome da rua" value={form.rua} onChange={e=>setF('rua',e.target.value)}/></Field>
         <Field label="Complemento (opcional)"><input style={inp} placeholder="Apto, bloco, casa..." value={form.complemento} onChange={e=>setF('complemento',e.target.value)}/></Field>
