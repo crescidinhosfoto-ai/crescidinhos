@@ -109,6 +109,7 @@ export default function GaleriaCliente({ agendamento }) {
   const [loading, setLoading] = useState(true);
   const [lightboxIdx, setLightboxIdx] = useState(null); // null = grade, número = lightbox
   const [cofrinhoSaldo, setCofrinhoSaldo] = useState(0);
+  const [cofrinhoData, setCofrinhoData] = useState(null);
   const [usandoCofrinho, setUsandoCofrinho] = useState(false);
 
   useEffect(() => {
@@ -120,10 +121,13 @@ export default function GaleriaCliente({ agendamento }) {
         setSelecao(res[0].selecao || []);
         setConfirmada(res[0].selecao_confirmada || false);
       }
-      // Busca saldo do cofrinho do cliente
+      // Busca saldo e dados do cofrinho do cliente
       if (agendamento.cliente_id) {
-        const cli = await sb(`clientes?id=eq.${agendamento.cliente_id}&select=cofrinho_saldo`);
-        if (cli && cli[0]?.cofrinho_saldo) setCofrinhoSaldo(Number(cli[0].cofrinho_saldo));
+        const cli = await sb(`clientes?id=eq.${agendamento.cliente_id}&select=cofrinho_saldo,cofrinho`);
+        if (cli && cli[0]) {
+          if (cli[0].cofrinho_saldo) setCofrinhoSaldo(Number(cli[0].cofrinho_saldo));
+          if (cli[0].cofrinho) setCofrinhoData(cli[0].cofrinho);
+        }
       }
       setLoading(false);
     };
@@ -154,17 +158,33 @@ export default function GaleriaCliente({ agendamento }) {
     setSalvando(false);
   };
 
+  const MP_TOKEN = 'APP_USR-6587879092760162-052100-b495626cba5c1d859c2be43374d0fa23-3417831486';
+
   const aplicarCofrinho = async () => {
-    if (!window.confirm(`Descontar R$ ${Math.min(cofrinhoSaldo, valorExtras).toFixed(2).replace(".", ",")} do seu Cofrinho?`)) return;
+    if (!window.confirm(`Descontar R$ ${Math.min(cofrinhoSaldo, valorExtras).toFixed(2).replace(".", ",")} do seu Cofrinho?\n\nAtenção: ao usar o cofrinho, sua assinatura será encerrada.`)) return;
     setUsandoCofrinho(true);
     try {
       const desconto = Math.min(cofrinhoSaldo, valorExtras);
       const novoSaldo = cofrinhoSaldo - desconto;
+      // Atualiza saldo
       await sbPatch(`clientes?id=eq.${agendamento.cliente_id}`, { cofrinho_saldo: novoSaldo });
       await sbPatch(`galerias?id=eq.${galeria.id}`, { cofrinho_desconto: desconto });
+      // Cancela assinatura no Mercado Pago
+      const preapprovalId = cofrinhoData?.preapproval_id;
+      if (preapprovalId) {
+        await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'cancelled' }),
+        }).catch(() => {});
+        // Marca cofrinho como cancelado no Supabase
+        await sbPatch(`clientes?id=eq.${agendamento.cliente_id}`, {
+          cofrinho: { ...cofrinhoData, status: 'cancelado', saldo: novoSaldo },
+        });
+      }
       setCofrinhoSaldo(novoSaldo);
       setGaleria(prev => ({ ...prev, cofrinho_desconto: desconto }));
-      alert(`✅ R$ ${desconto.toFixed(2).replace(".", ",")} descontado do seu Cofrinho!`);
+      alert(`✅ R$ ${desconto.toFixed(2).replace(".", ",")} descontado!\nSua assinatura foi encerrada. Obrigada por guardar com a Crescidinhos! 🌸`);
     } catch (e) { alert("Erro: " + e.message); }
     setUsandoCofrinho(false);
   };

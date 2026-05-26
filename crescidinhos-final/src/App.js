@@ -72,6 +72,39 @@ const criarLinkMercadoPago=async(titulo,valor,referencia,incluiBoleto=false)=>{
 };
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
 
+// ── COFRINHO — Mercado Pago Preapproval ──────────────────────────
+const COFRINHO_PLAN_ID = '740db1255e8347d5b12761667a20b75b';
+
+const criarAssinaturaCofrinho = async (clienteId, emailCliente) => {
+  try {
+    const r = await fetch('https://api.mercadopago.com/preapproval', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        preapproval_plan_id: COFRINHO_PLAN_ID,
+        payer_email: emailCliente || undefined,
+        external_reference: `COFRINHO-${clienteId}`,
+        back_url: 'https://app.crescidinhosfoto.com.br',
+      }),
+    });
+    const d = await r.json();
+    if (!d.init_point) throw new Error(JSON.stringify(d));
+    return { init_point: d.init_point, preapproval_id: d.id };
+  } catch (e) { console.error('MP Cofrinho:', e); return null; }
+};
+
+const cancelarAssinaturaCofrinho = async (preapprovalId) => {
+  if (!preapprovalId) return false;
+  try {
+    const r = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    });
+    return r.ok;
+  } catch (e) { console.error('MP Cancelar Cofrinho:', e); return false; }
+};
+
 // ─── SERVIÇOS QUE REQUEREM DADOS DE EVENTO/EXTERNO ───────────────
 const SERVICOS_EVENTO   = ["aniversario","batizado","quinze-anos"];
 const SERVICOS_EXTERNOS = ["gestante-externa","adulto-externo","familia-externa"];
@@ -1161,6 +1194,8 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [editandoPerfil,setEditandoPerfil]=useState(false);
   const [perfilForm,setPerfilForm]=useState({});
   const [salvandoPerfil,setSalvandoPerfil]=useState(false);
+  const [criandoAssinatura,setCriandoAssinatura]=useState(false);
+  const [linkAssinatura,setLinkAssinatura]=useState(null);
 
   // ── Estado de autenticação ──
   const [authTela,setAuthTela]=useState('verificando');
@@ -1517,20 +1552,95 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
       {tab==="cofrinho"&&(
         <div>
-          {cofrinho?(
-            <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,color:"#fff"}}>
-              <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>Cofrinho de Recordações</p>
-              <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 4px"}}>{cofrinho.plano}</p>
-              <p style={{fontSize:14,margin:"0 0 16px",opacity:.9}}>R$ {cofrinho.saldo?.toLocaleString("pt-BR")} de saldo</p>
-              <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(100,(cofrinho.meses_pagos/12)*100)}%`,background:"#fff",borderRadius:8}}/></div>
-              <p style={{fontSize:11,margin:"6px 0 0",opacity:.8}}>{cofrinho.meses_pagos} meses pagos · Resgate após 3 meses</p>
+          {cofrinho&&cofrinho.status!=="cancelado"?(
+            <div>
+              {/* Card principal */}
+              <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:20,color:"#fff",marginBottom:16}}>
+                <p style={{fontSize:11,fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 4px",opacity:.8}}>🪙 Cofrinho de Recordações</p>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:28,fontWeight:700,margin:"0 0 2px"}}>{cofrinho.plano||"Ativo"}</p>
+                {cofrinho.valor_mensal&&<p style={{fontSize:13,margin:"0 0 12px",opacity:.8}}>R$ {Number(cofrinho.valor_mensal).toFixed(2).replace(".",",")} / mês</p>}
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:36,fontWeight:700,margin:"0 0 12px"}}>R$ {Number(cofrinho.saldo||0).toFixed(2).replace(".",",")}</p>
+                <p style={{fontSize:12,margin:"0 0 8px",opacity:.8}}>saldo disponível</p>
+                {/* Barra 6 meses */}
+                <div style={{background:"rgba(255,255,255,0.2)",borderRadius:8,height:8,overflow:"hidden",marginBottom:4}}>
+                  <div style={{height:"100%",width:`${Math.min(100,((cofrinho.meses_pagos||0)/6)*100)}%`,background:"#fff",borderRadius:8,transition:"width .5s"}}/>
+                </div>
+                <p style={{fontSize:11,margin:0,opacity:.8}}>{cofrinho.meses_pagos||0} de 6 meses pagos</p>
+              </div>
+              {/* Regras */}
+              <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:16}}>
+                <p style={{fontSize:12,fontWeight:700,color:"#b8967e",margin:"0 0 10px",textTransform:"uppercase",letterSpacing:"1px"}}>Como funciona</p>
+                {[
+                  ["💰","Saldo","A cada mês pago, o valor entra no seu cofrinho automaticamente."],
+                  ["📸","Resgate","Use o saldo em qualquer ensaio avulso ou fotos extras."],
+                  ["⚠️","Atenção","Ao resgatar, a assinatura é encerrada. Use com cuidado!"],
+                  ["📅","Prazo","Plano de 6 meses. Resgate disponível a partir do 1º mês."],
+                ].map(([ic,t,d])=>(
+                  <div key={t} style={{display:"flex",gap:10,marginBottom:8}}>
+                    <span style={{fontSize:18,flexShrink:0}}>{ic}</span>
+                    <div><p style={{margin:0,fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{t}</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888",lineHeight:1.5}}>{d}</p></div>
+                  </div>
+                ))}
+              </div>
+              {/* Encerrado após 6 meses */}
+              {(cofrinho.meses_pagos||0)>=6&&(
+                <div style={{background:"#e8f5e9",border:"1.5px solid #a5d6a7",borderRadius:10,padding:12,textAlign:"center"}}>
+                  <p style={{margin:0,fontSize:14,fontWeight:700,color:"#2e7d32"}}>✅ Cofrinho completo!</p>
+                  <p style={{margin:"4px 0 0",fontSize:12,color:"#555"}}>6 meses concluídos. Use seu saldo no próximo ensaio. 🌸</p>
+                </div>
+              )}
             </div>
           ):(
-            <div style={{textAlign:"center",padding:"40px 16px"}}>
-              <div style={{fontSize:40,marginBottom:12}}>💰</div>
-              <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",marginBottom:8}}>Cofrinho de Recordações</p>
-              <p style={{fontSize:13,color:"#888",marginBottom:20,lineHeight:1.6}}>Acumule saldo mensalmente e resgate em ensaios. 🌸</p>
-              <a href="https://wa.me/5514996845521?text=Olá! Quero assinar o Cofrinho 💰" target="_blank" rel="noreferrer" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600}}>💬 Quero assinar</a>
+            <div>
+              {/* Sem cofrinho — assinar */}
+              <div style={{background:"linear-gradient(135deg,#D9A7B4,#698494)",borderRadius:16,padding:24,color:"#fff",textAlign:"center",marginBottom:16}}>
+                <div style={{fontSize:48,marginBottom:8}}>🪙</div>
+                <p style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,fontWeight:700,margin:"0 0 8px"}}>Cofrinho de Recordações</p>
+                <p style={{fontSize:13,opacity:.9,lineHeight:1.6,margin:0}}>Pague mensalmente e acumule saldo para usar em ensaios e fotos extras. Plano de 6 meses.</p>
+              </div>
+              {/* Regras rápidas */}
+              <div style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:16}}>
+                {[
+                  ["🌱","Escolha o valor","Você define quanto quer guardar por mês (ex: R$50, R$100, R$150...)"],
+                  ["💳","Cobrança automática","O Mercado Pago cobra todo mês, sem precisar lembrar"],
+                  ["📸","Resgate em ensaios","Use o saldo acumulado em qualquer ensaio ou fotos extras"],
+                  ["📅","6 meses","Plano fixo de 6 meses. Ao resgatar, a assinatura é encerrada"],
+                ].map(([ic,t,d])=>(
+                  <div key={t} style={{display:"flex",gap:10,marginBottom:10}}>
+                    <span style={{fontSize:18,flexShrink:0}}>{ic}</span>
+                    <div><p style={{margin:0,fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{t}</p><p style={{margin:"2px 0 0",fontSize:12,color:"#888",lineHeight:1.5}}>{d}</p></div>
+                  </div>
+                ))}
+              </div>
+              {/* Link gerado */}
+              {linkAssinatura?(
+                <div style={{background:"#e8f5e9",border:"1.5px solid #a5d6a7",borderRadius:12,padding:14,textAlign:"center",marginBottom:12}}>
+                  <p style={{margin:"0 0 10px",fontSize:14,fontWeight:700,color:"#2e7d32"}}>✅ Link gerado! Clique para assinar:</p>
+                  <a href={linkAssinatura} target="_blank" rel="noreferrer"
+                    style={{display:"inline-flex",alignItems:"center",gap:8,padding:"12px 24px",borderRadius:10,background:"#009EE3",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:700}}>
+                    💳 Ir para o pagamento →
+                  </a>
+                  <p style={{margin:"10px 0 0",fontSize:11,color:"#555"}}>Após o pagamento, seu saldo aparece aqui automaticamente.</p>
+                </div>
+              ):(
+                <button
+                  disabled={criandoAssinatura}
+                  onClick={async()=>{
+                    setCriandoAssinatura(true);
+                    const res=await criarAssinaturaCofrinho(logado.id,logado.email);
+                    if(res?.init_point){
+                      // Salva preapproval_id pendente no Supabase
+                      await atualizarCliente(logado.id,{cofrinho:{status:"pendente",preapproval_id:res.preapproval_id,saldo:0,meses_pagos:0}});
+                      setLinkAssinatura(res.init_point);
+                    }else{
+                      alert("Erro ao gerar link. Tente novamente ou fale com a Crescidinhos.");
+                    }
+                    setCriandoAssinatura(false);
+                  }}
+                  style={{width:"100%",padding:"14px",borderRadius:12,background:criandoAssinatura?"#ccc":"linear-gradient(135deg,#D9A7B4,#698494)",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,cursor:criandoAssinatura?"default":"pointer"}}>
+                  {criandoAssinatura?"⏳ Gerando link...":"🪙 Assinar Cofrinho"}
+                </button>
+              )}
             </div>
           )}
         </div>
