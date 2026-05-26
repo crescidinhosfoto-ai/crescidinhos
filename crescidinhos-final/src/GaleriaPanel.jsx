@@ -1,5 +1,5 @@
 // GaleriaPanel.jsx — Crescidinhos Fotografia
-// Painel da Thais: upload de fotos em baixa, configuração e visualização da seleção do cliente
+// Painel da Thais: upload, gerenciamento e visualização da seleção
 
 import { useState, useEffect, useRef } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config";
@@ -45,6 +45,8 @@ export default function GaleriaPanel({ agendamento }) {
   const [msg, setMsg] = useState("");
   const [drag, setDrag] = useState(false);
   const [config, setConfig] = useState({ fotos_incluidas: 20, preco_foto_extra: 0 });
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [selecionadasParaExcluir, setSelecionadasParaExcluir] = useState(new Set());
   const fileRef = useRef();
 
   useEffect(() => { carregar(); }, [agendamento.id]);
@@ -85,15 +87,39 @@ export default function GaleriaPanel({ agendamento }) {
     setUploading(false);
   };
 
-  const removerFoto = async (foto, idx) => {
-    if (!window.confirm("Remover esta foto da galeria?")) return;
+  // ── Modo exclusão ──────────────────────────────────────────────
+  const toggleParaExcluir = (idx) => {
+    setSelecionadasParaExcluir(prev => {
+      const n = new Set(prev);
+      n.has(idx) ? n.delete(idx) : n.add(idx);
+      return n;
+    });
+  };
+
+  const selecionarTodas = () => {
+    const todas = new Set((galeria?.fotos || []).map((_, i) => i));
+    setSelecionadasParaExcluir(todas);
+  };
+
+  const desmarcarTodas = () => setSelecionadasParaExcluir(new Set());
+
+  const excluirSelecionadas = async () => {
+    if (selecionadasParaExcluir.size === 0) return;
+    if (!window.confirm(`Excluir ${selecionadasParaExcluir.size} foto(s)? Essa ação não pode ser desfeita.`)) return;
     try {
-      await deletarFoto(foto.path);
-      const novas = galeria.fotos.filter((_, i) => i !== idx);
+      const fotos = galeria.fotos || [];
+      const paraExcluir = [...selecionadasParaExcluir].map(i => fotos[i]);
+      await Promise.all(paraExcluir.map(f => deletarFoto(f.path)));
+      const novas = fotos.filter((_, i) => !selecionadasParaExcluir.has(i));
       await sb(`galerias?id=eq.${galeria.id}`, { method: "PATCH", body: JSON.stringify({ fotos: novas }) });
       setGaleria(prev => ({ ...prev, fotos: novas }));
-    } catch (e) { alert("Erro: " + e.message); }
+      setSelecionadasParaExcluir(new Set());
+      setDeleteMode(false);
+      setMsg(`✅ ${paraExcluir.length} foto(s) excluída(s).`);
+    } catch (e) { setMsg("❌ Erro: " + e.message); }
   };
+
+  const cancelarDeleteMode = () => { setDeleteMode(false); setSelecionadasParaExcluir(new Set()); };
 
   const salvarConfig = async () => {
     setSaving(true);
@@ -127,6 +153,13 @@ export default function GaleriaPanel({ agendamento }) {
   const selecao = galeria?.selecao || [];
   const extras = Math.max(0, selecao.length - (galeria?.fotos_incluidas || 0));
   const valorExtras = extras * (galeria?.preco_foto_extra || 0);
+  const fotos = galeria?.fotos || [];
+
+  // Nomes das fotos selecionadas pelo cliente
+  const nomesSelecionados = selecao.map(url => {
+    const foto = fotos.find(f => f.url === url);
+    return foto?.nome || url.split("/").pop();
+  });
 
   return (
     <div>
@@ -149,32 +182,72 @@ export default function GaleriaPanel({ agendamento }) {
       </div>
 
       {/* Upload */}
-      <div
-        onDragOver={e => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={e => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
-        onClick={() => fileRef.current?.click()}
-        style={{ border: `2px dashed ${drag ? C.primary : C.border}`, borderRadius: 10, padding: 24, textAlign: "center", cursor: "pointer", background: drag ? "#fdf5ef" : "#fff", marginBottom: 12, transition: "all 0.2s" }}
-      >
-        <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={e => handleFiles(e.target.files)} />
-        <p style={{ margin: 0, fontSize: 13, color: C.muted }}>{uploading ? "⏳ Enviando fotos..." : "📁 Arraste as fotos aqui ou clique para selecionar"}</p>
-        <p style={{ margin: "4px 0 0", fontSize: 11, color: C.border }}>JPG, PNG — baixa resolução recomendada</p>
-      </div>
+      {!deleteMode && (
+        <div
+          onDragOver={e => { e.preventDefault(); setDrag(true); }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={e => { e.preventDefault(); setDrag(false); handleFiles(e.dataTransfer.files); }}
+          onClick={() => fileRef.current?.click()}
+          style={{ border: `2px dashed ${drag ? C.primary : C.border}`, borderRadius: 10, padding: 24, textAlign: "center", cursor: "pointer", background: drag ? "#fdf5ef" : "#fff", marginBottom: 12, transition: "all 0.2s" }}
+        >
+          <input ref={fileRef} type="file" multiple accept="image/*" style={{ display: "none" }} onChange={e => handleFiles(e.target.files)} />
+          <p style={{ margin: 0, fontSize: 13, color: C.muted }}>{uploading ? "⏳ Enviando fotos..." : "📁 Arraste as fotos aqui ou clique para selecionar"}</p>
+          <p style={{ margin: "4px 0 0", fontSize: 11, color: C.border }}>JPG, PNG — 1200px recomendado</p>
+        </div>
+      )}
 
       {msg && <p style={{ fontSize: 13, color: msg.startsWith("✅") ? C.green : C.red, marginBottom: 10 }}>{msg}</p>}
 
-      {/* Grid de fotos */}
-      {galeria?.fotos?.length > 0 && (
+      {/* Grade de fotos */}
+      {fotos.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <p style={{ fontSize: 12, color: C.muted, margin: "0 0 8px" }}>{galeria.fotos.length} foto(s) na galeria</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
-            {galeria.fotos.map((f, i) => (
-              <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 8, overflow: "hidden", background: "#eee" }}>
-                <img src={f.url} alt={f.nome} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                <button onClick={() => removerFoto(f, i)} style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.6)", border: "none", borderRadius: 4, color: "#fff", fontSize: 11, cursor: "pointer", padding: "2px 5px" }}>✕</button>
+          {/* Barra de ações */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+            <p style={{ fontSize: 12, color: C.muted, margin: 0 }}>{fotos.length} foto(s) na galeria</p>
+            {!deleteMode ? (
+              <button onClick={() => setDeleteMode(true)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12, color: C.muted, cursor: "pointer" }}>
+                🗑️ Gerenciar fotos
+              </button>
+            ) : (
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={selecionadasParaExcluir.size === fotos.length ? desmarcarTodas : selecionarTodas} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12, color: C.text, cursor: "pointer" }}>
+                  {selecionadasParaExcluir.size === fotos.length ? "Desmarcar todas" : "Selecionar todas"}
+                </button>
+                <button onClick={cancelarDeleteMode} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 12, color: C.muted, cursor: "pointer" }}>
+                  Cancelar
+                </button>
               </div>
-            ))}
+            )}
           </div>
+
+          {/* Grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
+            {fotos.map((f, i) => {
+              const marcada = selecionadasParaExcluir.has(i);
+              return (
+                <div key={i} onClick={() => deleteMode && toggleParaExcluir(i)}
+                  style={{ position: "relative", aspectRatio: "1", borderRadius: 8, overflow: "hidden", background: "#eee", cursor: deleteMode ? "pointer" : "default", border: deleteMode && marcada ? `3px solid ${C.red}` : "3px solid transparent", boxSizing: "border-box" }}>
+                  <img src={f.url} alt={f.nome} style={{ width: "100%", height: "100%", objectFit: "cover", opacity: deleteMode && marcada ? 0.5 : 1 }} />
+                  {deleteMode && (
+                    <div style={{ position: "absolute", top: 4, left: 4, width: 20, height: 20, borderRadius: 4, background: marcada ? C.red : "rgba(255,255,255,0.8)", border: `2px solid ${marcada ? C.red : "#ccc"}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {marcada && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
+                    </div>
+                  )}
+                  {!deleteMode && (
+                    <button onClick={() => { if (!window.confirm("Remover esta foto?")) return; (async () => { await deletarFoto(f.path); const novas = fotos.filter((_, j) => j !== i); await sb(`galerias?id=eq.${galeria.id}`, { method: "PATCH", body: JSON.stringify({ fotos: novas }) }); setGaleria(prev => ({ ...prev, fotos: novas })); })(); }}
+                      style={{ position: "absolute", top: 3, right: 3, background: "rgba(0,0,0,0.6)", border: "none", borderRadius: 4, color: "#fff", fontSize: 11, cursor: "pointer", padding: "2px 5px" }}>✕</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Botão excluir selecionadas */}
+          {deleteMode && selecionadasParaExcluir.size > 0 && (
+            <button onClick={excluirSelecionadas} style={btn(C.red, { width: "100%", marginTop: 10 })}>
+              🗑️ Excluir {selecionadasParaExcluir.size} foto(s) selecionada(s)
+            </button>
+          )}
         </div>
       )}
 
@@ -191,19 +264,33 @@ export default function GaleriaPanel({ agendamento }) {
           <p style={{ fontSize: 12, fontWeight: 700, color: C.green, margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "1px" }}>
             ✅ Seleção do cliente {galeria.selecao_confirmada ? "(confirmada)" : "(em andamento)"}
           </p>
-          <p style={{ fontSize: 13, color: C.text, margin: "0 0 6px" }}>
-            {selecao.length} foto(s) selecionada(s) · {galeria.fotos_incluidas} inclusa(s)
+          <p style={{ fontSize: 13, color: C.text, margin: "0 0 8px" }}>
+            {selecao.length} foto(s) · {galeria.fotos_incluidas} inclusa(s)
             {extras > 0 && ` · ${extras} extra(s) = R$ ${valorExtras.toFixed(2).replace(".", ",")} `}
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5, marginBottom: extras > 0 ? 10 : 0 }}>
+
+          {/* Grid das selecionadas */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5, marginBottom: 10 }}>
             {selecao.map((url, i) => (
               <div key={i} style={{ aspectRatio: "1", borderRadius: 6, overflow: "hidden", border: `2px solid ${C.green}` }}>
                 <img src={url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
               </div>
             ))}
           </div>
+
+          {/* Nomes das fotos selecionadas */}
+          <div style={{ background: "#fff", border: `1px solid #c8e6c9`, borderRadius: 8, padding: "8px 12px" }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: C.green, margin: "0 0 5px", textTransform: "uppercase", letterSpacing: "0.5px" }}>Arquivos selecionados:</p>
+            {nomesSelecionados.map((nome, i) => (
+              <p key={i} style={{ fontSize: 11, color: C.text, margin: "2px 0", fontFamily: "monospace" }}>
+                {i + 1}. {nome}
+              </p>
+            ))}
+          </div>
+
+          {/* Link de pagamento extras */}
           {extras > 0 && (
-            <div>
+            <div style={{ marginTop: 10 }}>
               <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Link de pagamento das extras (InfinityPay)</label>
               <input style={inp} type="url" placeholder="Cole o link aqui" defaultValue={galeria.link_pagamento_extras || ""} onBlur={e => salvarLinkExtras(e.target.value)} />
             </div>
