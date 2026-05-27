@@ -1769,6 +1769,7 @@ function ClientView() {
   const [erroVale,setErroVale]=useState('');
   const [codigoGerado,setCodigoGerado]=useState('');
   const [linkPagamento,setLinkPagamento]=useState('');
+  const [linkCofrinho,setLinkCofrinho]=useState('');
 
   const cadastroSalvo=(()=>{try{return JSON.parse(sessionStorage.getItem("cres_cadastro")||"{}");}catch{return {};}})();
   const [cadastro,setCadastroRaw]=useState({
@@ -1894,6 +1895,24 @@ function ClientView() {
         return;
       }
 
+      // ── COFRINHO — confirma automático e gera link MP ──
+      if(service?.grupo==="cofrinho"){
+        const mpRes=await criarAssinaturaCofrinho(cid,cadastro.email);
+        await criarAgendamento({
+          cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
+          modalidade:modality?.label,modalidade_id:modality?.id||null,
+          valor:modality?.price||null,
+          status:"Confirmado",pagamento_status:"Pendente",
+        });
+        if(mpRes?.init_point){
+          await atualizarCliente(cid,{cofrinho:{status:"pendente",preapproval_id:mpRes.preapproval_id,saldo:0,meses_pagos:0}});
+          setLinkCofrinho(mpRes.init_point);
+        }
+        await enviarWhatsApp("14996845521",`🪙 *Novo Cofrinho!*\n\nCliente: ${cadastro.nome_mae}\nPlano: ${service?.label}${modality?.label?" — "+modality.label:""}\nWhatsApp: ${cadastro.telefone}\n\nJá confirmado automaticamente.`);
+        setLoading(false);limparSessao();setSubmitted(true);
+        return;
+      }
+
       // ── Agendamento normal ──
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({
@@ -1949,6 +1968,22 @@ function ClientView() {
       )}
       <button onClick={()=>{try{navigator.clipboard.writeText(codigoGerado);}catch(e){}alert(`Código ${codigoGerado} copiado!`);}} style={{width:"100%",padding:13,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:14,fontWeight:600,color:"#1a1a1a",marginBottom:12}}>📋 Copiar código</button>
       <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Envie o código para a presenteada — ela usa no app para resgatar o ensaio. 🌸</p>
+    </div>
+  );
+
+  if(submitted&&service?.grupo==="cofrinho")return(
+    <div style={{textAlign:"center",padding:"48px 16px"}}>
+      <div style={{fontSize:52,marginBottom:16}}>🪙</div>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:"#1a1a1a",marginBottom:8}}>Cofrinho ativado!</h2>
+      <p style={{color:"#888",fontSize:14,lineHeight:1.7,marginBottom:20}}>Seu Cofrinho de Recordações foi criado. Clique abaixo para assinar e começar a acumular saldo. 🌸</p>
+      {linkCofrinho?(
+        <a href={linkCofrinho} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:14,borderRadius:10,background:"linear-gradient(135deg,#D9A7B4,#698494)",color:"#fff",textDecoration:"none",fontSize:15,fontWeight:700,boxSizing:"border-box",marginBottom:12}}>
+          💳 Assinar e pagar agora →
+        </a>
+      ):(
+        <p style={{fontSize:13,color:"#aaa",marginBottom:12}}>Link de pagamento não disponível. Entre em contato com a Crescidinhos.</p>
+      )}
+      <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Após o pagamento, seu saldo aparece automaticamente na sua área. 🌸</p>
     </div>
   );
 
@@ -2395,6 +2430,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
   const [filhoNome,setFilhoNome]=useState('');
   const [loading,setLoading]=useState(false);
   const [submitted,setSubmitted]=useState(false);
+  const [linkCofrinho,setLinkCofrinho]=useState('');
   // Ensaio vinculado
   const extraComEnsaio=extras.find(e=>e.precisaAgenda)||null;
   const [dataEnsaio,setDataEnsaio]=useState(null);
@@ -2428,6 +2464,25 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
     try{
       const cid=cliente.id;
       const nomeCrianca=paraFilho?filhoNome:'';
+
+      // ── COFRINHO — confirma automático e gera link MP ──
+      if(service?.grupo==="cofrinho"){
+        const mpRes=await criarAssinaturaCofrinho(cid,cliente.email);
+        await criarAgendamento({
+          cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
+          modalidade:modality?.label,modalidade_id:modality?.id||null,
+          valor:modality?.price||null,
+          status:"Confirmado",pagamento_status:"Pendente",
+        });
+        if(mpRes?.init_point){
+          await atualizarCliente(cid,{cofrinho:{status:"pendente",preapproval_id:mpRes.preapproval_id,saldo:0,meses_pagos:0}});
+          setLinkCofrinho(mpRes.init_point);
+        }
+        await enviarWhatsApp("14996845521",`🪙 *Novo Cofrinho!*\n\nCliente: ${cliente.nome_mae}\nPlano: ${service?.label}${modality?.label?" — "+modality.label:""}\nWhatsApp: ${cliente.telefone}\n\nJá confirmado automaticamente.`);
+        setLoading(false);setSubmitted(true);
+        return;
+      }
+
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
@@ -2458,6 +2513,23 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
     }catch(e){console.error(e);alert('Erro ao enviar. Tente novamente.');}
     setLoading(false);
   };
+
+  if(submitted&&service?.grupo==="cofrinho")return(
+    <div style={{textAlign:'center',padding:'48px 16px'}}>
+      <div style={{fontSize:52,marginBottom:16}}>🪙</div>
+      <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:26,color:P.vinho,marginBottom:8}}>Cofrinho ativado!</h2>
+      <p style={{color:'#888',fontSize:14,lineHeight:1.7,marginBottom:20}}>Seu Cofrinho de Recordações foi criado. Clique abaixo para assinar e começar a acumular saldo. 🌸</p>
+      {linkCofrinho?(
+        <a href={linkCofrinho} target="_blank" rel="noreferrer" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8,width:'100%',padding:14,borderRadius:10,background:'linear-gradient(135deg,#D9A7B4,#698494)',color:'#fff',textDecoration:'none',fontSize:15,fontWeight:700,boxSizing:'border-box',marginBottom:12}}>
+          💳 Assinar e pagar agora →
+        </a>
+      ):(
+        <p style={{fontSize:13,color:'#aaa',marginBottom:12}}>Link de pagamento não disponível. Entre em contato com a Crescidinhos.</p>
+      )}
+      <p style={{fontSize:12,color:'#aaa',lineHeight:1.6}}>Após o pagamento, seu saldo aparece automaticamente na sua área. 🌸</p>
+      {onVoltar&&<button onClick={onVoltar} style={{marginTop:16,padding:'12px 24px',borderRadius:10,background:P.ardosia,color:'#fff',border:'none',fontSize:14,fontWeight:600,cursor:'pointer'}}>← Voltar à minha área</button>}
+    </div>
+  );
 
   if(submitted)return(
     <div style={{textAlign:'center',padding:'48px 16px'}}>
