@@ -72,25 +72,14 @@ const criarLinkMercadoPago=async(titulo,valor,referencia,incluiBoleto=false)=>{
 };
 const diasDesde = (d) => d ? Math.floor((new Date() - new Date(d)) / 86400000) : 9999;
 
-// ── COFRINHO — Mercado Pago Preapproval ──────────────────────────
-const COFRINHO_PLAN_ID = '740db1255e8347d5b12761667a20b75b';
+// ── COFRINHO — Link direto do plano Mercado Pago ─────────────────
+// A API /preapproval bloqueia CORS do browser; usamos o link do plano direto.
+// O preapproval_id real é capturado pelo n8n no primeiro pagamento (via payer.email).
+const COFRINHO_LINK = 'https://www.mercadopago.com.br/subscriptions/checkout?preapproval_plan_id=740db1255e8347d5b12761667a20b75b';
 
 const criarAssinaturaCofrinho = async (clienteId, emailCliente) => {
-  try {
-    const r = await fetch('https://api.mercadopago.com/preapproval', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        preapproval_plan_id: COFRINHO_PLAN_ID,
-        payer_email: emailCliente || undefined,
-        external_reference: `COFRINHO-${clienteId}`,
-        back_url: 'https://app.crescidinhosfoto.com.br',
-      }),
-    });
-    const d = await r.json();
-    if (!d.init_point) throw new Error(JSON.stringify(d));
-    return { init_point: d.init_point, preapproval_id: d.id };
-  } catch (e) { console.error('MP Cofrinho:', e); return null; }
+  // Retorna o link fixo do plano — sem chamada de API (evita CORS)
+  return { init_point: COFRINHO_LINK, preapproval_id: null };
 };
 
 const cancelarAssinaturaCofrinho = async (preapprovalId) => {
@@ -1623,23 +1612,17 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
                   <p style={{margin:"10px 0 0",fontSize:11,color:"#555"}}>Após o pagamento, seu saldo aparece aqui automaticamente.</p>
                 </div>
               ):(
-                <button
-                  disabled={criandoAssinatura}
+                <a
+                  href={COFRINHO_LINK}
+                  target="_blank"
+                  rel="noreferrer"
                   onClick={async()=>{
-                    setCriandoAssinatura(true);
-                    const res=await criarAssinaturaCofrinho(logado.id,logado.email);
-                    if(res?.init_point){
-                      // Salva preapproval_id pendente no Supabase
-                      await atualizarCliente(logado.id,{cofrinho:{status:"pendente",preapproval_id:res.preapproval_id,saldo:0,meses_pagos:0}});
-                      setLinkAssinatura(res.init_point);
-                    }else{
-                      alert("Erro ao gerar link. Tente novamente ou fale com a Crescidinhos.");
-                    }
-                    setCriandoAssinatura(false);
+                    // Marca cofrinho como pendente no Supabase ao clicar
+                    await atualizarCliente(logado.id,{cofrinho:{status:"pendente",preapproval_id:null,saldo:0,meses_pagos:0}}).catch(()=>{});
                   }}
-                  style={{width:"100%",padding:"14px",borderRadius:12,background:criandoAssinatura?"#ccc":"linear-gradient(135deg,#D9A7B4,#698494)",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,cursor:criandoAssinatura?"default":"pointer"}}>
-                  {criandoAssinatura?"⏳ Gerando link...":"🪙 Assinar Cofrinho"}
-                </button>
+                  style={{display:"block",width:"100%",padding:"14px",borderRadius:12,background:"linear-gradient(135deg,#D9A7B4,#698494)",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:18,fontWeight:700,cursor:"pointer",textAlign:"center",textDecoration:"none",boxSizing:"border-box"}}>
+                  🪙 Assinar Cofrinho
+                </a>
               )}
             </div>
           )}
