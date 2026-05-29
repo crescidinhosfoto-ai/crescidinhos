@@ -70,7 +70,8 @@ const MAKINGOFF  = { id: "makingoff",  label: "Making off",         price: 400 }
 const HORA_EXTRA = { id: "hora-extra", label: "Hora adicional",     price: 275 };
 const BALOES     = { id: "baloes",     label: "Balões",             price: 160 };
 const ENSAIO_DUO = { id: "extra-duo",  label: "Ensaio Duo",         price: 280, precisaAgenda: true, duracao_min: 60 };
-const SMASH_BAS  = { id: "extra-smash",label: "Smash Básico",       price: 380, precisaAgenda: true, duracao_min: 60 };
+const SMASH_BAS  = { id: "extra-smash",     label: "Smash Básico",    price: 380, precisaAgenda: true, duracao_min: 60 };
+const SMASH_COMP = { id: "extra-smash-comp", label: "Smash Completo", price: 620, precisaAgenda: true, duracao_min: 60 };
 
 export const SERVICES = [
   // ─── CHAMEGO (Acompanhamento básico) ────────────────────────────
@@ -216,7 +217,7 @@ export const SERVICES = [
       { id: "aniv-4h", label: "Completo 4h", price: 580,
         detail: "Cobertura 4h · Todas as fotos tratadas · Entrega em até 10 dias", duracao: "4h", duracao_min: 240 },
     ],
-    extras: [ENSAIO_DUO, SMASH_BAS, QUADRO, BALOES, ALBUM],
+    extras: [ENSAIO_DUO, SMASH_BAS, SMASH_COMP, QUADRO, BALOES, ALBUM],
   },
 
   // ─── BATIZADO / CONFRATERNIZAÇÃO / CHÁ REVELAÇÃO ─────────────────
@@ -231,7 +232,7 @@ export const SERVICES = [
       { id: "bat-2h", label: "2h", price: 360,
         detail: "Cobertura 2h · Todas as fotos tratadas · Entrega em até 10 dias", duracao: "2h", duracao_min: 120 },
     ],
-    extras: [ENSAIO_DUO, SMASH_BAS, QUADRO, BALOES, ALBUM],
+    extras: [ENSAIO_DUO, SMASH_BAS, SMASH_COMP, QUADRO, BALOES, ALBUM],
   },
 
   // ─── 15 ANOS ─────────────────────────────────────────────────────
