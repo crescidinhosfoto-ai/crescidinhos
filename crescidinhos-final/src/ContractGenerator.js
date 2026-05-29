@@ -390,15 +390,19 @@ function blocoCampanha(d) {
 
 function blocoEvento(d) {
   const extras = d.extras?.filter(e => e.price) || [];
-  const nomeAniv = d.nomeCrianca || d.nomeAniversariante || "";
+  const nomeAniv = d.nomeAniversariante || d.nomeCrianca || "";
+  const localEvento = d.localEvento || d.localEnsaio || "";
+  const p1 = extras.length > 0 ? 1 : 0; // offset de parágrafos
   return `
 <div class="block-title">Condições Específicas — Cobertura Fotográfica de Evento</div>
 <div class="clause">
   <h4>Cláusula E1 — Objeto</h4>
   <p>A CONTRATADA prestará serviço de cobertura fotográfica de <strong>${d.catLabel}</strong>${nomeAniv ? ` de <strong>${nomeAniv}</strong>` : ""}, com duração de <strong>${d.duracao || "conforme pacote contratado"}</strong>.</p>
-  ${extras.length > 0 ? `<p>§1º Adicionais contratados: <strong>${extras.map(e => e.label).join(", ")}</strong>.${d.desconto > 0 ? ` Desconto de <strong>10%</strong> aplicado.` : ""}</p>` : ""}
-  <p>§${extras.length > 0 ? "2" : "1"}º As fotos editadas serão entregues em até <strong>15 (quinze) dias úteis</strong> após o evento, via link digital disponível por 10 dias. Eventuais vídeos: até <strong>120 (cento e vinte) dias</strong>.</p>
-  <p>§${extras.length > 0 ? "3" : "2"}º Pendrive com acréscimo de <strong>R$ 120,00</strong>, com retirada em até 60 dias (após esse prazo: R$ 60,00 para nova gravação). Após 6 meses do evento, envio exclusivamente via pendrive (R$ 200,00).</p>
+  ${localEvento ? `<p>§1º Local do evento: <strong>${localEvento}</strong>. Data: <strong>${fmtData(d.dataEnsaio)}</strong>${d.horaEnsaio ? ` às <strong>${d.horaEnsaio}</strong>` : ""}.</p>` : ""}
+  ${extras.length > 0 ? `<p>§${localEvento ? "2" : "1"}º Adicionais contratados: <strong>${extras.map(e => e.label).join(", ")}</strong>.${d.desconto > 0 ? ` Desconto de <strong>10%</strong> aplicado.` : ""}</p>` : ""}
+  ${d.ensaioVinculado ? `<p>§${(localEvento ? 1 : 0) + (extras.length > 0 ? 1 : 0) + 1}º Inclui também: <strong>${d.ensaioVinculado}</strong>, realizado no estúdio Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP.</p>` : ""}
+  <p>§${(localEvento ? 1 : 0) + (extras.length > 0 ? 1 : 0) + (d.ensaioVinculado ? 1 : 0) + 1}º As fotos editadas serão entregues em até <strong>15 (quinze) dias úteis</strong> após o evento, via link digital disponível por 10 dias. Eventuais vídeos: até <strong>120 (cento e vinte) dias</strong>.</p>
+  <p>§${(localEvento ? 1 : 0) + (extras.length > 0 ? 1 : 0) + (d.ensaioVinculado ? 1 : 0) + 2}º Pendrive com acréscimo de <strong>R$ 120,00</strong>, com retirada em até 60 dias (após esse prazo: R$ 60,00 para nova gravação). Após 6 meses do evento, envio exclusivamente via pendrive (R$ 200,00).</p>
 </div>
 <div class="clause">
   <h4>Cláusula E2 — Permanência no evento</h4>

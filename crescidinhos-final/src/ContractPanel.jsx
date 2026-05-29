@@ -99,6 +99,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   const cat = SERVICES.find(s => s.id === catKey);
 
   // Estado do formulário
+  const isEvento = ["aniversario","batizado","quinze-anos"].includes(catKey);
+
   const [form, setForm] = useState({
     cpf: agendamento?.cpf_mae || cl.cpf_mae || "",
     valor: agendamento?.valor || "",
@@ -107,6 +109,9 @@ export default function ContractPanel({ agendamento, onUpdate }) {
     obs: agendamento?.obs || "",
     extras: [],
     localEnsaio: "",
+    // Evento: puxa do dados_evento salvo no agendamento
+    localEvento: agendamento?.dados_evento?.local_nome || agendamento?.dados_evento?.local || "",
+    nomeAniversariante: agendamento?.dados_evento?.nome_aniversariante || "",
   });
 
   // Estado do painel
@@ -200,10 +205,16 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         fotos: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.fotos,
         duracao: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.duracao,
         localExterno: catKey?.includes("externa") || catKey?.includes("externo"),
-        localEnsaio: form.localEnsaio ||
-          (catKey?.includes("externa") || catKey?.includes("externo")
-            ? "A confirmar"
-            : "Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP"),
+        localEnsaio: isEvento
+          ? (form.localEvento || "A confirmar")
+          : (form.localEnsaio ||
+              (catKey?.includes("externa") || catKey?.includes("externo")
+                ? "A confirmar"
+                : "Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP")),
+        localEvento: form.localEvento || "",
+        nomeAniversariante: form.nomeAniversariante || agendamento?.dados_evento?.nome_aniversariante || "",
+        // Ensaio vinculado ao evento (se houver)
+        ensaioVinculado: agendamento?.obs?.startsWith("Inclui") ? agendamento.obs : null,
         valorTotal: valorFinal,
         valorMensal: catKey === "cofrinho" ? Number(form.valor) : null,
         desconto,
@@ -424,6 +435,27 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         </Field>
       )}
 
+      {isEvento && (
+        <>
+          <Field label="Local do evento *">
+            <input
+              style={inp}
+              placeholder="Nome e endereço do local (ex: Espaço Estrelas — Av. Nações 100, Bauru/SP)"
+              value={form.localEvento}
+              onChange={e => set("localEvento", e.target.value)}
+            />
+          </Field>
+          <Field label="Nome do aniversariante">
+            <input
+              style={inp}
+              placeholder="Ex: Maria Eduarda · 1 aninho"
+              value={form.nomeAniversariante}
+              onChange={e => set("nomeAniversariante", e.target.value)}
+            />
+          </Field>
+        </>
+      )}
+
       {/* Extras para eventos */}
       {extrasDisponiveis.length > 0 && (
         <div style={{ marginBottom: 14 }}>
@@ -498,8 +530,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
       <button
         onClick={gerarEEnviar}
-        disabled={!form.cpf || !form.valor || !form.formaPagamento}
-        style={btnStyle(!form.cpf || !form.valor || !form.formaPagamento ? "#ccc" : "#72243E")}
+        disabled={!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento)}
+        style={btnStyle(!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento) ? "#ccc" : "#72243E")}
       >
         📄 Gerar e enviar contrato
       </button>
