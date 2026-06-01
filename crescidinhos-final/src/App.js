@@ -774,6 +774,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [gerandoLink,setGerandoLink]=useState(false);
   const [parcelaForm,setParcelaForm]=useState(null);// null=fechado | {valor:'',num:'',total:''}
   const [parcelaGerada,setParcelaGerada]=useState(null);// {link, label}
+  const [letraFiltro,setLetraFiltro]=useState("Todos");
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
@@ -1105,13 +1106,28 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           {filtered.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];const cl=a.clientes||{};return(<div key={a.id} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1,cursor:"pointer"}} onClick={()=>setSelected(a.id)}><p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p><p style={{margin:"3px 0 0",fontSize:12,color:"#555"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p><div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span></div></div><div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,marginLeft:8,flexShrink:0}}><p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p><button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button></div></div></div>);})}
         </>
       )}
-      {!loading&&tab==="clientes"&&(
+      {!loading&&tab==="clientes"&&(()=>{
+        const ALFA="ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        const clientesOrdenados=[...clientes].sort((a,b)=>(a.nome_mae||"").localeCompare(b.nome_mae||"","pt-BR"));
+        const letrasDosClientes=new Set(clientesOrdenados.map(c=>(c.nome_mae||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase()[0]).filter(Boolean));
+        const clientesFiltrados=letraFiltro==="Todos"?clientesOrdenados:clientesOrdenados.filter(c=>(c.nome_mae||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toUpperCase().startsWith(letraFiltro));
+        return(
         <>
-          <p style={{fontSize:12,color:"#999",marginBottom:12}}>{clientes.length} cliente{clientes.length!==1?"s":""} cadastrada{clientes.length!==1?"s":""}</p>
-          {clientes.length===0&&<p style={{textAlign:"center",color:"#bbb",fontSize:14,marginTop:40}}>Nenhuma cliente ainda</p>}
-          {clientes.map(c=>{const dias=diasDesde(c.ultimo_ensaio);const badge=dias<90?{label:"Frequente 🌟",bg:"#e6f4ea",color:"#2e7d32"}:dias<180?{label:"Regular",bg:"#e3f2fd",color:"#1565C0"}:c.ultimo_ensaio?{label:"Retorno",bg:"#fff8e1",color:"#f57c00"}:{label:"Nova",bg:"#f3e5f5",color:"#7b1fa2"};return(<div key={c.id} onClick={()=>setSelectedCliente(c.id)} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,cursor:"pointer",background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><p style={{margin:0,fontWeight:600,fontSize:14}}>{c.nome_mae}</p><p style={{margin:"3px 0 0",fontSize:12,color:"#999"}}>{c.filhos?.length>0?`👶 ${c.filhos.length} filho(s)`:""}</p><p style={{margin:"3px 0 0",fontSize:11,color:"#b8967e"}}>{c.total_ensaios||0} ensaio{(c.total_ensaios||0)!==1?"s":""} · último: {formatDateBR(c.ultimo_ensaio)}</p></div><span style={{padding:"3px 8px",borderRadius:12,fontSize:10,fontWeight:700,background:badge.bg,color:badge.color,flexShrink:0}}>{badge.label}</span></div></div>);})}
+          {/* Barra de alfabeto */}
+          <div style={{marginBottom:14}}>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
+              <button onClick={()=>setLetraFiltro("Todos")} style={{padding:"5px 10px",borderRadius:8,fontSize:12,fontWeight:700,border:"1.5px solid "+(letraFiltro==="Todos"?"#1a1a1a":"#e8e0d8"),background:letraFiltro==="Todos"?"#1a1a1a":"#fff",color:letraFiltro==="Todos"?"#fff":"#666",cursor:"pointer"}}>Todos</button>
+              {ALFA.map(letra=>{const ativa=letrasDosClientes.has(letra);return(<button key={letra} onClick={()=>ativa&&setLetraFiltro(letra===letraFiltro?"Todos":letra)} style={{width:30,height:30,borderRadius:7,fontSize:12,fontWeight:700,border:"1.5px solid "+(letraFiltro===letra?"#72243E":ativa?"#e8e0d8":"#f4f0ec"),background:letraFiltro===letra?"#72243E":ativa?"#fff":"#faf8f5",color:letraFiltro===letra?"#fff":ativa?"#1a1a1a":"#ccc",cursor:ativa?"pointer":"default",lineHeight:"1"}}>{letra}</button>);})}
+            </div>
+            <p style={{fontSize:12,color:"#999",margin:0}}>
+              {letraFiltro==="Todos"?`${clientes.length} cliente${clientes.length!==1?"s":""} no total`:`${clientesFiltrados.length} cliente${clientesFiltrados.length!==1?"s":""} com a letra ${letraFiltro}`}
+            </p>
+          </div>
+          {clientesFiltrados.length===0&&<p style={{textAlign:"center",color:"#bbb",fontSize:14,marginTop:40}}>Nenhuma cliente{letraFiltro!=="Todos"?` com a letra ${letraFiltro}`:""}</p>}
+          {clientesFiltrados.map(c=>{const dias=diasDesde(c.ultimo_ensaio);const badge=dias<90?{label:"Frequente 🌟",bg:"#e6f4ea",color:"#2e7d32"}:dias<180?{label:"Regular",bg:"#e3f2fd",color:"#1565C0"}:c.ultimo_ensaio?{label:"Retorno",bg:"#fff8e1",color:"#f57c00"}:{label:"Nova",bg:"#f3e5f5",color:"#7b1fa2"};return(<div key={c.id} onClick={()=>setSelectedCliente(c.id)} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,cursor:"pointer",background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div><p style={{margin:0,fontWeight:600,fontSize:14}}>{c.nome_mae}</p><p style={{margin:"3px 0 0",fontSize:12,color:"#999"}}>{c.filhos?.length>0?`👶 ${c.filhos.length} filho(s)`:""}</p><p style={{margin:"3px 0 0",fontSize:11,color:"#b8967e"}}>{c.total_ensaios||0} ensaio{(c.total_ensaios||0)!==1?"s":""} · último: {formatDateBR(c.ultimo_ensaio)}</p></div><span style={{padding:"3px 8px",borderRadius:12,fontSize:10,fontWeight:700,background:badge.bg,color:badge.color,flexShrink:0}}>{badge.label}</span></div></div>);})}
         </>
-      )}
+        );
+      })()}
     </div>
   );
 }
