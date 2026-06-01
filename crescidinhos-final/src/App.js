@@ -736,7 +736,7 @@ function AgendaView({ auth, onVerCliente }) {
   const DIAS_LABEL=["Seg","Ter","Qua","Qui","Sex","Sáb"];
   const MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
-  const H_INI=7, H_FIM=20, SLOT=56; // px por hora
+  const H_INI=0, H_FIM=23, SLOT=36; // px por hora
   const TOTAL_H=(H_FIM-H_INI)*SLOT;
   const COL_T=34; // largura coluna de horários
 
