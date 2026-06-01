@@ -689,66 +689,180 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
   );
 }
 
-// ─── AGENDA VIEW ──────────────────────────────────────────────────
+// ─── AGENDA VIEW — Grade Semanal ──────────────────────────────────
+const CORES_SERVICO={
+  newborn:   {bg:"#b8967e",borda:"#8a6e5a"},
+  chamego:   {bg:"#72243E",borda:"#501a2c"},
+  afeto:     {bg:"#72243E",borda:"#501a2c"},
+  infantil:  {bg:"#D9A7B4",borda:"#b8607e"},
+  gestante:  {bg:"#c9869e",borda:"#a06080"},
+  familia:   {bg:"#698494",borda:"#4a6070"},
+  adulto:    {bg:"#698494",borda:"#4a6070"},
+  aniversario:{bg:"#4a90c4",borda:"#2e6a9e"},
+  batizado:  {bg:"#5ba05b",borda:"#3d7a3d"},
+  "15anos":  {bg:"#9966cc",borda:"#7a4aaa"},
+  sazonal:   {bg:"#e08050",borda:"#b85e30"},
+};
+const COR_DEFAULT={bg:"#90A0AD",borda:"#6a7e8a"};
+function getCorServico(servicoId){return CORES_SERVICO[servicoId]||COR_DEFAULT;}
+
 function AgendaView({ auth, onVerCliente }) {
   const [agendamentos,setAgendamentos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [fichaSel,setFichaSel]=useState(null);
-  const carregar=useCallback(async()=>{setLoading(true);try{const ags=await getAgendamentos();setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
+  const [semanaOffset,setSemanaOffset]=useState(0);
+  const [agora,setAgora]=useState(new Date());
+
+  const carregar=useCallback(async()=>{
+    setLoading(true);
+    try{const ags=await getAgendamentos();setAgendamentos(ags||[]);}
+    catch(e){console.error(e);}
+    finally{setLoading(false);}
+  },[]);
   useEffect(()=>{carregar();},[carregar]);
-  const hoje=new Date().toISOString().substring(0,10);
-  const upcoming=agendamentos.filter(a=>a.data&&a.data>=hoje&&a.status!=="Cancelado").sort((a,b)=>a.data.localeCompare(b.data)||(a.hora||"").localeCompare(b.hora||"")).slice(0,50);
-  const porDia={};upcoming.forEach(a=>{if(!porDia[a.data])porDia[a.data]=[];porDia[a.data].push(a);});
-  const dias=Object.keys(porDia).sort();
-  return (
+  // Atualiza linha do "agora" a cada minuto
+  useEffect(()=>{const t=setInterval(()=>setAgora(new Date()),60000);return()=>clearInterval(t);},[]);
+
+  const hoje=new Date();
+  const hojeStr=hoje.toISOString().substring(0,10);
+
+  // Segunda-feira da semana atual + offset
+  const seg=new Date(hoje);
+  const dow=hoje.getDay();
+  seg.setDate(hoje.getDate()-(dow===0?6:dow-1)+semanaOffset*7);
+
+  // 6 dias: Seg → Sáb
+  const diasSemana=Array.from({length:6},(_,i)=>{const d=new Date(seg);d.setDate(seg.getDate()+i);return d;});
+  const DIAS_LABEL=["Seg","Ter","Qua","Qui","Sex","Sáb"];
+  const MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+
+  const H_INI=7, H_FIM=20, SLOT=56; // px por hora
+  const TOTAL_H=(H_FIM-H_INI)*SLOT;
+  const COL_T=34; // largura coluna de horários
+
+  // Agrupa agendamentos por data
+  const porDia={};
+  agendamentos.filter(a=>a.data&&a.status!=="Cancelado").forEach(a=>{
+    if(!porDia[a.data])porDia[a.data]=[];
+    porDia[a.data].push(a);
+  });
+
+  function posEvento(hora,duracao_min=60){
+    if(!hora)return null;
+    const[h,m]=hora.split(":").map(Number);
+    const minTotal=h*60+m;
+    if(minTotal<H_INI*60||minTotal>=H_FIM*60)return null;
+    return{
+      top:((minTotal-H_INI*60)/60)*SLOT+1,
+      height:Math.max((duracao_min/60)*SLOT-3,18),
+    };
+  }
+
+  const priMes=diasSemana[0], ultMes=diasSemana[5];
+  const labelSemana=priMes.getMonth()===ultMes.getMonth()
+    ?`${priMes.getDate()}–${ultMes.getDate()} ${MESES[priMes.getMonth()]} ${priMes.getFullYear()}`
+    :`${priMes.getDate()} ${MESES[priMes.getMonth()]} – ${ultMes.getDate()} ${MESES[ultMes.getMonth()]} ${ultMes.getFullYear()}`;
+
+  // Posição linha do "agora"
+  const agoraSemanaStr=agora.toISOString().substring(0,10);
+  const agoraMinTotal=agora.getHours()*60+agora.getMinutes();
+  const agoraTop=((agoraMinTotal-H_INI*60)/60)*SLOT;
+  const agoraVisivel=agoraMinTotal>=H_INI*60&&agoraMinTotal<H_FIM*60;
+
+  const btnNav={padding:"5px 10px",borderRadius:8,border:"1.5px solid #e8e0d8",background:"#fff",cursor:"pointer",fontSize:13,color:"#555",fontWeight:600,lineHeight:1};
+
+  return(
     <div>
       {fichaSel&&<FichaRapida agendamento={fichaSel} onFechar={()=>setFichaSel(null)} onVerMais={()=>{setFichaSel(null);onVerCliente(fichaSel.id);}}/>}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-        <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,margin:0}}>📅 Próximos ensaios</h3>
-        <button onClick={carregar} style={{padding:"6px 12px",borderRadius:7,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>🔄 Atualizar</button>
+
+      {/* Navegação */}
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+        <button onClick={()=>setSemanaOffset(0)} style={{...btnNav,background:semanaOffset===0?"#1a1a1a":"#fff",color:semanaOffset===0?"#fff":"#555",border:"1.5px solid "+(semanaOffset===0?"#1a1a1a":"#e8e0d8"),fontSize:11}}>Hoje</button>
+        <button onClick={()=>setSemanaOffset(o=>o-1)} style={btnNav}>‹</button>
+        <button onClick={()=>setSemanaOffset(o=>o+1)} style={btnNav}>›</button>
+        <span style={{fontSize:12,fontWeight:600,color:"#555",flex:1}}>{labelSemana}</span>
+        <button onClick={carregar} style={{...btnNav,fontSize:11}}>🔄</button>
       </div>
-      {loading&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Sincronizando com Google Calendar...</p>}
-      {!loading&&dias.length===0&&<div style={{textAlign:"center",padding:"48px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum evento nos próximos dias</p></div>}
-      {!loading&&dias.map(dia=>{
-        const isHoje=dia===hoje;
-        const d=new Date(dia+"T12:00:00");
-        const diaLabel=isHoje?"Hoje":d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"});
-        return(
-          <div key={dia} style={{marginBottom:20}}>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-              <span style={{fontSize:12,fontWeight:700,color:isHoje?"#b8967e":"#888",textTransform:"capitalize"}}>{diaLabel}</span>
-              {isHoje&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
-              <div style={{flex:1,height:1,background:"#f0e8e0"}}/>
-            </div>
-            {porDia[dia].map(ag=>{
-              const cl=ag?.clientes||{};const st=STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"];
-              return(
-                <div key={ag.id} onClick={()=>setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:"pointer",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                    <div style={{flex:1}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <span style={{fontSize:13,fontWeight:700,color:"#b8967e",fontFamily:"'Cormorant Garamond',serif"}}>{ag.hora}</span>
-                        <span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</span>
-                      </div>
-                      <p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>{ag.servico}{ag.modalidade?" — "+ag.modalidade:""}</p>
-                      {cl.telefone&&<p style={{margin:"0 0 6px",fontSize:12,color:"#999"}}>📞 {cl.telefone}</p>}
-                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{ag.status}</span>
-                        <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {ag.pagamento_status||"Pendente"}</span>
-                        {cl.anamnese&&Object.keys(cl.anamnese).length>0&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#f5f0eb",color:"#888"}}>📋 Anamnese</span>}
-                      </div>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
-                      <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(ag.valor||0).toFixed(2).replace(".",",")}</p>
-                      <span style={{fontSize:10,color:"#b8967e",fontWeight:700}}>Ver ficha →</span>
-                    </div>
+
+      {loading&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Carregando agenda...</p>}
+
+      {!loading&&(
+        <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch",borderRadius:10,border:"1.5px solid #e8e0d8",background:"#fff"}}>
+          <div style={{minWidth:320}}>
+
+            {/* Cabeçalho dos dias */}
+            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(6,1fr)`,borderBottom:"1.5px solid #e8e0d8",background:"#faf8f5"}}>
+              <div style={{borderRight:"1px solid #f0ece8"}}/>
+              {diasSemana.map((d,i)=>{
+                const dStr=d.toISOString().substring(0,10);
+                const isHoje=dStr===hojeStr;
+                const qtd=porDia[dStr]?.length||0;
+                return(
+                  <div key={i} style={{textAlign:"center",padding:"8px 2px 6px",borderRight:i<5?"1px solid #f0ece8":"none",background:isHoje?"#fdf0e8":"transparent"}}>
+                    <div style={{fontSize:9,fontWeight:700,color:isHoje?"#b8967e":"#aaa",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>{DIAS_LABEL[i]}</div>
+                    <div style={{width:24,height:24,borderRadius:"50%",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",background:isHoje?"#b8967e":"transparent",color:isHoje?"#fff":"#1a1a1a",fontSize:13,fontWeight:700}}>{d.getDate()}</div>
+                    {qtd>0&&<div style={{marginTop:3,display:"flex",justifyContent:"center",gap:2}}>
+                      {Array.from({length:Math.min(qtd,3)},(_,k)=><div key={k} style={{width:4,height:4,borderRadius:"50%",background:"#D9A7B4"}}/>)}
+                    </div>}
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+
+            {/* Grade de horários */}
+            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(6,1fr)`}}>
+
+              {/* Coluna de horas */}
+              <div style={{borderRight:"1px solid #f0ece8"}}>
+                {Array.from({length:H_FIM-H_INI},(_,i)=>(
+                  <div key={i} style={{height:SLOT,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:5,paddingTop:3,borderTop:i>0?"1px solid #f4f0ec":"none"}}>
+                    <span style={{fontSize:9,color:"#ccc",fontWeight:500}}>{String(H_INI+i).padStart(2,"0")}:00</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Colunas de cada dia */}
+              {diasSemana.map((d,colIdx)=>{
+                const dStr=d.toISOString().substring(0,10);
+                const isHoje=dStr===hojeStr;
+                const eventos=porDia[dStr]||[];
+                const showAgora=isHoje&&agoraVisivel;
+                return(
+                  <div key={colIdx} style={{position:"relative",height:TOTAL_H,background:isHoje?"#fffbf8":"#fff",borderRight:colIdx<5?"1px solid #f0ece8":"none"}}>
+                    {/* Linhas horizontais de hora */}
+                    {Array.from({length:H_FIM-H_INI},(_,i)=>(
+                      <div key={i} style={{position:"absolute",top:i*SLOT,left:0,right:0,borderTop:i>0?"1px solid #f4f0ec":"none",pointerEvents:"none"}}/>
+                    ))}
+                    {/* Linha do agora */}
+                    {showAgora&&agoraTop>=0&&agoraTop<=TOTAL_H&&(
+                      <div style={{position:"absolute",top:agoraTop,left:-1,right:0,height:2,background:"#b8967e",zIndex:4,pointerEvents:"none"}}>
+                        <div style={{width:7,height:7,borderRadius:"50%",background:"#b8967e",position:"absolute",left:-3,top:-2.5}}/>
+                      </div>
+                    )}
+                    {/* Eventos */}
+                    {eventos.map(ag=>{
+                      const pos=posEvento(ag.hora,ag.duracao_min);
+                      if(!pos)return null;
+                      const cor=getCorServico(ag.servico_id);
+                      const cl=ag.clientes||{};
+                      return(
+                        <div key={ag.id} onClick={()=>setFichaSel(ag)}
+                          style={{position:"absolute",top:pos.top,left:2,right:2,height:pos.height,
+                            borderRadius:5,padding:"3px 5px",background:cor.bg,
+                            borderLeft:`3px solid ${cor.borda}`,cursor:"pointer",zIndex:2,
+                            overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}>
+                          <div style={{fontSize:10,fontWeight:700,color:"#fff",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.nome_mae||ag.servico}</div>
+                          {pos.height>26&&<div style={{fontSize:9,color:"rgba(255,255,255,0.85)",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ag.hora}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        );
-      })}
+        </div>
+      )}
     </div>
   );
 }
