@@ -901,6 +901,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [parcelaForm,setParcelaForm]=useState(null);// null=fechado | {valor:'',num:'',total:''}
   const [parcelaGerada,setParcelaGerada]=useState(null);// {link, label}
   const [letraFiltro,setLetraFiltro]=useState("Todos");
+  const [filtroFin,setFiltroFin]=useState("todos");
+  const [mesFin,setMesFin]=useState("todos");
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
@@ -940,20 +942,101 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
 
   // Stats
   if(!loading&&tab==="stats"){
-    const porMes={};agendamentos.filter(a=>a.status!=="Cancelado").forEach(a=>{if(!a.data)return;const m=a.data.substring(0,7);if(!porMes[m])porMes[m]={recebido:0,pendente:0,total:0,qtd:0};const val=Number(a.valor||0);porMes[m].total+=val;porMes[m].qtd+=1;if(a.pagamento_status==="Pago")porMes[m].recebido+=val;else porMes[m].pendente+=val;});
-    const mesesOrd=Object.keys(porMes).sort().reverse();
-    const totalRecebido=agendamentos.reduce((acc,a)=>a.pagamento_status==="Pago"?acc+Number(a.valor||0):acc,0);
-    const totalPendente=agendamentos.filter(a=>a.status!=="Cancelado").reduce((acc,a)=>a.pagamento_status!=="Pago"?acc+Number(a.valor||0):acc,0);
+    const ativas=agendamentos.filter(a=>a.status!=="Cancelado"&&Number(a.valor||0)>0);
+    const mesesFinDisp=[...new Set(ativas.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
+    const listaFin=ativas
+      .filter(a=>{
+        const mesOk=mesFin==="todos"||(a.data&&a.data.startsWith(mesFin));
+        const pagOk=filtroFin==="todos"||(a.pagamento_status||"Pendente")===
+          {pendente:"Pendente",pago:"Pago",parcial:"Parcial"}[filtroFin];
+        return mesOk&&pagOk;
+      })
+      .sort((a,b)=>(b.data||"").localeCompare(a.data||""));
+    const totalRecebido=ativas.reduce((s,a)=>a.pagamento_status==="Pago"?s+Number(a.valor||0):s,0);
+    const totalParcial=ativas.reduce((s,a)=>a.pagamento_status==="Parcial"?s+Number(a.valor||0):s,0);
+    const totalPendente=ativas.reduce((s,a)=>(!a.pagamento_status||a.pagamento_status==="Pendente")?s+Number(a.valor||0):s,0);
+    const totalGeral=ativas.reduce((s,a)=>s+Number(a.valor||0),0);
+    const pctRecebido=totalGeral>0?Math.round((totalRecebido/totalGeral)*100):0;
     return(
       <div>
         <div style={{display:"flex",gap:6,marginBottom:16}}>{[["agendamentos","📅 Agenda"],["clientes","👥 Clientes"],["stats","📊 Resumo"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"9px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-          <div style={{padding:16,background:"#e6f4ea",border:"1.5px solid #a5d6a7",borderRadius:12,textAlign:"center"}}><p style={{fontSize:11,color:"#2e7d32",fontWeight:700,margin:"0 0 4px",textTransform:"uppercase",letterSpacing:"1px"}}>💰 Recebido</p><p style={{fontSize:22,fontWeight:700,color:"#2e7d32",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalRecebido.toFixed(2).replace(".",",")}</p></div>
-          <div style={{padding:16,background:"#fff8e1",border:"1.5px solid #ffe082",borderRadius:12,textAlign:"center"}}><p style={{fontSize:11,color:"#f57c00",fontWeight:700,margin:"0 0 4px",textTransform:"uppercase",letterSpacing:"1px"}}>⏳ A receber</p><p style={{fontSize:22,fontWeight:700,color:"#f57c00",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalPendente.toFixed(2).replace(".",",")}</p></div>
+
+        {/* Cards de totais */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:12}}>
+          <div style={{padding:12,background:"#e6f4ea",border:"1.5px solid #a5d6a7",borderRadius:12,textAlign:"center"}}>
+            <p style={{fontSize:9,color:"#2e7d32",fontWeight:700,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:"1px"}}>✅ Recebido</p>
+            <p style={{fontSize:16,fontWeight:700,color:"#2e7d32",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalRecebido.toFixed(2).replace(".",",")}</p>
+          </div>
+          <div style={{padding:12,background:"#fff8e1",border:"1.5px solid #ffe082",borderRadius:12,textAlign:"center"}}>
+            <p style={{fontSize:9,color:"#f57c00",fontWeight:700,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:"1px"}}>⏳ Pendente</p>
+            <p style={{fontSize:16,fontWeight:700,color:"#f57c00",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalPendente.toFixed(2).replace(".",",")}</p>
+          </div>
+          <div style={{padding:12,background:"#fce4ec",border:"1.5px solid #f48fb1",borderRadius:12,textAlign:"center"}}>
+            <p style={{fontSize:9,color:"#c2185b",fontWeight:700,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:"1px"}}>💳 Parcial</p>
+            <p style={{fontSize:16,fontWeight:700,color:"#c2185b",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalParcial.toFixed(2).replace(".",",")}</p>
+          </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}}>{[["Agendamentos",agendamentos.length,"#1a1a1a"],["Clientes",clientes.length,"#b8967e"],["Concluídos",agendamentos.filter(a=>a.status==="Concluído").length,"#2e7d32"]].map(([l,n,cor])=><div key={l} style={{padding:12,background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,textAlign:"center"}}><p style={{fontSize:22,fontWeight:700,color:cor,margin:0,fontFamily:"'Cormorant Garamond',serif"}}>{n}</p><p style={{fontSize:10,color:"#999",margin:"3px 0 0"}}>{l}</p></div>)}</div>
-        <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>Receita por mês</p>
-        {mesesOrd.map(m=>{const d=porMes[m];const pct=d.total>0?Math.round((d.recebido/d.total)*100):0;return(<div key={m} style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:8}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}><span style={{fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{mesAno(m+"-01")}</span><span style={{fontSize:11,color:"#999"}}>{d.qtd} ensaio{d.qtd!==1?"s":""} · Total: R$ {d.total.toFixed(2).replace(".",",")}</span></div><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}><div><p style={{fontSize:10,color:"#2e7d32",fontWeight:700,margin:"0 0 2px"}}>✅ Recebido</p><p style={{fontSize:14,fontWeight:700,color:"#2e7d32",margin:0}}>R$ {d.recebido.toFixed(2).replace(".",",")}</p></div><div><p style={{fontSize:10,color:"#f57c00",fontWeight:700,margin:"0 0 2px"}}>⏳ A receber</p><p style={{fontSize:14,fontWeight:700,color:"#f57c00",margin:0}}>R$ {d.pendente.toFixed(2).replace(".",",")}</p></div></div><div style={{height:6,background:"#f0e8e0",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${pct}%`,background:"#2e7d32",borderRadius:4}}/></div><p style={{fontSize:10,color:"#999",margin:"4px 0 0",textAlign:"right"}}>{pct}% recebido</p></div>);})}
+
+        {/* Barra de progresso geral */}
+        <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:12,fontWeight:700,color:"#1a1a1a"}}>Total geral: R$ {totalGeral.toFixed(2).replace(".",",")}</span>
+            <span style={{fontSize:12,fontWeight:700,color:"#2e7d32"}}>{pctRecebido}% recebido</span>
+          </div>
+          <div style={{height:8,background:"#f0e8e0",borderRadius:4,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${pctRecebido}%`,background:"#2e7d32",borderRadius:4,transition:"width .5s"}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+            <span style={{fontSize:10,color:"#999"}}>{ativas.length} atendimento{ativas.length!==1?"s":""}</span>
+            <span style={{fontSize:10,color:"#f57c00"}}>A receber: R$ {(totalPendente+totalParcial).toFixed(2).replace(".",",")}</span>
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+          {[["todos","Todos"],["pendente","⏳ Pendente"],["pago","✅ Pago"],["parcial","💳 Parcial"]].map(([v,l])=>(
+            <button key={v} onClick={()=>setFiltroFin(v)} style={{padding:"5px 10px",borderRadius:20,fontSize:11,fontWeight:600,border:"1.5px solid "+(filtroFin===v?"#1a1a1a":"#e8e0d8"),background:filtroFin===v?"#1a1a1a":"#fff",color:filtroFin===v?"#fff":"#666",cursor:"pointer"}}>{l}</button>
+          ))}
+        </div>
+        <div style={{marginBottom:12}}>
+          <select value={mesFin} onChange={e=>setMesFin(e.target.value)} style={{width:"100%",padding:"8px 10px",borderRadius:8,border:"1.5px solid #e8e0d8",fontSize:12,color:"#555",background:"#fff"}}>
+            <option value="todos">Todos os meses</option>
+            {mesesFinDisp.map(m=><option key={m} value={m}>{mesAno(m+"-01")}</option>)}
+          </select>
+        </div>
+
+        {/* Lista de clientes com pagamento */}
+        <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 8px"}}>
+          {listaFin.length} registro{listaFin.length!==1?"s":" "}
+          {filtroFin!=="todos"?` · ${filtroFin}`:""}
+          {mesFin!=="todos"?` · ${mesAno(mesFin+"-01")}`:""}
+        </p>
+        {listaFin.length===0&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Nenhum registro encontrado</p>}
+        {listaFin.map(a=>{
+          const cl=a.clientes||{};
+          const pag=a.pagamento_status||"Pendente";
+          const PAG={Pago:{bg:"#e6f4ea",color:"#2e7d32",icon:"✅"},Parcial:{bg:"#fce4ec",color:"#c2185b",icon:"💳"},Pendente:{bg:"#fff8e1",color:"#f57c00",icon:"⏳"},Cancelado:{bg:"#ffebee",color:"#c62828",icon:"❌"}};
+          const pc=PAG[pag]||PAG.Pendente;
+          const valor=Number(a.valor||0);
+          return(
+            <div key={a.id} onClick={()=>{setSelected(a.id);setTab("agendamentos");}} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:8,cursor:"pointer",background:"#fff",borderLeft:`4px solid ${pc.color}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p>
+                  <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
+                  <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{formatDateBR(a.data)}</p>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
+                  <p style={{margin:0,fontSize:15,fontWeight:700,color:"#1a1a1a",fontFamily:"'Cormorant Garamond',serif"}}>R$ {valor.toFixed(2).replace(".",",")}</p>
+                  <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:pc.bg,color:pc.color}}>{pc.icon} {pag}</span>
+                </div>
+              </div>
+              {a.pagamento_link&&<div style={{marginTop:6,display:"flex",alignItems:"center",gap:6}}>
+                <a href={a.pagamento_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#009EE3",fontWeight:600,textDecoration:"none"}}>🔗 Ver link de pagamento</a>
+              </div>}
+            </div>
+          );
+        })}
       </div>
     );
   }
