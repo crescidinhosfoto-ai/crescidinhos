@@ -390,9 +390,6 @@ function AnamneseForm({ data, onChange, titulo }) {
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
             <Field label="Concorda com o ECA Digital?" required><Radio options={["Sim","Não"]} value={data.eca_atip} onChange={v=>set("eca_atip",v)}/></Field>
             {data.eca_atip==="Sim"&&<Field label="Podemos postar sobre o transtorno?"><Radio options={["Sim, pode postar e falar sobre as questões dele!","Não, prefiro ficar mais reservada."]} value={data.postar_transtorno} onChange={v=>set("postar_transtorno",v)}/></Field>}
-            <Field label="Autoriza o uso das fotos no portfólio e redes sociais da Crescidinhos?" required>
-              <Radio options={["Sim, pode usar!","Não autorizo"]} value={data.autoriza_imagem} onChange={v=>set("autoriza_imagem",v)}/>
-            </Field>
           </div>
         </div>
       )}
@@ -1193,7 +1190,9 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
         {ensaiosCliente.length>0&&(()=>{
           const totalGasto=ensaiosCliente.reduce((s,a)=>s+Number(a.valor||0),0);
           const totalPago=ensaiosCliente.filter(a=>a.pagamento_status==="Pago").reduce((s,a)=>s+Number(a.valor||0),0);
-          const autImagem=cliente.anamnese?.autoriza_imagem||cliente.filhos?.[0]?.autoriza_imagem;
+          const an=cliente.anamnese||cliente.filhos?.[0]||{};
+          const isAtip=an.atipico==="Sim"||cliente.atipico;
+          const autImagem=isAtip?(an.postar_transtorno||null):(an.autoriza_imagem||null);
           return(
             <div style={{background:"linear-gradient(135deg,#fdf0e8,#faf8f5)",border:"1.5px solid #f0ddd0",borderRadius:12,padding:14,marginBottom:12,marginTop:16}}>
               <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>📊 Resumo do cliente</p>

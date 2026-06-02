@@ -102,9 +102,15 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   const isEvento = ["aniversario","batizado","quinze-anos"].includes(catKey);
 
   // Lê autorização de imagem da anamnese (já respondida pelo cliente)
-  const autorizacaoDaAnamnese = cl.anamnese?.autoriza_imagem || cl.filhos?.[0]?.autoriza_imagem || null;
+  // Atípico: usa "postar_transtorno" (que já existia na ficha)
+  // Típico: usa "autoriza_imagem" (novo campo adicionado)
+  const anamnese = cl.anamnese || cl.filhos?.[0] || {};
+  const isAtipico = anamnese.atipico === "Sim" || cl.atipico;
+  const autorizacaoDaAnamnese = isAtipico
+    ? (anamnese.postar_transtorno || null)
+    : (anamnese.autoriza_imagem || null);
   const autorizaImagemInicial = autorizacaoDaAnamnese
-    ? autorizacaoDaAnamnese === "Sim, pode usar!"
+    ? autorizacaoDaAnamnese.startsWith("Sim")
     : true;
 
   const [form, setForm] = useState({
