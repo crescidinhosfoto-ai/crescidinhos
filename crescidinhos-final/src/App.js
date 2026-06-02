@@ -943,15 +943,25 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   // Stats
   if(!loading&&tab==="stats"){
     const ativas=agendamentos.filter(a=>a.status!=="Cancelado"&&Number(a.valor||0)>0);
-    const mesesFinDisp=[...new Set(ativas.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
+    // Meses disponíveis: usa data_pagamento para pagos, data do ensaio para pendentes
+    const mesesFinDisp=[...new Set(ativas.map(a=>{
+      const ref=a.data_pagamento||a.data;
+      return ref?.substring(0,7);
+    }).filter(Boolean))].sort().reverse();
     const listaFin=ativas
       .filter(a=>{
-        const mesOk=mesFin==="todos"||(a.data&&a.data.startsWith(mesFin));
+        const refData=a.data_pagamento||a.data;
+        const mesOk=mesFin==="todos"||(refData&&refData.startsWith(mesFin));
         const pagOk=filtroFin==="todos"||(a.pagamento_status||"Pendente")===
           {pendente:"Pendente",pago:"Pago",parcial:"Parcial"}[filtroFin];
         return mesOk&&pagOk;
       })
-      .sort((a,b)=>(b.data||"").localeCompare(a.data||""));
+      .sort((a,b)=>{
+        // Ordena: pagos pela data_pagamento desc, pendentes pela data do ensaio desc
+        const da=a.data_pagamento||a.data||"";
+        const db=b.data_pagamento||b.data||"";
+        return db.localeCompare(da);
+      });
     const totalRecebido=ativas.reduce((s,a)=>a.pagamento_status==="Pago"?s+Number(a.valor||0):s,0);
     const totalParcial=ativas.reduce((s,a)=>a.pagamento_status==="Parcial"?s+Number(a.valor||0):s,0);
     const totalPendente=ativas.reduce((s,a)=>(!a.pagamento_status||a.pagamento_status==="Pendente")?s+Number(a.valor||0):s,0);
@@ -1020,18 +1030,27 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
           const valor=Number(a.valor||0);
           return(
             <div key={a.id} onClick={()=>{setSelected(a.id);setTab("agendamentos");}} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:8,cursor:"pointer",background:"#fff",borderLeft:`4px solid ${pc.color}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                 <div style={{flex:1}}>
                   <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p>
                   <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:"#aaa"}}>{formatDateBR(a.data)}</p>
                 </div>
                 <div style={{textAlign:"right",flexShrink:0,marginLeft:8}}>
                   <p style={{margin:0,fontSize:15,fontWeight:700,color:"#1a1a1a",fontFamily:"'Cormorant Garamond',serif"}}>R$ {valor.toFixed(2).replace(".",",")}</p>
                   <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:pc.bg,color:pc.color}}>{pc.icon} {pag}</span>
                 </div>
               </div>
-              {a.pagamento_link&&<div style={{marginTop:6,display:"flex",alignItems:"center",gap:6}}>
+              {/* Datas */}
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                <span style={{fontSize:10,color:"#aaa"}}>📷 Ensaio: <strong style={{color:"#888"}}>{formatDateBR(a.data)||"—"}</strong></span>
+                {a.data_pagamento
+                  ?<span style={{fontSize:10,color:pc.color,fontWeight:600}}>💰 Pago em: <strong>{formatDateBR(a.data_pagamento)}</strong></span>
+                  :(pag==="Pendente"||pag==="Parcial")
+                    ?<span style={{fontSize:10,color:"#f57c00"}}>⏳ Pagamento pendente</span>
+                    :null
+                }
+              </div>
+              {a.pagamento_link&&<div style={{marginTop:6}}>
                 <a href={a.pagamento_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#009EE3",fontWeight:600,textDecoration:"none"}}>🔗 Ver link de pagamento</a>
               </div>}
             </div>
@@ -1099,7 +1118,31 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>💳 Pagamento</p>
           {/* Status pagamento */}
-          <Field label="Status do pagamento"><div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>{Object.keys(PAG_COLORS).map(s=><button key={s} onClick={()=>update(agendamento.id,{pagamento_status:s})} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,border:"2px solid "+((agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#e8e0d8"),background:(agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#fff",color:(agendamento.pagamento_status||"Pendente")===s?"#fff":"#666",cursor:"pointer"}}>{s}</button>)}</div></Field>
+          <Field label="Status do pagamento">
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
+              {Object.keys(PAG_COLORS).map(s=>(
+                <button key={s} onClick={()=>{
+                  const patch={pagamento_status:s};
+                  // Ao marcar Pago ou Parcial, pré-preenche data_pagamento com hoje se ainda não tiver
+                  if((s==="Pago"||s==="Parcial")&&!agendamento.data_pagamento){
+                    patch.data_pagamento=new Date().toISOString().substring(0,10);
+                  }
+                  update(agendamento.id,patch);
+                }} style={{padding:"6px 12px",borderRadius:20,fontSize:12,fontWeight:600,border:"2px solid "+((agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#e8e0d8"),background:(agendamento.pagamento_status||"Pendente")===s?"#1a1a1a":"#fff",color:(agendamento.pagamento_status||"Pendente")===s?"#fff":"#666",cursor:"pointer"}}>{s}</button>
+              ))}
+            </div>
+          </Field>
+          {/* Data do pagamento — campo separado e editável */}
+          <div style={{marginTop:8,padding:"10px 12px",background:"#f8f4f5",borderRadius:10,border:"1.5px solid #e8e0d8"}}>
+            <label style={{fontSize:11,color:"#b8967e",fontWeight:700,display:"block",marginBottom:6}}>📅 Data em que o pagamento foi recebido</label>
+            <input
+              type="date"
+              style={{...inp,fontSize:13,marginBottom:0}}
+              defaultValue={agendamento.data_pagamento||""}
+              onBlur={e=>update(agendamento.id,{data_pagamento:e.target.value||null})}
+            />
+            <p style={{fontSize:10,color:"#aaa",margin:"4px 0 0"}}>Preencha a data real do recebimento — não precisa ser hoje.</p>
+          </div>
           {/* Gerar link Mercado Pago */}
           {Number(agendamento.valor||0)>0&&(()=>{
             const svcConfig=SERVICES.find(s=>s.id===agendamento.servico_id);
