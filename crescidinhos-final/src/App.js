@@ -178,8 +178,17 @@ function DadosEventoForm({ serviceId, data, onChange }) {
       <Field label="Nome do aniversariante" required>
         <input style={inp} value={data.nome_aniversariante||""} onChange={e=>set("nome_aniversariante",e.target.value)} placeholder="Nome da criança"/>
       </Field>
+      <Field label="Idade que vai completar">
+        <input style={inp} value={data.idade_aniversariante||""} onChange={e=>set("idade_aniversariante",e.target.value)} placeholder="Ex: 1 aninho, 5 anos..."/>
+      </Field>
       <Field label="Data de aniversário" required>
         <input style={inp} type="date" value={data.data_aniversario||""} onChange={e=>set("data_aniversario",e.target.value)}/>
+      </Field>
+      <Field label="Nome/tipo do local do evento" required>
+        <input style={inp} value={data.local_nome||""} onChange={e=>set("local_nome",e.target.value)} placeholder="Ex: Buffet Sonho de Festa, Espaço Villa..."/>
+      </Field>
+      <Field label="Endereço do local">
+        <input style={inp} value={data.local_rua||""} onChange={e=>set("local_rua",e.target.value)} placeholder="Rua, número — Bairro, Bauru/SP"/>
       </Field>
       <Field label="Número aproximado de convidados">
         <input style={inp} type="number" value={data.num_convidados||""} onChange={e=>set("num_convidados",e.target.value)} placeholder="Ex: 80"/>
@@ -381,6 +390,9 @@ function AnamneseForm({ data, onChange, titulo }) {
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
             <Field label="Concorda com o ECA Digital?" required><Radio options={["Sim","Não"]} value={data.eca_atip} onChange={v=>set("eca_atip",v)}/></Field>
             {data.eca_atip==="Sim"&&<Field label="Podemos postar sobre o transtorno?"><Radio options={["Sim, pode postar e falar sobre as questões dele!","Não, prefiro ficar mais reservada."]} value={data.postar_transtorno} onChange={v=>set("postar_transtorno",v)}/></Field>}
+            <Field label="Autoriza o uso das fotos no portfólio e redes sociais da Crescidinhos?" required>
+              <Radio options={["Sim, pode usar!","Não autorizo"]} value={data.autoriza_imagem} onChange={v=>set("autoriza_imagem",v)}/>
+            </Field>
           </div>
         </div>
       )}
@@ -401,6 +413,9 @@ function AnamneseForm({ data, onChange, titulo }) {
             <p style={{fontSize:12,fontWeight:700,color:"#1a1a1a",margin:"0 0 8px"}}>🔒 ECA Digital e LGPD</p>
             <p style={{fontSize:11,color:"#666",lineHeight:1.6,margin:"0 0 12px"}}>{ECA}</p>
             <Field label="Concorda com o ECA Digital?" required><Radio options={["Sim","Não"]} value={data.eca_tip} onChange={v=>set("eca_tip",v)}/></Field>
+            <Field label="Autoriza o uso das fotos no portfólio e redes sociais da Crescidinhos?" required>
+              <Radio options={["Sim, pode usar!","Não autorizo"]} value={data.autoriza_imagem} onChange={v=>set("autoriza_imagem",v)}/>
+            </Field>
           </div>
         </div>
       )}
@@ -1174,9 +1189,58 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             ))}
           </div>
         )}
-        <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"16px 0 10px"}}>Histórico de ensaios</p>
-        {ensaiosCliente.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>Nenhum ensaio registrado</p>}
-        {ensaiosCliente.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];return(<div key={a.id} onClick={()=>{setSelectedCliente(null);setSelected(a.id);}} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:8,cursor:"pointer",background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between"}}><div><p style={{margin:0,fontSize:13,fontWeight:600}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p><div style={{display:"flex",gap:5,marginTop:4}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span></div></div><p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p></div></div>);})}
+        {/* Resumo de tudo que o cliente fechou */}
+        {ensaiosCliente.length>0&&(()=>{
+          const totalGasto=ensaiosCliente.reduce((s,a)=>s+Number(a.valor||0),0);
+          const totalPago=ensaiosCliente.filter(a=>a.pagamento_status==="Pago").reduce((s,a)=>s+Number(a.valor||0),0);
+          const autImagem=cliente.anamnese?.autoriza_imagem||cliente.filhos?.[0]?.autoriza_imagem;
+          return(
+            <div style={{background:"linear-gradient(135deg,#fdf0e8,#faf8f5)",border:"1.5px solid #f0ddd0",borderRadius:12,padding:14,marginBottom:12,marginTop:16}}>
+              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 10px"}}>📊 Resumo do cliente</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                {[["Atendimentos",ensaiosCliente.length],["Concluídos",ensaiosCliente.filter(a=>a.status==="Concluído").length],["Total gasto","R$ "+totalGasto.toFixed(2).replace(".",",")],["Total pago","R$ "+totalPago.toFixed(2).replace(".",",")]].map(([k,v])=>(
+                  <div key={k} style={{background:"#fff",borderRadius:8,padding:"8px 10px"}}>
+                    <span style={{fontSize:9,color:"#aaa",display:"block",fontWeight:700,textTransform:"uppercase"}}>{k}</span>
+                    <span style={{fontSize:14,fontWeight:700,color:"#1a1a1a",fontFamily:"'Cormorant Garamond',serif"}}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              {autImagem&&(
+                <div style={{fontSize:11,color:autImagem==="Sim, pode usar!"?"#2e7d32":"#c62828",fontWeight:600,padding:"6px 10px",background:autImagem==="Sim, pode usar!"?"#e8f5e9":"#ffebee",borderRadius:8}}>
+                  {autImagem==="Sim, pode usar!"?"✅ Autoriza uso de imagem nas redes":"⛔ Não autoriza uso de imagem"}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"16px 0 10px"}}>📋 Histórico completo</p>
+        {ensaiosCliente.length===0&&<p style={{fontSize:13,color:"#bbb",textAlign:"center",padding:"20px 0"}}>Nenhum atendimento registrado</p>}
+        {ensaiosCliente.sort((a,b)=>(b.data||"").localeCompare(a.data||"")).map(a=>{
+          const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
+          const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
+          const de=a.dados_evento||{};
+          // Identifica extras do obs
+          const obsExtras=a.obs&&a.obs.startsWith("Inclui")?a.obs:null;
+          return(
+            <div key={a.id} onClick={()=>{setSelectedCliente(null);setSelected(a.id);}} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:8,cursor:"pointer",background:"#fff",borderLeft:`3px solid ${st.color}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
+                  <p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)}{a.hora?" às "+a.hora:""}</p>
+                  {de.nome_aniversariante&&<p style={{margin:"2px 0 0",fontSize:11,color:"#b8967e"}}>🎂 {de.nome_aniversariante}{de.local_nome?" · "+de.local_nome:""}</p>}
+                  {obsExtras&&<p style={{margin:"2px 0 0",fontSize:11,color:"#698494"}}>📸 {obsExtras}</p>}
+                </div>
+                <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:"0 0 0 8px",fontFamily:"'Cormorant Garamond',serif",flexShrink:0}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
+              </div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span>
+                <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
+                {a.contrato_numero&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:"#e8f4ff",color:"#1565C0"}}>📄 {a.contrato_numero}</span>}
+              </div>
+            </div>
+          );
+        })}
         <a href={`https://wa.me/55${(cliente.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box",marginTop:12}}>💬 Abrir WhatsApp</a>
       </div>
     );

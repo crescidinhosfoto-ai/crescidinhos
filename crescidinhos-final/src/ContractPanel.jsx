@@ -101,11 +101,17 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   // Estado do formulário
   const isEvento = ["aniversario","batizado","quinze-anos"].includes(catKey);
 
+  // Lê autorização de imagem da anamnese (já respondida pelo cliente)
+  const autorizacaoDaAnamnese = cl.anamnese?.autoriza_imagem || cl.filhos?.[0]?.autoriza_imagem || null;
+  const autorizaImagemInicial = autorizacaoDaAnamnese
+    ? autorizacaoDaAnamnese === "Sim, pode usar!"
+    : true;
+
   const [form, setForm] = useState({
     cpf: agendamento?.cpf_mae || cl.cpf_mae || "",
     valor: agendamento?.valor || "",
     formaPagamento: agendamento?.forma_pagamento || "",
-    autorizaImagem: true,
+    autorizaImagem: autorizaImagemInicial,
     obs: agendamento?.obs || "",
     extras: [],
     localEnsaio: "",
@@ -123,6 +129,7 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   });
 
   const [numContrato, setNumContrato] = useState(agendamento?.contrato_numero || "");
+  const [previewHTML, setPreviewHTML] = useState(null); // HTML gerado para pré-visualizar
 
   // Status de assinaturas — recarrega do Supabase ao abrir
   const [sigStatus, setSigStatus] = useState({
@@ -190,56 +197,64 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   const linkCliente   = `${APP_URL}/contrato/${agendamento?.id}`;
   const linkFotografa = `${APP_URL}/contrato/${agendamento?.id}?p=fotografa`;
 
-  // ── Gerar e enviar ──────────────────────────────────────────────
-  async function gerarEEnviar() {
+  // ── Monta dadosContrato (reutilizado em preview e envio) ──────────
+  function montarDados(numero) {
+    return {
+      catKey,
+      catLabel: cat?.label || agendamento?.servico || "",
+      planoId: agendamento?.modalidade_id || "",
+      planoLabel: agendamento?.modalidade || "",
+      fotos: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.fotos,
+      duracao: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.duracao,
+      localExterno: catKey?.includes("externa") || catKey?.includes("externo"),
+      localEnsaio: isEvento
+        ? (form.localEvento || "A confirmar")
+        : (form.localEnsaio ||
+            (catKey?.includes("externa") || catKey?.includes("externo")
+              ? "A confirmar"
+              : "Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP")),
+      localEvento: form.localEvento || "",
+      nomeAniversariante: form.nomeAniversariante || agendamento?.dados_evento?.nome_aniversariante || "",
+      ensaioVinculado: agendamento?.obs?.startsWith("Inclui") ? agendamento.obs : null,
+      valorTotal: valorFinal,
+      valorMensal: catKey === "cofrinho" ? Number(form.valor) : null,
+      desconto,
+      formaPagamento: form.formaPagamento,
+      extras: form.extras,
+      descontoExtras: descontoExtras && form.extras.length > 0,
+      autorizaUsoImagem: form.autorizaImagem,
+      prazoEntrega: ["aniversario","batizado","quinze-anos"].includes(catKey) ? "10 dias corridos" : "20 dias úteis",
+      nomeCliente: cl.nome_mae || "",
+      cpfCliente: form.cpf,
+      emailCliente: cl.email || "",
+      whatsappCliente: cl.telefone || "",
+      temMenor,
+      nomeCrianca,
+      idadeCrianca,
+      nomeResponsavel: cl.nome_mae || "",
+      dataContrato: new Date().toISOString().split("T")[0],
+      dataEnsaio: agendamento?.data || "",
+      horaEnsaio: agendamento?.hora || "",
+      numeroContrato: numero,
+      agendamentoId: agendamento?.id || "",
+    };
+  }
+
+  // ── Pré-visualizar (não envia ainda) ────────────────────────────
+  function abrirPreview() {
+    const numero = gerarNumeroContrato(catKey);
+    setNumContrato(numero);
+    const html = gerarContratoHTML(montarDados(numero));
+    setPreviewHTML(html);
+    setStatus("preview");
+  }
+
+  // ── Confirmar e enviar (após aprovar preview) ────────────────────
+  async function confirmarEEnviar() {
     setStatus("gerando");
     try {
-      const numero = gerarNumeroContrato(catKey);
-      setNumContrato(numero);
-
-      const dadosContrato = {
-        catKey,
-        catLabel: cat?.label || agendamento?.servico || "",
-        planoId: agendamento?.modalidade_id || "",
-        planoLabel: agendamento?.modalidade || "",
-        fotos: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.fotos,
-        duracao: cat?.modalities?.find(m => m.id === agendamento?.modalidade_id)?.duracao,
-        localExterno: catKey?.includes("externa") || catKey?.includes("externo"),
-        localEnsaio: isEvento
-          ? (form.localEvento || "A confirmar")
-          : (form.localEnsaio ||
-              (catKey?.includes("externa") || catKey?.includes("externo")
-                ? "A confirmar"
-                : "Crescidinhos Fotografia — Padre Anchieta 775, Bauru/SP")),
-        localEvento: form.localEvento || "",
-        nomeAniversariante: form.nomeAniversariante || agendamento?.dados_evento?.nome_aniversariante || "",
-        // Ensaio vinculado ao evento (se houver)
-        ensaioVinculado: agendamento?.obs?.startsWith("Inclui") ? agendamento.obs : null,
-        valorTotal: valorFinal,
-        valorMensal: catKey === "cofrinho" ? Number(form.valor) : null,
-        desconto,
-        formaPagamento: form.formaPagamento,
-        extras: form.extras,
-        descontoExtras: descontoExtras && form.extras.length > 0,
-        autorizaUsoImagem: form.autorizaImagem,
-        prazoEntrega: ["aniversario","batizado","quinze-anos"].includes(catKey)
-          ? "10 dias corridos" : "20 dias úteis",
-        nomeCliente: cl.nome_mae || "",
-        cpfCliente: form.cpf,
-        emailCliente: cl.email || "",
-        whatsappCliente: cl.telefone || "",
-        temMenor,
-        nomeCrianca,
-        idadeCrianca,
-        nomeResponsavel: cl.nome_mae || "",
-        dataContrato: new Date().toISOString().split("T")[0],
-        dataEnsaio: agendamento?.data || "",
-        horaEnsaio: agendamento?.hora || "",
-        numeroContrato: numero,
-        agendamentoId: agendamento?.id || "",
-      };
-
-      const html = gerarContratoHTML(dadosContrato);
+      const html = previewHTML;
+      const numero = numContrato;
 
       // 1. Salva no Supabase
       await sb(`agendamentos?id=eq.${agendamento.id}`, {
@@ -289,6 +304,33 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       setStatus("erro");
     }
   }
+
+  // ── Render: pré-visualização ────────────────────────────────────
+  if (status === "preview") return (
+    <div>
+      <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+        <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
+          style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
+          ← Voltar e corrigir
+        </button>
+        <button onClick={confirmarEEnviar}
+          style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+          ✅ Confirmar e enviar ao cliente
+        </button>
+      </div>
+      <div style={{ background: "#fff3cd", border: "1px solid #ffe082", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#856404" }}>
+        👁 Revise o contrato abaixo. Se precisar corrigir algo, clique em "Voltar e corrigir".
+      </div>
+      <div style={{ border: "1.5px solid #e8e0d8", borderRadius: 10, overflow: "hidden" }}>
+        <iframe
+          srcDoc={previewHTML}
+          title="Pré-visualização do contrato"
+          style={{ width: "100%", height: "70vh", border: "none" }}
+          sandbox="allow-same-origin"
+        />
+      </div>
+    </div>
+  );
 
   // ── Render: ambos assinaram ─────────────────────────────────────
   if (status === "assinado_ambos") return (
@@ -496,9 +538,14 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         </div>
       )}
 
-      {/* Autorização de imagem */}
+      {/* Autorização de imagem — sincroniza com anamnese */}
       <div style={{ marginBottom: 14 }}>
         <label style={lbl}>Autorização de uso de imagem</label>
+        {autorizacaoDaAnamnese && (
+          <div style={{ fontSize: 11, color: "#1565C0", background: "#e3f2fd", border: "1px solid #90CAF9", borderRadius: 6, padding: "5px 10px", marginBottom: 6 }}>
+            📋 Pré-preenchido da anamnese: <strong>"{autorizacaoDaAnamnese}"</strong>. Pode alterar se necessário.
+          </div>
+        )}
         <div style={{ display: "flex", gap: 8 }}>
           {[["Autoriza", true], ["Não autoriza", false]].map(([txt, val]) => (
             <button
@@ -529,14 +576,14 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       </Field>
 
       <button
-        onClick={gerarEEnviar}
+        onClick={abrirPreview}
         disabled={!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento)}
         style={btnStyle(!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento) ? "#ccc" : "#72243E")}
       >
-        📄 Gerar e enviar contrato
+        👁 Pré-visualizar contrato
       </button>
       <p style={{ fontSize: 11, color: "#aaa", textAlign: "center", marginTop: 6 }}>
-        Envia link por WhatsApp e e-mail para o cliente automaticamente
+        Revise o contrato antes de enviar ao cliente
       </p>
     </div>
   );
