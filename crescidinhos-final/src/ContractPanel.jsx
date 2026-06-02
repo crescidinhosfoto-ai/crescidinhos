@@ -581,6 +581,22 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         />
       </Field>
 
+      {/* Campos que faltam preencher */}
+      {(()=>{
+        const faltando=[];
+        if(!form.cpf) faltando.push("CPF da cliente");
+        if(!form.valor) faltando.push("Valor total");
+        if(!form.formaPagamento) faltando.push("Forma de pagamento");
+        if(isEvento && !form.localEvento) faltando.push("Local do evento");
+        if(faltando.length===0) return null;
+        return(
+          <div style={{background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"8px 12px",marginBottom:10}}>
+            <p style={{fontSize:11,fontWeight:700,color:"#856404",margin:"0 0 4px"}}>⚠️ Preencha para liberar:</p>
+            {faltando.map(f=><p key={f} style={{fontSize:11,color:"#856404",margin:"2px 0"}}>• {f}</p>)}
+          </div>
+        );
+      })()}
+
       <button
         onClick={abrirPreview}
         disabled={!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento)}
