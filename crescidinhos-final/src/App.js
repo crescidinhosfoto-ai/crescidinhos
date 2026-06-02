@@ -741,11 +741,11 @@ function AgendaView({ auth, onVerCliente }) {
   // Segunda-feira da semana atual + offset
   const seg=new Date(hoje);
   const dow=hoje.getDay();
-  seg.setDate(hoje.getDate()-(dow===0?6:dow-1)+semanaOffset*7);
+  seg.setDate(hoje.getDate()-dow+semanaOffset*7); // domingo da semana
 
-  // 6 dias: Seg → Sáb
-  const diasSemana=Array.from({length:6},(_,i)=>{const d=new Date(seg);d.setDate(seg.getDate()+i);return d;});
-  const DIAS_LABEL=["Seg","Ter","Qua","Qui","Sex","Sáb"];
+  // 7 dias: Dom → Sáb
+  const diasSemana=Array.from({length:7},(_,i)=>{const d=new Date(seg);d.setDate(seg.getDate()+i);return d;});
+  const DIAS_LABEL=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
   const MESES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
   const H_INI=0, H_FIM=23, SLOT=36; // px por hora
@@ -770,7 +770,7 @@ function AgendaView({ auth, onVerCliente }) {
     };
   }
 
-  const priMes=diasSemana[0], ultMes=diasSemana[5];
+  const priMes=diasSemana[0], ultMes=diasSemana[6];
   const labelSemana=priMes.getMonth()===ultMes.getMonth()
     ?`${priMes.getDate()}–${ultMes.getDate()} ${MESES[priMes.getMonth()]} ${priMes.getFullYear()}`
     :`${priMes.getDate()} ${MESES[priMes.getMonth()]} – ${ultMes.getDate()} ${MESES[ultMes.getMonth()]} ${ultMes.getFullYear()}`;
@@ -803,14 +803,14 @@ function AgendaView({ auth, onVerCliente }) {
           <div style={{minWidth:320}}>
 
             {/* Cabeçalho dos dias */}
-            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(6,1fr)`,borderBottom:"1.5px solid #e8e0d8",background:"#faf8f5"}}>
+            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(7,1fr)`,borderBottom:"1.5px solid #e8e0d8",background:"#faf8f5"}}>
               <div style={{borderRight:"1px solid #f0ece8"}}/>
               {diasSemana.map((d,i)=>{
                 const dStr=d.toISOString().substring(0,10);
                 const isHoje=dStr===hojeStr;
                 const qtd=porDia[dStr]?.length||0;
                 return(
-                  <div key={i} style={{textAlign:"center",padding:"8px 2px 6px",borderRight:i<5?"1px solid #f0ece8":"none",background:isHoje?"#fdf0e8":"transparent"}}>
+                  <div key={i} style={{textAlign:"center",padding:"8px 2px 6px",borderRight:i<6?"1px solid #f0ece8":"none",background:isHoje?"#fdf0e8":"transparent"}}>
                     <div style={{fontSize:9,fontWeight:700,color:isHoje?"#b8967e":"#aaa",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:3}}>{DIAS_LABEL[i]}</div>
                     <div style={{width:24,height:24,borderRadius:"50%",margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"center",background:isHoje?"#b8967e":"transparent",color:isHoje?"#fff":"#1a1a1a",fontSize:13,fontWeight:700}}>{d.getDate()}</div>
                     {qtd>0&&<div style={{marginTop:3,display:"flex",justifyContent:"center",gap:2}}>
@@ -822,7 +822,7 @@ function AgendaView({ auth, onVerCliente }) {
             </div>
 
             {/* Grade de horários */}
-            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(6,1fr)`}}>
+            <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(7,1fr)`}}>
 
               {/* Coluna de horas */}
               <div style={{borderRight:"1px solid #f0ece8"}}>
@@ -840,7 +840,7 @@ function AgendaView({ auth, onVerCliente }) {
                 const eventos=porDia[dStr]||[];
                 const showAgora=isHoje&&agoraVisivel;
                 return(
-                  <div key={colIdx} style={{position:"relative",height:TOTAL_H,background:isHoje?"#fffbf8":"#fff",borderRight:colIdx<5?"1px solid #f0ece8":"none"}}>
+                  <div key={colIdx} style={{position:"relative",height:TOTAL_H,background:isHoje?"#fffbf8":"#fff",borderRight:colIdx<6?"1px solid #f0ece8":"none"}}>
                     {/* Linhas horizontais de hora */}
                     {Array.from({length:H_FIM-H_INI},(_,i)=>(
                       <div key={i} style={{position:"absolute",top:i*SLOT,left:0,right:0,borderTop:i>0?"1px solid #f4f0ec":"none",pointerEvents:"none"}}/>
