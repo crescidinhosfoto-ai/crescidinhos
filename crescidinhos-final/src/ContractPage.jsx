@@ -146,9 +146,9 @@ function SignaturePad({ onSign, disabled, jaSalvo, nomeLabel, dataLabel, savedIm
 
   if (assinado) return (
     <div style={st.sigBox}>
-      <canvas ref={canvasRef} width={600} height={220}
-        style={{ ...st.canvas, borderColor: "#a5d6a7", cursor: "default", opacity: 0.85 }} />
-      <p style={{ fontSize: 12, color: "#2e7d32", fontWeight: 600, margin: "6px 0 2px", textAlign: "center" }}>✅ Assinado</p>
+      <canvas ref={canvasRef} width={900} height={360}
+        style={{ ...st.canvas, borderColor: "#a5d6a7", cursor: "default", opacity: 0.85, height: 180 }} />
+      <p style={{ fontSize: 13, color: "#2e7d32", fontWeight: 600, margin: "8px 0 2px", textAlign: "center" }}>✅ Assinado</p>
       <p style={st.sigLabel}>{nomeLabel}</p>
       {dataLabel && <p style={st.sigDate}>{dataLabel}</p>}
     </div>
@@ -157,21 +157,21 @@ function SignaturePad({ onSign, disabled, jaSalvo, nomeLabel, dataLabel, savedIm
   return (
     <div style={st.sigBox}>
       <div style={{ position: "relative" }}>
-        <canvas ref={canvasRef} width={600} height={220} style={st.canvas} />
+        <canvas ref={canvasRef} width={900} height={360} style={{ ...st.canvas, height: 180 }} />
         {vazio && (
           <div style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", pointerEvents: "none",
           }}>
-            <span style={{ fontSize: 28, marginBottom: 6 }}>✍️</span>
-            <span style={{ fontSize: 13, color: "#c9a0b0", fontWeight: 500 }}>Toque aqui e assine com o dedo</span>
+            <span style={{ fontSize: 36, marginBottom: 8 }}>✍️</span>
+            <span style={{ fontSize: 14, color: "#c9a0b0", fontWeight: 600 }}>Toque aqui e assine com o dedo</span>
           </div>
         )}
       </div>
       <div style={st.sigActions}>
         <button onClick={limpar} style={st.btnClear}>Limpar</button>
         <button onClick={confirmar} disabled={salvando || vazio}
-          style={{ ...st.btnConfirm, opacity: (salvando || vazio) ? 0.5 : 1 }}>
+          style={{ ...st.btnConfirm, opacity: (salvando || vazio) ? 0.5 : 1, padding: "10px 24px", fontSize: 14 }}>
           {salvando ? "Salvando..." : "Assinar ✍️"}
         </button>
       </div>
@@ -389,10 +389,12 @@ export default function ContractPage() {
               </div>
             )}
 
-            {/* Grid assinaturas */}
+            {/* Assinaturas em coluna única */}
             <div style={st.sigGrid}>
-              <div>
-                <p style={st.sigSectionLabel}>1. Contratante</p>
+
+              {/* 1. Contratante */}
+              <div style={{ background: "#faf8f5", border: "1.5px solid #e8e0d8", borderRadius: 12, padding: 16 }}>
+                <p style={st.sigSectionLabel}>1. Assinatura do(a) Contratante</p>
                 <SignaturePad
                   disabled={perfil === "fotografa"}
                   jaSalvo={!!sigCliente}
@@ -401,13 +403,34 @@ export default function ContractPage() {
                   dataLabel={signedAt}
                   onSign={(d) => salvarAssinatura("signature", d)}
                 />
-                <div style={st.sigInfo}>
-                  <strong>CPF:</strong> {ag.cpf_mae || cl.cpf_mae || "—"}<br />
+                <div style={{ ...st.sigInfo, marginTop: 10 }}>
+                  <strong>CPF:</strong> {ag.cpf_mae || cl.cpf_mae || "—"} &nbsp;·&nbsp;
                   <strong>E-mail:</strong> {cl.email || "—"}
                 </div>
               </div>
-              <div>
-                <p style={st.sigSectionLabel}>{temMenor ? "3." : "2."} Contratada</p>
+
+              {/* 2. Responsável legal (se menor) */}
+              {temMenor && (
+                <div style={{ background: "#fdf6f8", border: "1.5px solid #F4C0D1", borderRadius: 12, padding: 16 }}>
+                  <p style={st.sigSectionLabel}>2. Responsável Legal (menor)</p>
+                  <SignaturePad
+                    disabled={perfil === "fotografa"}
+                    jaSalvo={!!sigResp}
+                    savedImage={sigResp}
+                    nomeLabel={cl.nome_mae || "Responsável legal"}
+                    dataLabel={signedAt}
+                    onSign={(d) => salvarAssinatura("signature_responsavel", d)}
+                  />
+                  <div style={{ marginTop: 10, padding: "10px 12px", background: "#FBEAF0", borderRadius: 8, fontSize: 12, color: "#72243E", lineHeight: 1.6 }}>
+                    <strong>ECA Digital — Lei nº 15.211/2025</strong><br />
+                    As imagens do menor serão utilizadas apenas para as finalidades autorizadas.
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Contratada */}
+              <div style={{ background: "#f5f0f8", border: "1.5px solid #CE93D8", borderRadius: 12, padding: 16 }}>
+                <p style={{ ...st.sigSectionLabel, color: "#7b1fa2" }}>{temMenor ? "3." : "2."} Assinatura da Contratada</p>
                 <SignaturePad
                   disabled={perfil === "cliente"}
                   jaSalvo={!!sigContratada}
@@ -416,38 +439,12 @@ export default function ContractPage() {
                   dataLabel={signedAt}
                   onSign={(d) => salvarAssinatura("signature_contratada", d)}
                 />
-                <div style={st.sigInfo}>
-                  <strong>Crescidinhos Fotografia</strong><br />
-                  CNPJ: 64.189.121/0001-06<br />
-                  Padre Anchieta 775, Bauru/SP
+                <div style={{ ...st.sigInfo, marginTop: 10 }}>
+                  <strong>Crescidinhos Fotografia</strong> · CNPJ: 64.189.121/0001-06 · Padre Anchieta 775, Bauru/SP
                 </div>
               </div>
-            </div>
 
-            {/* Responsável legal */}
-            {temMenor && (
-              <div style={{ marginTop: 24 }}>
-                <p style={st.sigSectionLabel}>2. Responsável Legal (menor)</p>
-                <div style={st.sigGrid}>
-                  <div>
-                    <SignaturePad
-                      disabled={perfil === "fotografa"}
-                      jaSalvo={!!sigResp}
-                      savedImage={sigResp}
-                      nomeLabel={cl.nome_mae || "Responsável legal"}
-                      dataLabel={signedAt}
-                      onSign={(d) => salvarAssinatura("signature_responsavel", d)}
-                    />
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center" }}>
-                    <div style={{ padding: 14, background: "#FBEAF0", borderRadius: 10, fontSize: 12, color: "#72243E", lineHeight: 1.6 }}>
-                      <strong>ECA Digital — Lei nº 15.211/2025</strong><br />
-                      As imagens do menor serão utilizadas apenas para as finalidades autorizadas.
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
             <p style={{ fontSize: 11, color: "#bbb", textAlign: "center", marginTop: 20, lineHeight: 1.6 }}>
               Assinaturas válidas nos termos da Lei nº 14.063/2020 (Assinaturas Eletrônicas).
@@ -565,7 +562,7 @@ const st = {
     fontWeight: 500, marginBottom: 20,
     background: "#EAF3DE", color: "#27500A", border: "1px solid #C0DD97",
   },
-  sigGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 },
+  sigGrid: { display: "flex", flexDirection: "column", gap: 24 },
   sigSectionLabel: {
     fontSize: 11, fontWeight: 700, color: "#698494",
     textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 10px",
@@ -577,7 +574,7 @@ const st = {
   },
   sigCanvasLocked: {
     border: "1px dashed #e0e0e0", borderRadius: 8, background: "#f5f5f5",
-    height: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 12,
+    height: 180, display: "flex", alignItems: "center", justifyContent: "center", padding: 12,
   },
   sigActions: { display: "flex", gap: 8, marginTop: 8, justifyContent: "flex-end" },
   btnClear: {
