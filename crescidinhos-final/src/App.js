@@ -717,6 +717,9 @@ const CORES_SERVICO={
 };
 const COR_DEFAULT={bg:"#90A0AD",borda:"#6a7e8a"};
 function getCorServico(servicoId){return CORES_SERVICO[servicoId]||COR_DEFAULT;}
+// Converte Date para "YYYY-MM-DD" usando hora LOCAL (evita bug de UTC -3h pular dia)
+function localDateStr(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;}
+
 
 function AgendaView({ auth, onVerCliente }) {
   const [agendamentos,setAgendamentos]=useState([]);
@@ -739,7 +742,7 @@ function AgendaView({ auth, onVerCliente }) {
     setSincronizando(true);setSyncStatus(null);
     // Pega todos confirmados com data futura ou dos últimos 60 dias
     const limite=new Date();limite.setDate(limite.getDate()-60);
-    const limiteStr=limite.toISOString().substring(0,10);
+    const limiteStr=localDateStr(limite);
     const paraSync=agendamentos.filter(a=>
       (a.status==="Confirmado"||a.status==="A Realizar")&&
       a.data&&a.data>=limiteStr&&a.hora
@@ -777,7 +780,7 @@ function AgendaView({ auth, onVerCliente }) {
   useEffect(()=>{const t=setInterval(()=>setAgora(new Date()),60000);return()=>clearInterval(t);},[]);
 
   const hoje=new Date();
-  const hojeStr=hoje.toISOString().substring(0,10);
+  const hojeStr=localDateStr(hoje);
 
   // Segunda-feira da semana atual + offset
   const seg=new Date(hoje);
@@ -817,7 +820,7 @@ function AgendaView({ auth, onVerCliente }) {
     :`${priMes.getDate()} ${MESES[priMes.getMonth()]} – ${ultMes.getDate()} ${MESES[ultMes.getMonth()]} ${ultMes.getFullYear()}`;
 
   // Posição linha do "agora"
-  const agoraSemanaStr=agora.toISOString().substring(0,10);
+  const agoraSemanaStr=localDateStr(agora);
   const agoraMinTotal=agora.getHours()*60+agora.getMinutes();
   const agoraTop=((agoraMinTotal-H_INI*60)/60)*SLOT;
   const agoraVisivel=agoraMinTotal>=H_INI*60&&agoraMinTotal<H_FIM*60;
@@ -865,7 +868,7 @@ function AgendaView({ auth, onVerCliente }) {
             <div style={{display:"grid",gridTemplateColumns:`${COL_T}px repeat(7,1fr)`,borderBottom:"1.5px solid #e8e0d8",background:"#faf8f5"}}>
               <div style={{borderRight:"1px solid #f0ece8"}}/>
               {diasSemana.map((d,i)=>{
-                const dStr=d.toISOString().substring(0,10);
+                const dStr=localDateStr(d);
                 const isHoje=dStr===hojeStr;
                 const qtd=porDia[dStr]?.length||0;
                 return(
@@ -894,7 +897,7 @@ function AgendaView({ auth, onVerCliente }) {
 
               {/* Colunas de cada dia */}
               {diasSemana.map((d,colIdx)=>{
-                const dStr=d.toISOString().substring(0,10);
+                const dStr=localDateStr(d);
                 const isHoje=dStr===hojeStr;
                 const eventos=porDia[dStr]||[];
                 const showAgora=isHoje&&agoraVisivel;
