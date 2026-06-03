@@ -724,6 +724,8 @@ function AgendaView({ auth, onVerCliente }) {
   const [fichaSel,setFichaSel]=useState(null);
   const [semanaOffset,setSemanaOffset]=useState(0);
   const [agora,setAgora]=useState(new Date());
+  const [sincronizando,setSincronizando]=useState(false);
+  const [syncStatus,setSyncStatus]=useState(null); // {ok, total}
 
   const carregar=useCallback(async()=>{
     setLoading(true);
@@ -732,6 +734,45 @@ function AgendaView({ auth, onVerCliente }) {
     finally{setLoading(false);}
   },[]);
   useEffect(()=>{carregar();},[carregar]);
+
+  const sincronizarTodos=async()=>{
+    setSincronizando(true);setSyncStatus(null);
+    // Pega todos confirmados com data futura ou dos últimos 60 dias
+    const limite=new Date();limite.setDate(limite.getDate()-60);
+    const limiteStr=limite.toISOString().substring(0,10);
+    const paraSync=agendamentos.filter(a=>
+      (a.status==="Confirmado"||a.status==="A Realizar")&&
+      a.data&&a.data>=limiteStr&&a.hora
+    );
+    let ok=0;
+    for(const ag of paraSync){
+      const cl=ag.clientes||{};
+      try{
+        await fetch(WEBHOOK_CONFIRMAR,{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            id:ag.id,
+            nome_mae:cl.nome_mae,
+            nome_crianca:ag.nome_crianca||cl.nome_crianca,
+            email:cl.email,
+            telefone:cl.telefone,
+            servico:ag.servico,
+            modalidade:ag.modalidade,
+            data:ag.data,
+            hora:ag.hora,
+            duracao_min:ag.duracao_min||60,
+            valor:ag.valor,
+          }),
+        });
+        ok++;
+        // Pequena pausa para não sobrecarregar o n8n
+        await new Promise(r=>setTimeout(r,600));
+      }catch(e){console.error("Sync erro:",ag.id,e);}
+    }
+    setSincronizando(false);
+    setSyncStatus({ok,total:paraSync.length});
+  };
   // Atualiza linha do "agora" a cada minuto
   useEffect(()=>{const t=setInterval(()=>setAgora(new Date()),60000);return()=>clearInterval(t);},[]);
 
@@ -788,12 +829,30 @@ function AgendaView({ auth, onVerCliente }) {
       {fichaSel&&<FichaRapida agendamento={fichaSel} onFechar={()=>setFichaSel(null)} onVerMais={()=>{setFichaSel(null);onVerCliente(fichaSel.id);}}/>}
 
       {/* Navegação */}
-      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
         <button onClick={()=>setSemanaOffset(0)} style={{...btnNav,background:semanaOffset===0?"#1a1a1a":"#fff",color:semanaOffset===0?"#fff":"#555",border:"1.5px solid "+(semanaOffset===0?"#1a1a1a":"#e8e0d8"),fontSize:11}}>Hoje</button>
         <button onClick={()=>setSemanaOffset(o=>o-1)} style={btnNav}>‹</button>
         <button onClick={()=>setSemanaOffset(o=>o+1)} style={btnNav}>›</button>
         <span style={{fontSize:12,fontWeight:600,color:"#555",flex:1}}>{labelSemana}</span>
         <button onClick={carregar} style={{...btnNav,fontSize:11}}>🔄</button>
+      </div>
+
+      {/* Botão sincronizar todos com Google Calendar */}
+      <div style={{marginBottom:12}}>
+        <button
+          onClick={sincronizarTodos}
+          disabled={sincronizando||loading}
+          style={{width:"100%",padding:"9px",borderRadius:8,background:sincronizando?"#e8e0d8":"#f5f0eb",border:"1.5px solid #e8e0d8",cursor:sincronizando?"default":"pointer",fontSize:12,fontWeight:600,color:sincronizando?"#aaa":"#72243E",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}
+        >
+          {sincronizando?"⏳ Sincronizando com Google Calendar...":"📅 Sincronizar todos com Google Calendar"}
+        </button>
+        {syncStatus&&(
+          <p style={{fontSize:11,textAlign:"center",margin:"4px 0 0",color:syncStatus.ok===syncStatus.total?"#2e7d32":"#f57c00",fontWeight:600}}>
+            {syncStatus.ok===syncStatus.total
+              ?`✅ ${syncStatus.ok} agendamento${syncStatus.ok!==1?"s":""} sincronizado${syncStatus.ok!==1?"s":""}!`
+              :`⚠️ ${syncStatus.ok} de ${syncStatus.total} sincronizados`}
+          </p>
+        )}
       </div>
 
       {loading&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Carregando agenda...</p>}
