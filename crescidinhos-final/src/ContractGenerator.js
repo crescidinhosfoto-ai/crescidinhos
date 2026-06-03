@@ -137,6 +137,12 @@ function blocoServico(d) {
   ${desconto > 0 ? `<div class="discount-row"><span>Desconto 10% (extras)</span><span>- ${fmtMoeda(desconto)}</span></div>` : ""}
   <div class="service-total"><span>Valor total</span><span>${fmtMoeda(d.valorTotal)}</span></div>
   ${d.formaPagamento ? `<div class="service-row" style="margin-top:8px"><span>Forma de pagamento</span><span>${d.formaPagamento}</span></div>` : ""}
+  ${d.parcela2Data ? `
+    <div style="margin-top:10px;padding:10px 12px;background:#fff8e1;border-radius:8px;border:1px solid #ffe082">
+      <div style="font-size:11px;font-weight:700;color:#856404;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">📆 Parcelamento acordado</div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>1ª parcela</span><span><strong>${fmtMoeda(d.parcela1Valor||d.valorTotal/2)}</strong> — no ato / conforme combinado</span></div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0"><span>2ª parcela</span><span><strong>${fmtMoeda(d.parcela2Valor||d.valorTotal/2)}</strong> — vencimento: <strong>${fmtData(d.parcela2Data)}</strong></span></div>
+    </div>` : ""}
 </div>`;
 }
 

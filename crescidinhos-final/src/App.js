@@ -1058,6 +1058,41 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             />
             <p style={{fontSize:10,color:"#aaa",margin:"4px 0 0"}}>Preencha a data real do recebimento — não precisa ser hoje.</p>
           </div>
+
+          {/* 2ª Parcela programada */}
+          <div style={{marginTop:10,padding:"12px 14px",background:"#f8f4f5",borderRadius:10,border:"1.5px solid #e8e0d8"}}>
+            <p style={{fontSize:11,color:"#72243E",fontWeight:700,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:"1px"}}>📆 2ª Parcela programada</p>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              <div>
+                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4}}>Valor (R$)</label>
+                <input type="number" style={{...inp,fontSize:13,marginBottom:0}}
+                  placeholder="0,00"
+                  defaultValue={agendamento.parcela_2_valor||""}
+                  onBlur={e=>update(agendamento.id,{parcela_2_valor:e.target.value?Number(e.target.value):null})}
+                />
+              </div>
+              <div>
+                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4}}>Data de vencimento</label>
+                <input type="date" style={{...inp,fontSize:13,marginBottom:0}}
+                  defaultValue={agendamento.parcela_2_data||""}
+                  onBlur={e=>update(agendamento.id,{parcela_2_data:e.target.value||null})}
+                />
+              </div>
+            </div>
+            {agendamento.parcela_2_data&&(
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
+                <span style={{fontSize:11,color:agendamento.parcela_2_pago?"#2e7d32":"#f57c00",fontWeight:600}}>
+                  {agendamento.parcela_2_pago?"✅ 2ª parcela recebida":"⏳ 2ª parcela pendente"}
+                </span>
+                <button onClick={()=>update(agendamento.id,{parcela_2_pago:!agendamento.parcela_2_pago})}
+                  style={{padding:"4px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",border:"1.5px solid "+(agendamento.parcela_2_pago?"#a5d6a7":"#ffe082"),background:agendamento.parcela_2_pago?"#e6f4ea":"#fff8e1",color:agendamento.parcela_2_pago?"#2e7d32":"#f57c00"}}>
+                  {agendamento.parcela_2_pago?"Desfazer":"Marcar como pago"}
+                </button>
+              </div>
+            )}
+            <p style={{fontSize:10,color:"#aaa",margin:"8px 0 0",lineHeight:1.5}}>💡 O app enviará um lembrete automático à cliente no WhatsApp no dia do vencimento.</p>
+          </div>
+
           {/* Gerar link Mercado Pago */}
           {Number(agendamento.valor||0)>0&&(()=>{
             const svcConfig=SERVICES.find(s=>s.id===agendamento.servico_id);
