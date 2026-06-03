@@ -3,7 +3,7 @@
 // v3: links separados cliente/fotógrafa + status de assinaturas
 // =============================================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { gerarContratoHTML, gerarNumeroContrato, fmtData } from "./ContractGenerator";
 import { SERVICES } from "./config";
 
@@ -147,6 +147,23 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
   const [numContrato, setNumContrato] = useState(agendamento?.contrato_numero || "");
   const [previewHTML, setPreviewHTML] = useState(null); // HTML gerado para pré-visualizar
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [corpoEditavel, setCorpoEditavel] = useState("");
+  const contratoEditRef = useRef(null);
+
+  // Quando ativa modo edição, carrega o conteúdo atual no div editável
+  useEffect(() => {
+    if (modoEdicao && contratoEditRef.current && previewHTML) {
+      const corpo = previewHTML
+        .replace(/<div class="sig-section"[\s\S]*$/, "")
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "")
+        .replace(/<\/body>[\s\S]*?<\/html>/i, "")
+        .replace(/<head[\s\S]*?<\/head>/i, "")
+        .trim();
+      contratoEditRef.current.innerHTML = corpo;
+    }
+  }, [modoEdicao]);
 
   // Status de assinaturas — recarrega do Supabase ao abrir
   const [sigStatus, setSigStatus] = useState({
@@ -337,36 +354,89 @@ export default function ContractPanel({ agendamento, onUpdate }) {
           .replace(/<head[\s\S]*?<\/head>/i, "")
           .trim()
       : "";
+
+    // Ao confirmar, captura o HTML editado (se estiver em modo edição) e injeta de volta
+    const handleConfirmar = () => {
+      if (modoEdicao && contratoEditRef.current) {
+        const corpoEditado = contratoEditRef.current.innerHTML;
+        // Substitui o corpo original pelo editado no HTML completo
+        const htmlFinal = previewHTML.replace(
+          /(<body[^>]*>)([\s\S]*)(<div class="sig-section"|<\/body>)/i,
+          (match, open, _corpo, fim) => open + corpoEditado + fim
+        );
+        setPreviewHTML(htmlFinal);
+        setModoEdicao(false);
+        return;
+      }
+      confirmarEEnviar();
+    };
+
     return (
       <div>
+        {/* Barra de ações fixada no topo */}
         <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#fff", paddingBottom: 8, marginBottom: 8 }}>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-            <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
-              style={{ padding: "10px 14px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
+            <button onClick={() => { setStatus("idle"); setPreviewHTML(null); setModoEdicao(false); }}
+              style={{ padding: "10px 12px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#666" }}>
               ← Voltar
             </button>
-            <button onClick={confirmarEEnviar}
-              style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-              ✅ Confirmar e enviar
+            <button
+              onClick={() => setModoEdicao(e => !e)}
+              style={{ padding: "10px 12px", borderRadius: 8, background: modoEdicao ? "#1a1a1a" : "#f5f0eb", border: "1.5px solid " + (modoEdicao ? "#1a1a1a" : "#e8e0d8"), cursor: "pointer", fontSize: 12, fontWeight: 700, color: modoEdicao ? "#fff" : "#72243E" }}>
+              {modoEdicao ? "✓ Concluir edição" : "✏️ Editar"}
+            </button>
+            <button onClick={handleConfirmar}
+              style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: modoEdicao ? "#ccc" : "#72243E", color: "#fff", border: "none", cursor: modoEdicao ? "default" : "pointer", fontSize: 12, fontWeight: 700 }}
+              disabled={modoEdicao}>
+              ✅ Enviar ao cliente
             </button>
           </div>
-          <div style={{ background: "#fff3cd", border: "1px solid #ffe082", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#856404" }}>
-            👁 Revise o contrato. Se precisar corrigir, clique em "← Voltar".
-          </div>
+
+          {modoEdicao ? (
+            <div style={{ background: "#e3f2fd", border: "1px solid #90CAF9", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#1565C0" }}>
+              ✏️ <strong>Modo edição ativo</strong> — toque em qualquer texto do contrato para editar. Clique em "✓ Concluir edição" quando terminar.
+            </div>
+          ) : (
+            <div style={{ background: "#fff3cd", border: "1px solid #ffe082", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#856404" }}>
+              👁 Revise o contrato. Toque em <strong>✏️ Editar</strong> para alterar cláusulas antes de enviar.
+            </div>
+          )}
         </div>
-        {/* Renderiza inline — funciona em qualquer navegador mobile */}
-        <div
-          dangerouslySetInnerHTML={{ __html: corpoPreview }}
-          style={{ background: "#fff", borderRadius: 10, padding: "16px 12px", border: "1.5px solid #e8e0d8",
-            fontFamily: "Inter, sans-serif", fontSize: 13, lineHeight: 1.7, color: "#2d2d2d" }}
-        />
+
+        {/* Contrato — visualização ou edição */}
+        {modoEdicao ? (
+          <div
+            ref={contratoEditRef}
+            contentEditable
+            suppressContentEditableWarning
+            style={{
+              background: "#fff", borderRadius: 10, padding: "16px 12px",
+              border: "2px solid #90CAF9",
+              fontFamily: "Inter, sans-serif", fontSize: 13, lineHeight: 1.7, color: "#2d2d2d",
+              outline: "none", minHeight: 200,
+            }}
+            onInput={() => {}} // permite edição livre
+          />
+        ) : (
+          <div
+            ref={contratoEditRef}
+            dangerouslySetInnerHTML={{ __html: corpoPreview }}
+            style={{
+              background: "#fff", borderRadius: 10, padding: "16px 12px",
+              border: "1.5px solid #e8e0d8",
+              fontFamily: "Inter, sans-serif", fontSize: 13, lineHeight: 1.7, color: "#2d2d2d",
+            }}
+          />
+        )}
+
+        {/* Botões no rodapé também */}
         <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-          <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
+          <button onClick={() => { setStatus("idle"); setPreviewHTML(null); setModoEdicao(false); }}
             style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
-            ← Voltar e corrigir
+            ← Voltar
           </button>
-          <button onClick={confirmarEEnviar}
-            style={{ flex: 2, padding: "12px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
+          <button onClick={handleConfirmar} disabled={modoEdicao}
+            style={{ flex: 2, padding: "12px", borderRadius: 8, background: modoEdicao ? "#ccc" : "#72243E", color: "#fff", border: "none", cursor: modoEdicao ? "default" : "pointer", fontSize: 14, fontWeight: 700 }}>
             ✅ Confirmar e enviar ao cliente
           </button>
         </div>
