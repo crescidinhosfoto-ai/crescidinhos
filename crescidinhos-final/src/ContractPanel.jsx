@@ -113,13 +113,24 @@ export default function ContractPanel({ agendamento, onUpdate }) {
     ? autorizacaoDaAnamnese.startsWith("Sim")
     : true;
 
+  // Pré-carrega extras salvos no agendamento (quadro, álbum, etc.)
+  const extrasIniciais = (() => {
+    const savedExtras = agendamento?.extras_json || [];
+    if (!savedExtras.length) return [];
+    // Cruza com os extras disponíveis do serviço para garantir dados completos
+    return savedExtras.map(se => {
+      const found = (cat?.extras || []).find(e => e.id === se.id);
+      return found || se;
+    }).filter(Boolean);
+  })();
+
   const [form, setForm] = useState({
     cpf: agendamento?.cpf_mae || cl.cpf_mae || "",
     valor: agendamento?.valor || "",
     formaPagamento: agendamento?.forma_pagamento || "",
     autorizaImagem: autorizaImagemInicial,
     obs: agendamento?.obs || "",
-    extras: [],
+    extras: extrasIniciais,
     localEnsaio: "",
     // Evento: puxa do dados_evento salvo no agendamento
     localEvento: agendamento?.dados_evento?.local_nome || agendamento?.dados_evento?.local || "",
@@ -457,7 +468,23 @@ export default function ContractPanel({ agendamento, onUpdate }) {
           placeholder="0,00"
           value={form.valor}
           onChange={e => set("valor", e.target.value)}
+          onBlur={async e => {
+            const v = Number(e.target.value);
+            if (v > 0 && v !== Number(agendamento?.valor)) {
+              // Salva no Supabase e atualiza o painel acima imediatamente
+              await sb(`agendamentos?id=eq.${agendamento.id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ valor: v }),
+              }).catch(() => {});
+              onUpdate?.({ valor: v });
+            }
+          }}
         />
+        {Number(form.valor) !== Number(agendamento?.valor) && Number(form.valor) > 0 && (
+          <p style={{ fontSize: 11, color: "#f57c00", margin: "3px 0 0" }}>
+            ⚠️ Valor diferente do agendamento (R$ {Number(agendamento?.valor||0).toFixed(2).replace(".",",")}). Será salvo ao sair do campo.
+          </p>
+        )}
       </Field>
 
       <Field label="Forma de pagamento">

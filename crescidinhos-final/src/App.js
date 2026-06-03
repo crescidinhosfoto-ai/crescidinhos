@@ -2217,6 +2217,7 @@ function ClientView() {
 
       // ── Agendamento normal ──
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
+      const extrasParaSalvar=extras.filter(e=>!e.precisaAgenda).map(e=>({id:e.id,label:e.label,price:e.price}));
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
@@ -2224,6 +2225,7 @@ function ClientView() {
         data:date,hora:time,valor:calc.total||modality?.price||null,
         status:"Pendente",pagamento_status:"Pendente",
         dados_evento:precisaDadosEvento?dadosEvento:null,
+        extras_json:extrasParaSalvar.length>0?extrasParaSalvar:null,
         obs:extraComEnsaio?`Inclui ${extraComEnsaio.label} em ${dataEnsaio} às ${horaEnsaio}`:null,
       });
       // ── Segundo agendamento: ensaio vinculado ao evento ──
@@ -2786,6 +2788,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
       }
 
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
+      const extrasParaSalvar=extras.filter(e=>!e.precisaAgenda).map(e=>({id:e.id,label:e.label,price:e.price}));
       await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
@@ -2793,6 +2796,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
         data:date,hora:time,valor:calc.total||modality?.price||null,
         status:"Pendente",pagamento_status:"Pendente",
         dados_evento:precisaDadosEvento?dadosEvento:null,
+        extras_json:extrasParaSalvar.length>0?extrasParaSalvar:null,
         obs:extraComEnsaio&&dataEnsaio?`Inclui ${extraComEnsaio.label} em ${dataEnsaio} às ${horaEnsaio}`:null,
       });
       if(extraComEnsaio&&dataEnsaio&&horaEnsaio){
