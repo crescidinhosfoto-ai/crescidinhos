@@ -494,30 +494,43 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         </p>
 
         {/* Link do cliente */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f0e8e0" }}>
-          <div>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", margin: 0 }}>🌸 Link do cliente</p>
-            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Enviado por WhatsApp e e-mail</p>
+        <div style={{ paddingBottom: 12, borderBottom: "1px solid #f0e8e0", marginBottom: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "#1a1a1a", margin: "0 0 8px" }}>🌸 Link do cliente (para assinar)</p>
+          <div style={{ background: "#faf8f5", borderRadius: 8, padding: "8px 10px", marginBottom: 8, wordBreak: "break-all", fontSize: 11, color: "#555" }}>
+            {linkCliente}
           </div>
-          <a href={linkCliente} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#72243E", fontWeight: 600, textDecoration: "none" }}>
-            Ver →
-          </a>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(linkCliente).catch(()=>{}); alert("Link copiado!"); }}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#f5f0eb", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#72243E" }}>
+              📋 Copiar link
+            </button>
+            <a href={`https://wa.me/${(cl.telefone||"").replace(/\D/g,"")}?text=${encodeURIComponent("Olá! 🎀 Seu contrato está pronto para assinar: " + linkCliente)}`}
+              target="_blank" rel="noreferrer"
+              style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#25D366", color: "#fff", textDecoration: "none", fontSize: 12, fontWeight: 600, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              💬 Enviar WhatsApp
+            </a>
+          </div>
         </div>
 
         {/* Link da fotógrafa */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0 4px" }}>
-          <div>
-            <p style={{ fontSize: 12, fontWeight: 600, color: "#7b1fa2", margin: 0 }}>📷 Seu link para assinar</p>
-            <p style={{ fontSize: 11, color: "#aaa", margin: "2px 0 0" }}>Use este para assinar como fotógrafa</p>
+        <div>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "#7b1fa2", margin: "0 0 8px" }}>📷 Seu link para assinar</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => { navigator.clipboard?.writeText(linkFotografa).catch(()=>{}); alert("Link copiado!"); }}
+              style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#f3e5f5", border: "1.5px solid #CE93D8", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#7b1fa2" }}>
+              📋 Copiar link
+            </button>
+            <a href={linkFotografa} target="_blank" rel="noreferrer"
+              style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#7b1fa2", color: "#fff", textDecoration: "none", fontSize: 12, fontWeight: 700, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              ✍️ Assinar →
+            </a>
           </div>
-          <a href={linkFotografa} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#7b1fa2", fontWeight: 700, textDecoration: "none" }}>
-            Assinar →
-          </a>
         </div>
 
-        {/* Aviso */}
-        <div style={{ background: "#f3e5f5", borderRadius: 8, padding: "8px 10px", marginTop: 8, fontSize: 11, color: "#7b1fa2", lineHeight: 1.5 }}>
-          💜 O cliente usa o link rosa (WhatsApp/e-mail). Você usa o link roxo acima. Cada um assina apenas no campo correspondente.
+        <div style={{ background: "#f3e5f5", borderRadius: 8, padding: "8px 10px", marginTop: 10, fontSize: 11, color: "#7b1fa2", lineHeight: 1.5 }}>
+          💜 O cliente usa o link rosa. Você usa o link roxo. Cada um assina apenas no campo correspondente.
         </div>
       </div>
     </div>
