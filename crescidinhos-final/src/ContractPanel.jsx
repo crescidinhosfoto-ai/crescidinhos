@@ -464,9 +464,32 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   // ── Render: contrato enviado, aguardando assinaturas ────────────
   if (status === "enviado") return (
     <div>
+      {/* Envio rápido — sempre visível no topo */}
+      <div style={{ background: "#fff", border: "2px solid #72243E", borderRadius: 12, padding: 14, marginBottom: 12 }}>
+        <p style={{ fontSize: 11, color: "#72243E", fontWeight: 700, textTransform: "uppercase", letterSpacing: "1px", margin: "0 0 10px" }}>
+          📤 Enviar link para a cliente
+        </p>
+        <div style={{ background: "#faf8f5", borderRadius: 8, padding: "8px 10px", marginBottom: 10, wordBreak: "break-all", fontSize: 11, color: "#555", userSelect: "all" }}>
+          {linkCliente}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => { try { navigator.clipboard.writeText(linkCliente); } catch(e){} alert("✅ Link copiado!"); }}
+            style={{ flex: 1, padding: "11px 8px", borderRadius: 9, background: "#f5f0eb", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#72243E" }}>
+            📋 Copiar link
+          </button>
+          <a
+            href={`https://wa.me/${(cl.telefone||"").replace(/\D/g,"")}?text=${encodeURIComponent("Olá, " + (cl.nome_mae?.split(" ")[0]||"") + "! 🎀\n\nSeu contrato da Crescidinhos Fotografia está pronto para assinar!\n\n" + linkCliente + "\n\n_Qualquer dúvida, é só chamar! 🐘_")}`}
+            target="_blank" rel="noreferrer"
+            style={{ flex: 1, padding: "11px 8px", borderRadius: 9, background: "#25D366", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 700, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            💬 Enviar WhatsApp
+          </a>
+        </div>
+      </div>
+
       <div style={{ background: "#e6f4ea", border: "1.5px solid #a5d6a7", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-        <p style={{ fontSize: 14, color: "#2e7d32", fontWeight: 600, margin: "0 0 4px" }}>✅ Contrato enviado!</p>
-        <p style={{ fontSize: 12, color: "#555", margin: 0 }}>Nº {numContrato || agendamento?.contrato_numero} · Link enviado por WhatsApp e e-mail para {cl.nome_mae}</p>
+        <p style={{ fontSize: 14, color: "#2e7d32", fontWeight: 600, margin: "0 0 4px" }}>✅ Contrato gerado!</p>
+        <p style={{ fontSize: 12, color: "#555", margin: 0 }}>Nº {numContrato || agendamento?.contrato_numero}</p>
       </div>
 
       {/* Status das assinaturas */}
