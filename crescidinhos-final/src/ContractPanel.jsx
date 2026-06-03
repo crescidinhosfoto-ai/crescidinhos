@@ -323,31 +323,53 @@ export default function ContractPanel({ agendamento, onUpdate }) {
   }
 
   // ── Render: pré-visualização ────────────────────────────────────
-  if (status === "preview") return (
-    <div>
-      <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
-          style={{ padding: "8px 14px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
-          ← Voltar e corrigir
-        </button>
-        <button onClick={confirmarEEnviar}
-          style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
-          ✅ Confirmar e enviar ao cliente
-        </button>
-      </div>
-      <div style={{ background: "#fff3cd", border: "1px solid #ffe082", borderRadius: 8, padding: "8px 12px", marginBottom: 10, fontSize: 12, color: "#856404" }}>
-        👁 Revise o contrato abaixo. Se precisar corrigir algo, clique em "Voltar e corrigir".
-      </div>
-      <div style={{ border: "1.5px solid #e8e0d8", borderRadius: 10, overflow: "hidden" }}>
-        <iframe
-          srcDoc={previewHTML}
-          title="Pré-visualização do contrato"
-          style={{ width: "100%", height: "70vh", border: "none" }}
-          sandbox="allow-same-origin"
+  if (status === "preview") {
+    // Extrai só o corpo do contrato (sem html/head/scripts/seção de assinatura)
+    const corpoPreview = previewHTML
+      ? previewHTML
+          .replace(/<div class="sig-section"[\s\S]*$/, "")
+          .replace(/<script[\s\S]*?<\/script>/gi, "")
+          .replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "")
+          .replace(/<\/body>[\s\S]*?<\/html>/i, "")
+          .replace(/<head[\s\S]*?<\/head>/i, "")
+          .trim()
+      : "";
+    return (
+      <div>
+        <div style={{ position: "sticky", top: 0, zIndex: 10, background: "#fff", paddingBottom: 8, marginBottom: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
+              style={{ padding: "10px 14px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
+              ← Voltar
+            </button>
+            <button onClick={confirmarEEnviar}
+              style={{ flex: 1, padding: "10px 14px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+              ✅ Confirmar e enviar
+            </button>
+          </div>
+          <div style={{ background: "#fff3cd", border: "1px solid #ffe082", borderRadius: 8, padding: "8px 12px", fontSize: 12, color: "#856404" }}>
+            👁 Revise o contrato. Se precisar corrigir, clique em "← Voltar".
+          </div>
+        </div>
+        {/* Renderiza inline — funciona em qualquer navegador mobile */}
+        <div
+          dangerouslySetInnerHTML={{ __html: corpoPreview }}
+          style={{ background: "#fff", borderRadius: 10, padding: "16px 12px", border: "1.5px solid #e8e0d8",
+            fontFamily: "Inter, sans-serif", fontSize: 13, lineHeight: 1.7, color: "#2d2d2d" }}
         />
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button onClick={() => { setStatus("idle"); setPreviewHTML(null); }}
+            style={{ flex: 1, padding: "12px", borderRadius: 8, background: "#fff", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "#666" }}>
+            ← Voltar e corrigir
+          </button>
+          <button onClick={confirmarEEnviar}
+            style={{ flex: 2, padding: "12px", borderRadius: 8, background: "#72243E", color: "#fff", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
+            ✅ Confirmar e enviar ao cliente
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // ── Render: ambos assinaram ─────────────────────────────────────
   if (status === "assinado_ambos") return (
