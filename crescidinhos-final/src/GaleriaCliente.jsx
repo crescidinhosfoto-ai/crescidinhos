@@ -25,12 +25,42 @@ const sbPatch = async (path, data) => {
 const C = { primary: "#b8967e", light: "#f5f0eb", border: "#e8e0d8", text: "#3d2b1f", muted: "#a09080", green: "#2e7d32", red: "#c62828" };
 
 // ── Marca d'água sobre a foto ──────────────────────────────────────
-function Marca() {
+function Marca({ grande = false }) {
+  // Gera uma grade de marcas repetidas em diagonal cobrindo toda a foto
+  const texto = "Crescidinhos Fotografia";
+  const tamanho = grande ? 16 : 11;
+  const opacidade = grande ? 0.35 : 0.45;
+  const espacamento = grande ? 110 : 70;
+
+  // Cria pontos de marca em grid 4x6 (cobrindo bem a imagem)
+  const pontos = [];
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 4; col++) {
+      const offsetX = (row % 2 === 0) ? 0 : espacamento / 2;
+      pontos.push({ x: col * espacamento + offsetX, y: row * (espacamento * 0.6) });
+    }
+  }
+
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", userSelect: "none" }}>
-      <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.5)", transform: "rotate(-35deg)", textAlign: "center", lineHeight: 1.4, textShadow: "0 1px 2px rgba(0,0,0,0.5)", letterSpacing: "0.5px", whiteSpace: "pre-line" }}>
-        {"Crescidinhos\nFotografia"}
-      </span>
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", userSelect: "none" }}>
+      {pontos.map((p, i) => (
+        <span key={i} style={{
+          position: "absolute",
+          left: `${p.x}%`,
+          top: `${p.y}%`,
+          fontSize: tamanho,
+          fontWeight: 700,
+          color: `rgba(255,255,255,${opacidade})`,
+          transform: "rotate(-30deg)",
+          transformOrigin: "left center",
+          whiteSpace: "nowrap",
+          textShadow: `0 1px 3px rgba(0,0,0,0.6)`,
+          letterSpacing: "0.5px",
+          fontFamily: "sans-serif",
+        }}>
+          {texto}
+        </span>
+      ))}
     </div>
   );
 }
@@ -69,7 +99,7 @@ function Lightbox({ fotos, idx, selecao, onClose, onToggle, onNav }) {
       {/* Foto */}
       <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <img src={foto.url} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
-        <Marca />
+        <Marca grande={true} />
       </div>
 
       {/* Navegação */}
