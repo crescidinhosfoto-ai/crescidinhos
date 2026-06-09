@@ -254,9 +254,15 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       valorMensal: catKey === "cofrinho" ? Number(form.valor) : null,
       desconto,
       formaPagamento: form.formaPagamento,
-      parcela2Data: agendamento?.parcela_2_data || null,
-      parcela2Valor: agendamento?.parcela_2_valor ? Number(agendamento.parcela_2_valor) : null,
-      parcela1Valor: agendamento?.parcela_2_valor ? (valorFinal - Number(agendamento.parcela_2_valor)) : null,
+      // Parcelas dinâmicas (novo) — fallback para parcela_2_* legado
+      parcelasJson: (() => {
+        const pj = agendamento?.parcelas_json;
+        if (Array.isArray(pj) && pj.length > 0) return pj;
+        if (agendamento?.parcela_2_data) {
+          return [{ valor: Number(agendamento.parcela_2_valor)||0, data: agendamento.parcela_2_data, pago: agendamento.parcela_2_pago||false }];
+        }
+        return null;
+      })(),
       extras: form.extras,
       descontoExtras: descontoExtras && form.extras.length > 0,
       autorizaUsoImagem: form.autorizaImagem,

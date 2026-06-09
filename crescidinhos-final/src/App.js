@@ -794,6 +794,130 @@ function AgendaView({ auth, onVerCliente }) {
   );
 }
 
+// ─── PARCELAS SECTION — dinâmico até 12x ─────────────────────────
+function ParcelasSection({ agendamento, onUpdate }) {
+  const pInp = { width:"100%", padding:"8px 10px", borderRadius:8, border:"1.5px solid #e0d8d0", fontSize:12, boxSizing:"border-box", outline:"none", background:"#fff", fontFamily:"inherit", color:"#1a1a1a", marginBottom:0 };
+
+  const [parcelas, setParcelas] = useState(() => {
+    const pj = agendamento.parcelas_json;
+    if (Array.isArray(pj) && pj.length > 0) return pj;
+    if (agendamento.parcela_2_data) {
+      return [{ valor: Number(agendamento.parcela_2_valor) || 0, data: agendamento.parcela_2_data, pago: agendamento.parcela_2_pago || false }];
+    }
+    return [];
+  });
+
+  useEffect(() => {
+    const pj = agendamento.parcelas_json;
+    if (Array.isArray(pj) && pj.length > 0) { setParcelas(pj); }
+    else if (agendamento.parcela_2_data) {
+      setParcelas([{ valor: Number(agendamento.parcela_2_valor)||0, data: agendamento.parcela_2_data, pago: agendamento.parcela_2_pago||false }]);
+    } else { setParcelas([]); }
+  }, [agendamento.id]);
+
+  const salvar = (lista) => {
+    onUpdate(agendamento.id, { parcelas_json: lista });
+  };
+
+  const adicionar = () => {
+    if (parcelas.length >= 12) return;
+    let nextDate = '';
+    const ref = parcelas.length > 0 ? parcelas[parcelas.length-1].data : agendamento.data;
+    if (ref) {
+      const d = new Date(ref + 'T12:00:00');
+      d.setMonth(d.getMonth() + 1);
+      nextDate = d.toISOString().substring(0, 10);
+    }
+    const nova = [...parcelas, { valor: '', data: nextDate, pago: false }];
+    setParcelas(nova);
+    salvar(nova);
+  };
+
+  const remover = (i) => {
+    const nova = parcelas.filter((_, idx) => idx !== i);
+    setParcelas(nova);
+    salvar(nova);
+  };
+
+  const togglePago = (i) => {
+    const nova = parcelas.map((p, idx) => idx === i ? { ...p, pago: !p.pago } : p);
+    setParcelas(nova);
+    salvar(nova);
+  };
+
+  const editar = (i, field, value) => {
+    setParcelas(ps => ps.map((p, idx) => idx === i ? { ...p, [field]: value } : p));
+  };
+
+  const salvarBlur = () => { salvar(parcelas); };
+
+  const totalParcelas = parcelas.reduce((s, p) => s + (Number(p.valor)||0), 0);
+  const valorTotal = Number(agendamento.valor) || 0;
+
+  return (
+    <div style={{ marginTop:10, padding:"12px 14px", background:"#f8f4f5", borderRadius:10, border:"1.5px solid #e8e0d8" }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+        <p style={{ fontSize:11, color:"#72243E", fontWeight:700, margin:0, textTransform:"uppercase", letterSpacing:"1px" }}>📆 Parcelas programadas</p>
+        {parcelas.length > 0 && (
+          <span style={{ fontSize:10, color:"#aaa", fontWeight:600 }}>
+            {parcelas.filter(p=>p.pago).length}/{parcelas.length} pagas
+          </span>
+        )}
+      </div>
+
+      {parcelas.length === 0 && (
+        <p style={{ fontSize:12, color:"#bbb", textAlign:"center", padding:"6px 0", margin:0 }}>Nenhuma parcela programada</p>
+      )}
+
+      {parcelas.map((p, i) => (
+        <div key={i} style={{ marginBottom:8, padding:"10px 12px", background: p.pago?"#f1f8e9":"#fff", borderRadius:8, border:`1.5px solid ${p.pago?"#a5d6a7":"#e8e0d8"}` }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+            <span style={{ fontSize:11, fontWeight:700, color:"#72243E" }}>{i+1}ª parcela</span>
+            <button onClick={()=>remover(i)} style={{ background:"none", border:"none", cursor:"pointer", fontSize:15, color:"#ccc", padding:"0 2px", lineHeight:1 }} title="Remover parcela">🗑</button>
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:7 }}>
+            <div>
+              <label style={{ fontSize:9, color:"#aaa", display:"block", marginBottom:3 }}>Valor (R$)</label>
+              <input type="number" style={pInp} placeholder="0,00"
+                value={p.valor} onChange={e=>editar(i,'valor',e.target.value)} onBlur={salvarBlur} />
+            </div>
+            <div>
+              <label style={{ fontSize:9, color:"#aaa", display:"block", marginBottom:3 }}>Vencimento</label>
+              <input type="date" style={pInp}
+                value={p.data} onChange={e=>editar(i,'data',e.target.value)} onBlur={salvarBlur} />
+            </div>
+          </div>
+          <button onClick={()=>togglePago(i)} style={{ width:"100%", padding:"5px 10px", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer", border:`1.5px solid ${p.pago?"#a5d6a7":"#ffe082"}`, background:p.pago?"#e6f4ea":"#fff8e1", color:p.pago?"#2e7d32":"#f57c00" }}>
+            {p.pago ? "✅ Recebida — toque para desfazer" : "⏳ Pendente — toque para marcar como pago"}
+          </button>
+        </div>
+      ))}
+
+      {parcelas.length < 12 && (
+        <button onClick={adicionar} style={{ width:"100%", padding:"9px", borderRadius:8, background:"#fff", border:"1.5px dashed #D9A7B4", cursor:"pointer", fontSize:12, fontWeight:600, color:"#b8967e", marginTop: parcelas.length > 0 ? 4 : 0 }}>
+          + Adicionar parcela {parcelas.length > 0 ? `(${parcelas.length}/12 usadas)` : ""}
+        </button>
+      )}
+
+      {parcelas.length > 0 && valorTotal > 0 && (
+        <div style={{ marginTop:8, padding:"6px 10px", background: totalParcelas > valorTotal ? "#fff3e0" : "#f0f4ff", borderRadius:6, border:`1px solid ${totalParcelas > valorTotal ? "#ffcc80" : "#c5cae9"}` }}>
+          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11 }}>
+            <span style={{ color:"#555" }}>Total das parcelas:</span>
+            <strong style={{ color: totalParcelas > valorTotal ? "#c62828" : "#1a1a1a" }}>
+              R$ {totalParcelas.toFixed(2).replace('.',',')}
+              {totalParcelas > valorTotal ? " ⚠️ excede o total" : ""}
+            </strong>
+          </div>
+        </div>
+      )}
+
+      <p style={{ fontSize:10, color:"#aaa", margin:"8px 0 0", lineHeight:1.5 }}>
+        💡 Lembretes automáticos serão enviados no WhatsApp no dia do vencimento de cada parcela.
+      </p>
+    </div>
+  );
+}
+
 // ─── CRM VIEW ─────────────────────────────────────────────────────
 function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [agendamentos,setAgendamentos]=useState([]);
@@ -1059,39 +1183,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             <p style={{fontSize:10,color:"#aaa",margin:"4px 0 0"}}>Preencha a data real do recebimento — não precisa ser hoje.</p>
           </div>
 
-          {/* 2ª Parcela programada */}
-          <div style={{marginTop:10,padding:"12px 14px",background:"#f8f4f5",borderRadius:10,border:"1.5px solid #e8e0d8"}}>
-            <p style={{fontSize:11,color:"#72243E",fontWeight:700,margin:"0 0 10px",textTransform:"uppercase",letterSpacing:"1px"}}>📆 2ª Parcela programada</p>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-              <div>
-                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4}}>Valor (R$)</label>
-                <input type="number" style={{...inp,fontSize:13,marginBottom:0}}
-                  placeholder="0,00"
-                  defaultValue={agendamento.parcela_2_valor||""}
-                  onBlur={e=>update(agendamento.id,{parcela_2_valor:e.target.value?Number(e.target.value):null})}
-                />
-              </div>
-              <div>
-                <label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:4}}>Data de vencimento</label>
-                <input type="date" style={{...inp,fontSize:13,marginBottom:0}}
-                  defaultValue={agendamento.parcela_2_data||""}
-                  onBlur={e=>update(agendamento.id,{parcela_2_data:e.target.value||null})}
-                />
-              </div>
-            </div>
-            {agendamento.parcela_2_data&&(
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
-                <span style={{fontSize:11,color:agendamento.parcela_2_pago?"#2e7d32":"#f57c00",fontWeight:600}}>
-                  {agendamento.parcela_2_pago?"✅ 2ª parcela recebida":"⏳ 2ª parcela pendente"}
-                </span>
-                <button onClick={()=>update(agendamento.id,{parcela_2_pago:!agendamento.parcela_2_pago})}
-                  style={{padding:"4px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",border:"1.5px solid "+(agendamento.parcela_2_pago?"#a5d6a7":"#ffe082"),background:agendamento.parcela_2_pago?"#e6f4ea":"#fff8e1",color:agendamento.parcela_2_pago?"#2e7d32":"#f57c00"}}>
-                  {agendamento.parcela_2_pago?"Desfazer":"Marcar como pago"}
-                </button>
-              </div>
-            )}
-            <p style={{fontSize:10,color:"#aaa",margin:"8px 0 0",lineHeight:1.5}}>💡 O app enviará um lembrete automático à cliente no WhatsApp no dia do vencimento.</p>
-          </div>
+          {/* Parcelas programadas — dinâmico até 12x */}
+          <ParcelasSection agendamento={agendamento} onUpdate={update} />
 
           {/* Gerar link Mercado Pago */}
           {Number(agendamento.valor||0)>0&&(()=>{
