@@ -942,10 +942,12 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
   const [letraFiltro,setLetraFiltro]=useState("Todos");
   const [filtroFin,setFiltroFin]=useState("todos");
   const [mesFin,setMesFin]=useState("todos");
+  const [filhoSelecionado,setFilhoSelecionado]=useState(null);
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
   useEffect(()=>{if(abrirAgendamentoId&&agendamentos.length>0){setSelected(abrirAgendamentoId);setTab("agendamentos");onAgendamentoAberto&&onAgendamentoAberto();}},[abrirAgendamentoId,agendamentos]);
+  useEffect(()=>{setFilhoSelecionado(null);},[selectedCliente]);
 
   const update=async(id,patch)=>{
     try{
@@ -1344,17 +1346,54 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
             </div>
           </div>
         )}
-        {cliente.filhos&&cliente.filhos.length>0&&(
-          <div style={{marginBottom:12}}>
-            <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 8px"}}>👶 Filhos cadastrados</p>
-            {cliente.filhos.map((f,i)=>(
-              <div key={i} style={{background:"#faf8f5",border:"1.5px solid #e8e0d8",borderRadius:10,padding:"10px 14px",marginBottom:6}}>
-                <p style={{margin:0,fontSize:13,fontWeight:600}}>{f.nome_crianca} · {f.idade}</p>
-                <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{f.atipico==="Sim"?"🧡 Atípico":"🌿 Típico"}</p>
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Filhos — clicável para ver anamnese completa */}
+        {(()=>{
+          // Monta lista de filhos: usa cliente.filhos; fallback para anamnese avulsa
+          const listaFilhos = (cliente.filhos&&cliente.filhos.length>0)
+            ? cliente.filhos
+            : (cliente.anamnese&&cliente.anamnese.nome_crianca ? [cliente.anamnese] : []);
+          if(listaFilhos.length===0) return null;
+          const EXCLUIR_HEADER=['nome_crianca','idade','atipico','data_nascimento','eca_atip','eca_tip'];
+          return(
+            <div style={{marginBottom:12}}>
+              <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 8px"}}>👶 Filhos cadastrados</p>
+              {listaFilhos.map((f,i)=>{
+                const isOpen=filhoSelecionado===i;
+                // Anamnese: campos do filho ou fallback no cliente.anamnese (1º filho)
+                const anData = (Object.keys(f).length > 4) ? f : (i===0 ? (cliente.anamnese||f) : f);
+                const camposAn = Object.entries(anData).filter(([k,v])=>v&&v!==""&&!EXCLUIR_HEADER.includes(k));
+                return(
+                  <div key={i} style={{marginBottom:6}}>
+                    {/* Card do filho — clicável */}
+                    <div onClick={()=>setFilhoSelecionado(isOpen?null:i)}
+                      style={{background:isOpen?"#fef0f5":"#faf8f5",border:`1.5px solid ${isOpen?"#D9A7B4":"#e8e0d8"}`,borderRadius:isOpen?"10px 10px 0 0":10,padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{f.nome_crianca||"Sem nome"}{f.idade?` · ${f.idade}`:""}</p>
+                        <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{f.atipico==="Sim"?"🧡 Atípico":"🌿 Típico"}</p>
+                      </div>
+                      <span style={{fontSize:12,color:"#b8967e",fontWeight:600}}>{isOpen?"▲ fechar":"📋 ver anamnese"}</span>
+                    </div>
+                    {/* Anamnese expandida */}
+                    {isOpen&&(
+                      <div style={{background:"#fff",border:"1.5px solid #D9A7B4",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"14px 14px 10px"}}>
+                        {camposAn.length>0?(
+                          camposAn.map(([k,v])=>(
+                            <div key={k} style={{marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f5eef0"}}>
+                              <span style={{fontSize:10,color:"#b8967e",display:"block",fontWeight:700,marginBottom:2,textTransform:"uppercase",letterSpacing:".05em"}}>{ANAMNESE_LABELS[k]||k.replace(/_/g," ")}</span>
+                              <span style={{fontSize:13,color:"#333",lineHeight:1.6}}>{Array.isArray(v)?v.join(", "):String(v)}</span>
+                            </div>
+                          ))
+                        ):(
+                          <p style={{fontSize:12,color:"#bbb",textAlign:"center",padding:"10px 0",margin:0}}>Anamnese não preenchida para este filho.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
         {/* Resumo de tudo que o cliente fechou */}
         {ensaiosCliente.length>0&&(()=>{
           const totalGasto=ensaiosCliente.reduce((s,a)=>s+Number(a.valor||0),0);
