@@ -80,15 +80,35 @@ export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
     );
     const agendados = agsRes || [];
 
-    // 3. Monta intervalos bloqueados [inicio_min, fim_min)
-    const intervalosOcupados = agendados
-      .filter((ag) => ag.hora)
-      .map((ag) => {
-        const [h, m] = ag.hora.split(":").map(Number);
-        const inicio = h * 60 + m;
-        const dur = getDuracaoMin(ag); // usa duração real do serviço
-        return [inicio, inicio + dur];
+    // 3a. Compromissos pessoais que bloqueiam horário
+    const diaInteiroRes = await sbGet(
+      `compromissos?data=eq.${data}&dia_inteiro=eq.true&bloqueia_horario=eq.true&select=id&limit=1`
+    );
+    if (diaInteiroRes?.length > 0) return [];
+
+    const compRes = await sbGet(
+      `compromissos?data=eq.${data}&dia_inteiro=eq.false&bloqueia_horario=eq.true&select=hora_inicio,hora_fim`
+    );
+    const intervalosCompromissos = (compRes || [])
+      .filter(c => c.hora_inicio && c.hora_fim)
+      .map(c => {
+        const [hi, mi] = c.hora_inicio.split(":").map(Number);
+        const [hf, mf] = c.hora_fim.split(":").map(Number);
+        return [hi * 60 + mi, hf * 60 + mf];
       });
+
+    // 3b. Monta intervalos bloqueados [inicio_min, fim_min)
+    const intervalosOcupados = [
+      ...agendados
+        .filter((ag) => ag.hora)
+        .map((ag) => {
+          const [h, m] = ag.hora.split(":").map(Number);
+          const inicio = h * 60 + m;
+          const dur = getDuracaoMin(ag);
+          return [inicio, inicio + dur];
+        }),
+      ...intervalosCompromissos,
+    ];
 
     // 4. Filtra slots: o slot é válido se [slot, slot+duracaoMin) não colide com ocupados
     return horariosLiberados.filter((slot) => {

@@ -40,6 +40,10 @@ const atualizarAgendamento = (id, data) => sb(`agendamentos?id=eq.${id}`, { meth
 const deletarCliente       = (id) => sb(`clientes?id=eq.${id}`, { method: "DELETE" });
 const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DELETE" });
+const getCompromissos      = () => sb("compromissos?order=data.asc,hora_inicio.asc");
+const criarCompromisso     = (data) => sb("compromissos", { method:"POST", body:JSON.stringify(data) });
+const atualizarCompromisso = (id,data) => sb(`compromissos?id=eq.${id}`, { method:"PATCH", body:JSON.stringify(data) });
+const deletarCompromisso   = (id) => sb(`compromissos?id=eq.${id}`, { method:"DELETE" });
 // Vale Presente
 const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'+Array.from({length:5},()=>c[Math.floor(Math.random()*c.length)]).join('');};
 const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
@@ -701,15 +705,128 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
   );
 }
 
+// ─── CARD COMPROMISSO ─────────────────────────────────────────────
+const TIPO_ICON = { 'Pessoal':'👤','Reunião':'🤝','Entrega álbum':'📦','Viagem':'✈️','Folga':'☀️' };
+
+function CardCompromisso({ comp, onEditar }) {
+  const horario = comp.dia_inteiro ? 'Dia inteiro' : (comp.hora_inicio && comp.hora_fim ? `${comp.hora_inicio}–${comp.hora_fim}` : comp.hora_inicio || '');
+  return (
+    <div onClick={onEditar} style={{padding:14,border:"1.5px solid #c5cae9",borderRadius:12,marginBottom:8,cursor:"pointer",background:"#f5f6ff",borderLeft:"4px solid #5c6bc0"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+            <span style={{fontSize:13}}>{TIPO_ICON[comp.tipo]||'📌'}</span>
+            <span style={{fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{comp.titulo}</span>
+          </div>
+          {horario&&<p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>🕐 {horario}</p>}
+          {!comp.bloqueia_horario&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>só lembrete</span>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
+          <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>{comp.tipo||'Pessoal'}</span>
+          <span style={{fontSize:10,color:"#5c6bc0",fontWeight:700}}>Editar →</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MODAL COMPROMISSO ────────────────────────────────────────────
+function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
+  const hoje = new Date().toISOString().substring(0,10);
+  const [titulo, setTitulo] = useState(comp?.titulo || '');
+  const [data, setData] = useState(comp?.data || hoje);
+  const [diaInteiro, setDiaInteiro] = useState(comp?.dia_inteiro ?? false);
+  const [horaInicio, setHoraInicio] = useState(comp?.hora_inicio || '');
+  const [horaFim, setHoraFim] = useState(comp?.hora_fim || '');
+  const [tipo, setTipo] = useState(comp?.tipo || 'Pessoal');
+  const [obs, setObs] = useState(comp?.obs || '');
+  const [bloqueiaHorario, setBloqueiaHorario] = useState(comp?.bloqueia_horario ?? true);
+  const [saving, setSaving] = useState(false);
+
+  const salvar = async () => {
+    if (!titulo.trim()) { alert('Informe o título do compromisso'); return; }
+    if (!data) { alert('Informe a data'); return; }
+    if (!diaInteiro && horaFim && horaInicio && horaFim <= horaInicio) { alert('Hora de fim deve ser após a hora de início'); return; }
+    setSaving(true);
+    const payload = { titulo: titulo.trim(), data, tipo, obs: obs||null, dia_inteiro: diaInteiro, hora_inicio: diaInteiro ? null : (horaInicio||null), hora_fim: diaInteiro ? null : (horaFim||null), bloqueia_horario: bloqueiaHorario };
+    await onSalvar(comp?.id || null, payload);
+    setSaving(false);
+    onFechar();
+  };
+
+  const excluir = async () => {
+    if (!window.confirm('Excluir este compromisso?')) return;
+    await onDeletar(comp.id);
+    onFechar();
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(0,0,0,0.5)",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+      <div style={{background:"#fff",borderRadius:"20px 20px 0 0",padding:"24px 20px 32px",maxHeight:"90vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <h3 style={{margin:0,fontFamily:"'Cormorant Garamond',serif",fontSize:20,color:"#1a1a1a"}}>{comp?.id ? 'Editar compromisso' : 'Novo compromisso'}</h3>
+          <button onClick={onFechar} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:"#888"}}>✕</button>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Título <span style={{color:"#b8967e"}}>*</span></label>
+          <input style={inp} value={titulo} onChange={e=>setTitulo(e.target.value)} placeholder="Ex: Médico, Reunião, Entrega álbum..." />
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Data <span style={{color:"#b8967e"}}>*</span></label>
+          <input style={inp} type="date" value={data} onChange={e=>setData(e.target.value)} />
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{...lbl,display:"flex",alignItems:"center",gap:10,cursor:"pointer",marginBottom:0}}>
+            <input type="checkbox" checked={diaInteiro} onChange={e=>setDiaInteiro(e.target.checked)} />
+            Dia inteiro
+          </label>
+        </div>
+        {!diaInteiro&&(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+            <div><label style={lbl}>Início</label><input style={inp} type="time" value={horaInicio} onChange={e=>setHoraInicio(e.target.value)} /></div>
+            <div><label style={lbl}>Fim</label><input style={inp} type="time" value={horaFim} onChange={e=>setHoraFim(e.target.value)} /></div>
+          </div>
+        )}
+        <div style={{marginBottom:14,marginTop:14}}>
+          <label style={lbl}>Tipo</label>
+          <select style={inp} value={tipo} onChange={e=>setTipo(e.target.value)}>
+            {['Pessoal','Reunião','Entrega álbum','Viagem','Folga'].map(t=><option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Observação</label>
+          <textarea style={{...inp,minHeight:60,resize:"vertical"}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Opcional..." />
+        </div>
+        <div style={{marginBottom:20,padding:"12px 14px",borderRadius:10,background:"#f5f6ff",border:"1.5px solid #c5cae9"}}>
+          <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",fontSize:13,color:"#1a1a1a"}}>
+            <input type="checkbox" checked={bloqueiaHorario} onChange={e=>setBloqueiaHorario(e.target.checked)} style={{marginTop:2}} />
+            <div>
+              <span style={{fontWeight:600}}>Bloquear horário para clientes</span>
+              <p style={{margin:"2px 0 0",fontSize:11,color:"#888"}}>{bloqueiaHorario ? 'Clientes não poderão agendar neste horário' : 'Só lembrete — clientes ainda podem agendar'}</p>
+            </div>
+          </label>
+        </div>
+        <button onClick={salvar} disabled={saving} style={{width:"100%",padding:14,borderRadius:10,background:"#5c6bc0",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:saving?"default":"pointer",marginBottom:10}}>
+          {saving ? 'Salvando...' : (comp?.id ? 'Salvar alterações' : 'Criar compromisso')}
+        </button>
+        {comp?.id&&<button onClick={excluir} style={{width:"100%",padding:12,borderRadius:10,background:"#fff",color:"#c62828",border:"1.5px solid #ffcdd2",fontSize:14,cursor:"pointer"}}>🗑 Excluir compromisso</button>}
+      </div>
+    </div>
+  );
+}
+
 // ─── AGENDA VIEW — Lista ──────────────────────────────────────────
 function AgendaView({ auth, onVerCliente }) {
   const [agendamentos,setAgendamentos]=useState([]);
+  const [compromissos,setCompromissos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [fichaSel,setFichaSel]=useState(null);
   const [sincronizando,setSincronizando]=useState(false);
   const [syncStatus,setSyncStatus]=useState(null);
+  const [modalComp,setModalComp]=useState(false);
+  const [compEditando,setCompEditando]=useState(null);
 
-  const carregar=useCallback(async()=>{setLoading(true);try{const ags=await getAgendamentos();setAgendamentos(ags||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
+  const carregar=useCallback(async()=>{setLoading(true);try{const [ags,comps]=await Promise.all([getAgendamentos(),getCompromissos()]);setAgendamentos(ags||[]);setCompromissos(comps||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
 
   const sincronizarTodos=async()=>{
@@ -731,16 +848,22 @@ function AgendaView({ auth, onVerCliente }) {
   };
 
   const hoje=new Date().toISOString().substring(0,10);
-  const upcoming=agendamentos.filter(a=>a.data&&a.data>=hoje&&a.status!=="Cancelado").sort((a,b)=>a.data.localeCompare(b.data)||(a.hora||"").localeCompare(b.hora||"")).slice(0,50);
+  const upcomingAgs=agendamentos.filter(a=>a.data&&a.data>=hoje&&a.status!=="Cancelado").map(a=>({...a,_tipo:"agendamento"}));
+  const upcomingComps=compromissos.filter(c=>c.data&&c.data>=hoje).map(c=>({...c,_tipo:"compromisso"}));
+  const upcoming=[...upcomingAgs,...upcomingComps].sort((a,b)=>a.data.localeCompare(b.data)||((a.hora||a.hora_inicio||"00:00").localeCompare(b.hora||b.hora_inicio||"00:00"))).slice(0,60);
   const porDia={};upcoming.forEach(a=>{if(!porDia[a.data])porDia[a.data]=[];porDia[a.data].push(a);});
   const dias=Object.keys(porDia).sort();
 
   return (
     <div>
       {fichaSel&&<FichaRapida agendamento={fichaSel} onFechar={()=>setFichaSel(null)} onVerMais={()=>{setFichaSel(null);onVerCliente(fichaSel.id);}}/>}
+      {modalComp&&<ModalCompromisso comp={compEditando} onFechar={()=>{setModalComp(false);setCompEditando(null);}} onSalvar={async(id,payload)=>{id?await atualizarCompromisso(id,payload):await criarCompromisso(payload);await carregar();}} onDeletar={async(id)=>{await deletarCompromisso(id);await carregar();}}/>}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,margin:0}}>📅 Próximos ensaios</h3>
-        <button onClick={carregar} style={{padding:"6px 12px",borderRadius:7,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>🔄 Atualizar</button>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>{setCompEditando(null);setModalComp(true);}} style={{padding:"6px 12px",borderRadius:7,background:"#e8eaf6",border:"none",cursor:"pointer",fontSize:12,color:"#5c6bc0",fontWeight:600}}>➕ Compromisso</button>
+          <button onClick={carregar} style={{padding:"6px 12px",borderRadius:7,background:"#f5f0eb",border:"none",cursor:"pointer",fontSize:12,color:"#666"}}>🔄 Atualizar</button>
+        </div>
       </div>
       <div style={{marginBottom:14}}>
         <button onClick={sincronizarTodos} disabled={sincronizando||loading} style={{width:"100%",padding:"9px",borderRadius:8,background:sincronizando?"#e8e0d8":"#f5f0eb",border:"1.5px solid #e8e0d8",cursor:sincronizando?"default":"pointer",fontSize:12,fontWeight:600,color:sincronizando?"#aaa":"#72243E",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
@@ -761,8 +884,11 @@ function AgendaView({ auth, onVerCliente }) {
               {isHoje&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:700,background:"#fdf0e8",color:"#b8967e"}}>HOJE</span>}
               <div style={{flex:1,height:1,background:"#f0e8e0"}}/>
             </div>
-            {porDia[dia].map(ag=>{
-              const cl=ag?.clientes||{};const st=STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"];
+            {porDia[dia].map(item=>{
+              if(item._tipo==="compromisso"){
+                return <CardCompromisso key={item.id} comp={item} onEditar={()=>{setCompEditando(item);setModalComp(true);}}/>;
+              }
+              const ag=item;const cl=ag?.clientes||{};const st=STATUS_COLORS[ag.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[ag.pagamento_status]||PAG_COLORS["Pendente"];
               return(
                 <div key={ag.id} onClick={()=>setFichaSel(ag)} style={{padding:14,border:"1.5px solid "+(isHoje?"#f0ddd0":"#e8e0d8"),borderRadius:12,marginBottom:8,cursor:"pointer",background:isHoje?"#fffbf8":"#fff",borderLeft:`4px solid ${isHoje?"#b8967e":"#e8e0d8"}`}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
