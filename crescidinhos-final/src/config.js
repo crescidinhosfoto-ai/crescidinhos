@@ -69,6 +69,7 @@ const FOTOGRAFO2 = { id: "fotografo2", label: "+1 Fotógrafo",       price: 450 
 const MAKINGOFF  = { id: "makingoff",  label: "Making off",         price: 400 };
 const HORA_EXTRA = { id: "hora-extra", label: "Hora adicional",     price: 275 };
 const BALOES     = { id: "baloes",     label: "Balões",             price: 160 };
+const ARCO_BALAO = { id: "arco-balao", label: "Arco de balão",      price: 140 };
 const ENSAIO_DUO = { id: "extra-duo",  label: "Ensaio Duo",         price: 280, precisaAgenda: true, duracao_min: 60 };
 const SMASH_BAS  = { id: "extra-smash",     label: "Smash Básico",    price: 380, precisaAgenda: true, duracao_min: 60 };
 const SMASH_COMP = { id: "extra-smash-comp", label: "Smash Completo", price: 620, precisaAgenda: true, duracao_min: 60 };
@@ -118,7 +119,7 @@ export const SERVICES = [
       { id: "gestante-ext", label: "Externa", price: 580,
         detail: "50 fotos · 2h · Locações dentro de Bauru", fotos: 50, duracao: "2h", duracao_min: 120 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── NEWBORN ─────────────────────────────────────────────────────
@@ -131,7 +132,7 @@ export const SERVICES = [
       { id: "newborn-studio", label: "Sessão Newborn", price: 480,
         detail: "20 fotos editadas · 3h · Sessão com pausas e segurança total", fotos: 20, duracao: "3h", duracao_min: 180 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── ADULTO / CORPORATIVO ────────────────────────────────────────
@@ -148,7 +149,7 @@ export const SERVICES = [
       { id: "adulto-ext", label: "Externa", price: 420,
         detail: "40 fotos · 2h · Local de trabalho ou externo · Dentro de Bauru", fotos: 40, duracao: "2h", duracao_min: 120 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── FAMÍLIA ─────────────────────────────────────────────────────
@@ -165,7 +166,7 @@ export const SERVICES = [
       { id: "familia-ext", label: "Externa", price: 420,
         detail: "40 fotos · 2h · Luz natural e momentos únicos · Dentro de Bauru", fotos: 40, duracao: "2h", duracao_min: 120 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── CAMPANHA SAZONAL ────────────────────────────────────────────
@@ -178,7 +179,7 @@ export const SERVICES = [
       { id: "sazonal-consulta", label: "Consultar disponibilidade", price: null,
         detail: "Valor conforme a campanha · 1h · Entre em contato para saber as próximas datas", duracao: "1h", duracao_min: 60 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── INFANTIL AVULSO ─────────────────────────────────────────────
@@ -202,7 +203,7 @@ export const SERVICES = [
       { id: "inf-externo", label: "Externo", price: 320,
         detail: "40 fotos · 1h · Criança em ambiente externo · Luz natural · Dentro de Bauru", fotos: 40, duracao: "1h", duracao_min: 60 },
     ],
-    extras: [],
+    extras: [QUADRO, ARCO_BALAO],
   },
 
   // ─── ANIVERSÁRIO ─────────────────────────────────────────────────
