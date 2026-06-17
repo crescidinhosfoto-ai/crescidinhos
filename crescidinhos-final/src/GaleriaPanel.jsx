@@ -121,6 +121,19 @@ export default function GaleriaPanel({ agendamento }) {
 
   const cancelarDeleteMode = () => { setDeleteMode(false); setSelecionadasParaExcluir(new Set()); };
 
+  const excluirTodasFotos = async () => {
+    const total = fotos.length;
+    if (total === 0) return;
+    if (!window.confirm(`Apagar TODAS as ${total} fotos do storage?\n\nEssa ação é irreversível — use apenas após o cliente ter finalizado a seleção.`)) return;
+    setMsg("⏳ Apagando fotos do storage...");
+    try {
+      await Promise.all(fotos.map(f => deletarFoto(f.path)));
+      await sb(`galerias?id=eq.${galeria.id}`, { method: "PATCH", body: JSON.stringify({ fotos: [], ativa: false }) });
+      setGaleria(prev => ({ ...prev, fotos: [], ativa: false }));
+      setMsg(`✅ ${total} foto(s) apagadas. Atendimento encerrado.`);
+    } catch (e) { setMsg("❌ Erro: " + e.message); }
+  };
+
   const salvarConfig = async () => {
     setSaving(true);
     try {
@@ -293,6 +306,18 @@ export default function GaleriaPanel({ agendamento }) {
             <div style={{ marginTop: 10 }}>
               <label style={{ fontSize: 11, color: C.muted, display: "block", marginBottom: 4 }}>Link de pagamento das extras (InfinityPay)</label>
               <input style={inp} type="url" placeholder="Cole o link aqui" defaultValue={galeria.link_pagamento_extras || ""} onBlur={e => salvarLinkExtras(e.target.value)} />
+            </div>
+          )}
+
+          {/* Encerrar atendimento — apaga todas as fotos do storage */}
+          {fotos.length > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: `1px solid #c8e6c9` }}>
+              <p style={{ fontSize: 11, color: C.muted, margin: "0 0 8px", lineHeight: 1.5 }}>
+                Cliente já finalizou a seleção? Apague as fotos do storage para encerrar o atendimento e liberar espaço.
+              </p>
+              <button onClick={excluirTodasFotos} style={btn(C.red, { width: "100%", fontSize: 13 })}>
+                🗑️ Apagar todas as fotos do storage
+              </button>
             </div>
           )}
         </div>
