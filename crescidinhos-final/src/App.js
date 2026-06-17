@@ -7,6 +7,7 @@ import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
 import GaleriaPanel from "./GaleriaPanel";
 import GaleriaCliente from "./GaleriaCliente";
+import AgentePanel from "./AgentePanel";
 
 // ─── SUPABASE ────────────────────────────────────────────────────
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
@@ -2951,11 +2952,12 @@ function PhotographerPanel({ auth, onLogout }) {
       {auth.email===PHOTOGRAPHER.email&&(
         <>
           <div style={{display:"flex",gap:6,marginBottom:20}}>
-            {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Horários"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
+            {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Horários"],["agente","🤖 Agente"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
           </div>
           {tab==="agenda"&&<AgendaView auth={auth} onVerCliente={(id)=>{setAbrirAgId(id);setTab("crm");}}/>}
           {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)}/>}
           {tab==="disponibilidade"&&<DisponibilidadePanel/>}
+          {tab==="agente"&&<AgentePanel/>}
         </>
       )}
     </div>
