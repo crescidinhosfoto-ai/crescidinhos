@@ -26,18 +26,35 @@ const C = { primary: "#b8967e", light: "#f5f0eb", border: "#e8e0d8", text: "#3d2
 
 // ── Marca d'água sobre a foto ──────────────────────────────────────
 function Marca({ grande = false }) {
-  // Gera uma grade de marcas repetidas em diagonal cobrindo toda a foto
   const texto = "Crescidinhos Fotografia";
-  const tamanho = grande ? 16 : 11;
-  const opacidade = grande ? 0.35 : 0.45;
-  const espacamento = grande ? 110 : 70;
+  const tamanho = grande ? 13 : 11;
+  const opacidade = grande ? 0.38 : 0.45;
 
-  // Cria pontos de marca em grid 4x6 (cobrindo bem a imagem)
+  // Distribui pontos explicitamente dentro de 0-100% para cobrir toda a área
   const pontos = [];
-  for (let row = 0; row < 6; row++) {
-    for (let col = 0; col < 4; col++) {
-      const offsetX = (row % 2 === 0) ? 0 : espacamento / 2;
-      pontos.push({ x: col * espacamento + offsetX, y: row * (espacamento * 0.6) });
+  if (grande) {
+    // Grade 4 cols × 7 rows com stagger, cobrindo 0-100% em ambos os eixos
+    const cols = 4, rows = 7;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const offsetX = (row % 2 === 0) ? 0 : 13;
+        pontos.push({
+          x: (col / (cols - 1)) * 85 + offsetX,
+          y: (row / (rows - 1)) * 92 + 2,
+        });
+      }
+    }
+  } else {
+    // Grade miniatura: 3 cols × 4 rows
+    const cols = 3, rows = 4;
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const offsetX = (row % 2 === 0) ? 0 : 18;
+        pontos.push({
+          x: (col / (cols - 1)) * 75 + offsetX,
+          y: (row / (rows - 1)) * 85 + 5,
+        });
+      }
     }
   }
 
