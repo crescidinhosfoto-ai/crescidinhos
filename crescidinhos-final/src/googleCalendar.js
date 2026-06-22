@@ -125,6 +125,58 @@ export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
   }
 }
 
+/**
+ * Cria um evento no Google Calendar do usuário autenticado
+ * @param {string} token - access_token do Google (auth.token.access_token)
+ * @param {object} ag - agendamento com data, hora, servico, clientes, etc.
+ * @returns {Promise<{ok:boolean, id?:string, error?:string}>}
+ */
+export async function criarEventoGoogleCalendar(token, ag) {
+  try {
+    const cl = ag.clientes || {};
+    const [h, m] = (ag.hora || "09:00").split(":").map(Number);
+    const dur = ag.duracao_min || 60;
+    const inicio = new Date(`${ag.data}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
+    const fim = new Date(inicio.getTime() + dur * 60000);
+    const fmtDT = (d) => d.toISOString().slice(0,19);
+
+    const evento = {
+      summary: `📸 ${ag.servico}${ag.modalidade ? " — " + ag.modalidade : ""} · ${cl.nome_mae || ""}`,
+      description: [
+        cl.nome_mae   ? `Cliente: ${cl.nome_mae}`   : null,
+        cl.telefone   ? `Tel: ${cl.telefone}`        : null,
+        ag.servico    ? `Serviço: ${ag.servico}`     : null,
+        ag.modalidade ? `Modalidade: ${ag.modalidade}` : null,
+        ag.valor      ? `Valor: R$ ${Number(ag.valor).toFixed(2).replace(".",",")}` : null,
+      ].filter(Boolean).join("\n"),
+      start: { dateTime: `${fmtDT(inicio)}-03:00`, timeZone: "America/Sao_Paulo" },
+      end:   { dateTime: `${fmtDT(fim)}-03:00`,    timeZone: "America/Sao_Paulo" },
+      colorId: "1",
+    };
+
+    const res = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(evento),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, error: err };
+    }
+    const data = await res.json();
+    return { ok: true, id: data.id };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
 // Mantidos para compatibilidade
 export async function fetchCalendarEvents() { return []; }
 export async function createCalendarEvent() { return null; }

@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, REGRAS, fmtPreco, calcularTotal } from "./config";
-import { fetchHorariosDisponiveis, fetchDatasDisponiveis } from "./googleCalendar";
+import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
@@ -902,21 +902,18 @@ function AgendaView({ auth, onVerCliente }) {
   useEffect(()=>{carregar();},[carregar]);
 
   const sincronizarTodos=async()=>{
+    if(!auth?.token?.access_token){alert('Faça login com o Google para sincronizar.');return;}
     setSincronizando(true);setSyncStatus(null);
-    const limite=new Date();limite.setDate(limite.getDate()-60);
-    const limiteStr=limite.toISOString().substring(0,10);
-    const paraSync=agendamentos.filter(a=>(a.status==="Confirmado"||a.status==="A Realizar")&&a.data&&a.data>=limiteStr&&a.hora);
-    let ok=0;
+    const hoje2=new Date().toISOString().substring(0,10);
+    const paraSync=agendamentos.filter(a=>(a.status==="Confirmado"||a.status==="A Realizar")&&a.data&&a.data>=hoje2&&a.hora);
+    let ok=0,erros=0;
     for(const ag of paraSync){
-      const cl=ag.clientes||{};
-      try{
-        await fetch(WEBHOOK_CONFIRMAR,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:ag.id,nome_mae:cl.nome_mae,nome_crianca:ag.nome_crianca||cl.nome_crianca,email:cl.email,telefone:cl.telefone,servico:ag.servico,modalidade:ag.modalidade,data:ag.data,hora:ag.hora,duracao_min:ag.duracao_min||60,valor:ag.valor})});
-        ok++;
-        await new Promise(r=>setTimeout(r,600));
-      }catch(e){console.error("Sync erro:",ag.id,e);}
+      const r=await criarEventoGoogleCalendar(auth.token.access_token,ag);
+      if(r.ok)ok++;else{erros++;console.error("Sync erro:",ag.id,r.error);}
+      await new Promise(res=>setTimeout(res,300));
     }
     setSincronizando(false);
-    setSyncStatus({ok,total:paraSync.length});
+    setSyncStatus({ok,total:paraSync.length,erros});
   };
 
   const hoje=new Date().toISOString().substring(0,10);
@@ -941,7 +938,7 @@ function AgendaView({ auth, onVerCliente }) {
         <button onClick={sincronizarTodos} disabled={sincronizando||loading} style={{width:"100%",padding:"9px",borderRadius:8,background:sincronizando?"#e8e0d8":"#f5f0eb",border:"1.5px solid #e8e0d8",cursor:sincronizando?"default":"pointer",fontSize:12,fontWeight:600,color:sincronizando?"#aaa":"#72243E",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
           {sincronizando?"⏳ Sincronizando com Google Calendar...":"📅 Sincronizar todos com Google Calendar"}
         </button>
-        {syncStatus&&<p style={{fontSize:11,textAlign:"center",margin:"4px 0 0",color:syncStatus.ok===syncStatus.total?"#2e7d32":"#f57c00",fontWeight:600}}>{syncStatus.ok===syncStatus.total?`✅ ${syncStatus.ok} agendamento${syncStatus.ok!==1?"s":""} sincronizado${syncStatus.ok!==1?"s":""}!`:`⚠️ ${syncStatus.ok} de ${syncStatus.total} sincronizados`}</p>}
+        {syncStatus&&<p style={{fontSize:11,textAlign:"center",margin:"4px 0 0",color:syncStatus.erros===0?"#2e7d32":"#f57c00",fontWeight:600}}>{syncStatus.erros===0?`✅ ${syncStatus.ok} agendamento${syncStatus.ok!==1?"s":""} adicionado${syncStatus.ok!==1?"s":""} ao Google Calendar!`:`⚠️ ${syncStatus.ok} de ${syncStatus.total} sincronizados · ${syncStatus.erros} erro(s)`}</p>}
       </div>
       {loading&&<p style={{textAlign:"center",color:"#bbb",fontSize:13,padding:"30px 0"}}>Carregando agenda...</p>}
       {!loading&&dias.length===0&&<div style={{textAlign:"center",padding:"48px 16px"}}><div style={{fontSize:40,marginBottom:12}}>📭</div><p style={{fontSize:14,color:"#bbb"}}>Nenhum evento nos próximos dias</p></div>}
@@ -1117,7 +1114,7 @@ function ParcelasSection({ agendamento, onUpdate }) {
 }
 
 // ─── CRM VIEW ─────────────────────────────────────────────────────
-function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
+function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
   const [agendamentos,setAgendamentos]=useState([]);
   const [clientes,setClientes]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -1151,26 +1148,9 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto }) {
     try{
       await atualizarAgendamento(id,patch);
       setAgendamentos(as=>as.map(a=>a.id===id?{...a,...patch}:a));
-      if(patch.status==="Confirmado"){
-        const ag=agendamentos.find(a=>a.id===id)||{};
-        const cl=ag.clientes||{};
-        fetch(WEBHOOK_CONFIRMAR,{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({
-            id,
-            nome_mae:cl.nome_mae,
-            nome_crianca:ag.nome_crianca||cl.nome_crianca,
-            email:cl.email,
-            telefone:cl.telefone,
-            servico:ag.servico,
-            modalidade:ag.modalidade,
-            data:ag.data,
-            hora:ag.hora,
-            duracao_min:ag.duracao_min||60,
-            valor:ag.valor,
-          }),
-        }).catch(()=>{});
+      if(patch.status==="Confirmado"&&auth?.token?.access_token){
+        const ag={...agendamentos.find(a=>a.id===id)||{},...patch};
+        criarEventoGoogleCalendar(auth.token.access_token,ag).catch(()=>{});
       }
     }catch(e){alert("Erro: "+e.message);}
   };
@@ -3026,7 +3006,7 @@ function PhotographerPanel({ auth, onLogout }) {
             {[["agenda","📅 Agenda"],["crm","🗂 CRM"],["disponibilidade","🗓 Horários"]].map(([t,l])=><button key={t} onClick={()=>setTab(t)} style={{flex:1,padding:"10px 4px",borderRadius:8,fontSize:11,fontWeight:600,background:tab===t?"#1a1a1a":"#fff",color:tab===t?"#fff":"#666",border:"2px solid "+(tab===t?"#1a1a1a":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}
           </div>
           {tab==="agenda"&&<AgendaView auth={auth} onVerCliente={(id)=>{setAbrirAgId(id);setTab("crm");}}/>}
-          {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)}/>}
+          {tab==="crm"&&<CRMView abrirAgendamentoId={abrirAgId} onAgendamentoAberto={()=>setAbrirAgId(null)} auth={auth}/>}
           {tab==="disponibilidade"&&<DisponibilidadePanel/>}
         </>
       )}
