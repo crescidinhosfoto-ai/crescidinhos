@@ -41,9 +41,11 @@ const deletarCliente       = (id) => sb(`clientes?id=eq.${id}`, { method: "DELET
 const deletarAgendamentosCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}`, { method: "DELETE" });
 const deletarAgendamento = (id) => sb(`agendamentos?id=eq.${id}`, { method: "DELETE" });
 const getCompromissos      = () => sb("compromissos?order=data.asc,hora_inicio.asc");
-const criarCompromisso     = (data) => sb("compromissos", { method:"POST", body:JSON.stringify(data) });
-const atualizarCompromisso = (id,data) => sb(`compromissos?id=eq.${id}`, { method:"PATCH", body:JSON.stringify(data) });
-const deletarCompromisso   = (id) => sb(`compromissos?id=eq.${id}`, { method:"DELETE" });
+const criarCompromisso       = (data) => sb("compromissos", { method:"POST", body:JSON.stringify(data) });
+const criarCompromissos      = (lista) => sb("compromissos", { method:"POST", body:JSON.stringify(lista) });
+const atualizarCompromisso   = (id,data) => sb(`compromissos?id=eq.${id}`, { method:"PATCH", body:JSON.stringify(data) });
+const deletarCompromisso     = (id) => sb(`compromissos?id=eq.${id}`, { method:"DELETE" });
+const deletarCompromissosSerie = (rid) => sb(`compromissos?recorrencia_id=eq.${rid}`, { method:"DELETE" });
 // Vale Presente
 const gerarCodigoVale=()=>{const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789';return 'C'+Array.from({length:5},()=>c[Math.floor(Math.random()*c.length)]).join('');};
 const buscarValeByCode=(code)=>sb(`agendamentos?obs=ilike.*${encodeURIComponent(code)}*&status=eq.Ativo&select=*,clientes(nome_mae)&limit=1`);
@@ -719,7 +721,10 @@ function CardCompromisso({ comp, onEditar }) {
             <span style={{fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{comp.titulo}</span>
           </div>
           {horario&&<p style={{margin:"0 0 4px",fontSize:12,color:"#888"}}>🕐 {horario}</p>}
-          {!comp.bloqueia_horario&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>só lembrete</span>}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {!comp.bloqueia_horario&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>só lembrete</span>}
+            {comp.recorrencia_id&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>🔁 recorrente</span>}
+          </div>
         </div>
         <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4,marginLeft:8}}>
           <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,background:"#e8eaf6",color:"#5c6bc0",fontWeight:600}}>{comp.tipo||'Pessoal'}</span>
@@ -731,7 +736,21 @@ function CardCompromisso({ comp, onEditar }) {
 }
 
 // ─── MODAL COMPROMISSO ────────────────────────────────────────────
-function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
+const DIAS_SEMANA = [
+  {label:'Seg',idx:1},{label:'Ter',idx:2},{label:'Qua',idx:3},
+  {label:'Qui',idx:4},{label:'Sex',idx:5},{label:'Sáb',idx:6},{label:'Dom',idx:0},
+];
+const gerarUUID = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);});
+const gerarDatasRecorrentes = (dataInicio, diasIdx, meses=6) => {
+  const datas=[];
+  const inicio=new Date(dataInicio+'T12:00:00');
+  const fim=new Date(inicio);fim.setMonth(fim.getMonth()+meses);
+  const cur=new Date(inicio);
+  while(cur<=fim){if(diasIdx.includes(cur.getDay()))datas.push(cur.toISOString().substring(0,10));cur.setDate(cur.getDate()+1);}
+  return datas;
+};
+
+function ModalCompromisso({ comp, onFechar, onSalvar, onSalvarLote, onDeletar, onDeletarSerie }) {
   const hoje = new Date().toISOString().substring(0,10);
   const [titulo, setTitulo] = useState(comp?.titulo || '');
   const [data, setData] = useState(comp?.data || hoje);
@@ -741,22 +760,39 @@ function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
   const [tipo, setTipo] = useState(comp?.tipo || 'Pessoal');
   const [obs, setObs] = useState(comp?.obs || '');
   const [bloqueiaHorario, setBloqueiaHorario] = useState(comp?.bloqueia_horario ?? true);
+  const [recorrente, setRecorrente] = useState(false);
+  const [diasSel, setDiasSel] = useState([]);
   const [saving, setSaving] = useState(false);
 
+  const toggleDia = (idx) => setDiasSel(prev=>prev.includes(idx)?prev.filter(d=>d!==idx):[...prev,idx]);
+
   const salvar = async () => {
-    if (!titulo.trim()) { alert('Informe o título do compromisso'); return; }
+    if (!titulo.trim()) { alert('Informe o título'); return; }
     if (!data) { alert('Informe a data'); return; }
     if (!diaInteiro && horaFim && horaInicio && horaFim <= horaInicio) { alert('Hora de fim deve ser após a hora de início'); return; }
+    if (recorrente && diasSel.length === 0) { alert('Selecione ao menos um dia da semana'); return; }
     setSaving(true);
-    const payload = { titulo: titulo.trim(), data, tipo, obs: obs||null, dia_inteiro: diaInteiro, hora_inicio: diaInteiro ? null : (horaInicio||null), hora_fim: diaInteiro ? null : (horaFim||null), bloqueia_horario: bloqueiaHorario };
-    await onSalvar(comp?.id || null, payload);
+    const base = { titulo:titulo.trim(), tipo, obs:obs||null, dia_inteiro:diaInteiro, hora_inicio:diaInteiro?null:(horaInicio||null), hora_fim:diaInteiro?null:(horaFim||null), bloqueia_horario:bloqueiaHorario };
+    if (recorrente && !comp?.id) {
+      const rid = gerarUUID();
+      const datas = gerarDatasRecorrentes(data, diasSel, 6);
+      await onSalvarLote(datas.map(d=>({...base, data:d, recorrencia_id:rid})));
+    } else {
+      await onSalvar(comp?.id||null, {...base, data});
+    }
     setSaving(false);
     onFechar();
   };
 
   const excluir = async () => {
-    if (!window.confirm('Excluir este compromisso?')) return;
-    await onDeletar(comp.id);
+    if (comp?.recorrencia_id) {
+      const escolha = window.confirm('Excluir TODA a série de eventos recorrentes?\n\nOK = excluir toda a série\nCancelar = excluir só este dia');
+      if (escolha) { await onDeletarSerie(comp.recorrencia_id); }
+      else { await onDeletar(comp.id); }
+    } else {
+      if (!window.confirm('Excluir este compromisso?')) return;
+      await onDeletar(comp.id);
+    }
     onFechar();
   };
 
@@ -769,10 +805,10 @@ function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
         </div>
         <div style={{marginBottom:14}}>
           <label style={lbl}>Título <span style={{color:"#b8967e"}}>*</span></label>
-          <input style={inp} value={titulo} onChange={e=>setTitulo(e.target.value)} placeholder="Ex: Médico, Reunião, Entrega álbum..." />
+          <input style={inp} value={titulo} onChange={e=>setTitulo(e.target.value)} placeholder="Ex: Ginástica, Médico, Reunião..." />
         </div>
         <div style={{marginBottom:14}}>
-          <label style={lbl}>Data <span style={{color:"#b8967e"}}>*</span></label>
+          <label style={lbl}>Data {recorrente ? '(início da série)' : ''} <span style={{color:"#b8967e"}}>*</span></label>
           <input style={inp} type="date" value={data} onChange={e=>setData(e.target.value)} />
         </div>
         <div style={{marginBottom:14}}>
@@ -797,6 +833,42 @@ function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
           <label style={lbl}>Observação</label>
           <textarea style={{...inp,minHeight:60,resize:"vertical"}} value={obs} onChange={e=>setObs(e.target.value)} placeholder="Opcional..." />
         </div>
+
+        {/* Recorrência — só ao criar */}
+        {!comp?.id&&(
+          <div style={{marginBottom:14,padding:"12px 14px",borderRadius:10,background:"#f0f4ff",border:"1.5px solid #c5cae9"}}>
+            <label style={{display:"flex",alignItems:"center",gap:10,cursor:"pointer",fontSize:13,color:"#1a1a1a",marginBottom:recorrente?12:0}}>
+              <input type="checkbox" checked={recorrente} onChange={e=>setRecorrente(e.target.checked)} />
+              <span style={{fontWeight:600}}>🔁 Repetir toda semana (6 meses)</span>
+            </label>
+            {recorrente&&(
+              <div>
+                <p style={{fontSize:11,color:"#666",margin:"0 0 10px"}}>Selecione os dias que se repetem:</p>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {DIAS_SEMANA.map(d=>{
+                    const sel=diasSel.includes(d.idx);
+                    return(
+                      <button key={d.idx} onClick={()=>toggleDia(d.idx)} style={{padding:"6px 10px",borderRadius:8,border:`2px solid ${sel?"#5c6bc0":"#c5cae9"}`,background:sel?"#5c6bc0":"#fff",color:sel?"#fff":"#5c6bc0",fontSize:13,fontWeight:700,cursor:"pointer",minWidth:42}}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {diasSel.length>0&&(
+                  <p style={{fontSize:11,color:"#5c6bc0",margin:"10px 0 0",fontWeight:600}}>
+                    ≈ {gerarDatasRecorrentes(data,diasSel,6).length} eventos criados até {(()=>{const d=new Date(data+'T12:00:00');d.setMonth(d.getMonth()+6);return d.toLocaleDateString('pt-BR');})()}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        {comp?.recorrencia_id&&(
+          <div style={{marginBottom:14,padding:"10px 14px",borderRadius:10,background:"#f0f4ff",border:"1.5px solid #c5cae9"}}>
+            <p style={{margin:0,fontSize:12,color:"#5c6bc0"}}>🔁 Este é um evento recorrente. Ao excluir, você poderá escolher entre excluir só este dia ou toda a série.</p>
+          </div>
+        )}
+
         <div style={{marginBottom:20,padding:"12px 14px",borderRadius:10,background:"#f5f6ff",border:"1.5px solid #c5cae9"}}>
           <label style={{display:"flex",alignItems:"flex-start",gap:10,cursor:"pointer",fontSize:13,color:"#1a1a1a"}}>
             <input type="checkbox" checked={bloqueiaHorario} onChange={e=>setBloqueiaHorario(e.target.checked)} style={{marginTop:2}} />
@@ -807,7 +879,7 @@ function ModalCompromisso({ comp, onFechar, onSalvar, onDeletar }) {
           </label>
         </div>
         <button onClick={salvar} disabled={saving} style={{width:"100%",padding:14,borderRadius:10,background:"#5c6bc0",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:saving?"default":"pointer",marginBottom:10}}>
-          {saving ? 'Salvando...' : (comp?.id ? 'Salvar alterações' : 'Criar compromisso')}
+          {saving ? 'Salvando...' : (comp?.id ? 'Salvar alterações' : (recorrente&&diasSel.length>0?`Criar ${gerarDatasRecorrentes(data,diasSel,6).length} eventos`:'Criar compromisso'))}
         </button>
         {comp?.id&&<button onClick={excluir} style={{width:"100%",padding:12,borderRadius:10,background:"#fff",color:"#c62828",border:"1.5px solid #ffcdd2",fontSize:14,cursor:"pointer"}}>🗑 Excluir compromisso</button>}
       </div>
@@ -857,7 +929,7 @@ function AgendaView({ auth, onVerCliente }) {
   return (
     <div>
       {fichaSel&&<FichaRapida agendamento={fichaSel} onFechar={()=>setFichaSel(null)} onVerMais={()=>{setFichaSel(null);onVerCliente(fichaSel.id);}}/>}
-      {modalComp&&<ModalCompromisso comp={compEditando} onFechar={()=>{setModalComp(false);setCompEditando(null);}} onSalvar={async(id,payload)=>{id?await atualizarCompromisso(id,payload):await criarCompromisso(payload);await carregar();}} onDeletar={async(id)=>{await deletarCompromisso(id);await carregar();}}/>}
+      {modalComp&&<ModalCompromisso comp={compEditando} onFechar={()=>{setModalComp(false);setCompEditando(null);}} onSalvar={async(id,payload)=>{id?await atualizarCompromisso(id,payload):await criarCompromisso(payload);await carregar();}} onSalvarLote={async(lista)=>{await criarCompromissos(lista);await carregar();}} onDeletar={async(id)=>{await deletarCompromisso(id);await carregar();}} onDeletarSerie={async(rid)=>{await deletarCompromissosSerie(rid);await carregar();}}/>}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,margin:0}}>📅 Próximos ensaios</h3>
         <div style={{display:"flex",gap:6}}>
