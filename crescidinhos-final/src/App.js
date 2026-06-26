@@ -1297,7 +1297,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             <div><h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:"0 0 2px"}}>{cl.nome_mae}</h3><p style={{fontSize:12,color:"#999",margin:0}}>{cl.nome_crianca?"👶 "+cl.nome_crianca+(cl.atipico?" · 🧡 Atípico":" · 🌿 Típico"):""}</p></div>
             <span style={{padding:"4px 12px",borderRadius:20,fontSize:11,fontWeight:700,background:st.bg,color:st.color}}>{agendamento.status}</span>
           </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>{[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["Valor",`R$ ${Number(agendamento.valor||0).toFixed(2).replace(".",",")}`],["WhatsApp",cl.telefone]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>{[["Serviço",agendamento.servico],["Modalidade",agendamento.modalidade||"—"],["WhatsApp",cl.telefone]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}<div><span style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Valor</span><input type="number" step="0.01" key={agendamento.id} defaultValue={Number(agendamento.valor||0).toFixed(2)} onBlur={e=>{const v=parseFloat(e.target.value);if(!isNaN(v))update(agendamento.id,{valor:v});}} style={{...inp,fontSize:13,padding:"5px 8px",width:"100%"}}/></div></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <div><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Data</label><input style={{...inp,fontSize:13}} type="date" defaultValue={agendamento.data||""} onBlur={e=>e.target.value&&update(agendamento.id,{data:e.target.value})}/></div>
             <div><label style={{fontSize:10,color:"#aaa",display:"block",marginBottom:3}}>Horário</label><input style={{...inp,fontSize:13}} type="time" defaultValue={agendamento.hora||""} onBlur={e=>e.target.value&&update(agendamento.id,{hora:e.target.value})}/></div>
@@ -1620,8 +1620,9 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
         })()}
         {/* Resumo de tudo que o cliente fechou */}
         {ensaiosCliente.length>0&&(()=>{
-          const totalGasto=ensaiosCliente.reduce((s,a)=>s+Number(a.valor||0),0);
-          const totalPago=ensaiosCliente.filter(a=>a.pagamento_status==="Pago").reduce((s,a)=>s+Number(a.valor||0),0);
+          const financeiros=ensaiosCliente.filter(a=>!a.modalidade?.startsWith("Vinculado"));
+          const totalGasto=financeiros.reduce((s,a)=>s+Number(a.valor||0),0);
+          const totalPago=financeiros.filter(a=>a.pagamento_status==="Pago").reduce((s,a)=>s+Number(a.valor||0),0);
           const an=cliente.anamnese||cliente.filhos?.[0]||{};
           const isAtip=an.atipico==="Sim"||cliente.atipico;
           const autImagem=isAtip?(an.postar_transtorno||null):(an.autoriza_imagem||null);
@@ -1651,20 +1652,22 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
           const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
           const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
           const de=a.dados_evento||{};
-          // Identifica extras do obs
+          // Identifica extras do obs e se é vinculado
           const obsExtras=a.obs&&a.obs.startsWith("Inclui")?a.obs:null;
+          const isVinculado=a.modalidade?.startsWith("Vinculado");
           return(
-            <div key={a.id} onClick={()=>{setSelectedCliente(null);setSelected(a.id);}} style={{padding:12,border:"1.5px solid #e8e0d8",borderRadius:10,marginBottom:8,cursor:"pointer",background:"#fff",borderLeft:`3px solid ${st.color}`}}>
+            <div key={a.id} onClick={()=>{setSelectedCliente(null);setSelected(a.id);}} style={{padding:12,border:"1.5px solid "+(isVinculado?"#e8eaf6":"#e8e0d8"),borderRadius:10,marginBottom:8,cursor:"pointer",background:isVinculado?"#f8f9ff":"#fff",borderLeft:`3px solid ${isVinculado?"#9fa8da":st.color}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                 <div style={{flex:1}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1a1a1a"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
+                  <p style={{margin:0,fontSize:13,fontWeight:700,color:isVinculado?"#7986cb":"#1a1a1a"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
                   <p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)}{a.hora?" às "+a.hora:""}</p>
                   {de.nome_aniversariante&&<p style={{margin:"2px 0 0",fontSize:11,color:"#b8967e"}}>🎂 {de.nome_aniversariante}{de.local_nome?" · "+de.local_nome:""}</p>}
                   {obsExtras&&<p style={{margin:"2px 0 0",fontSize:11,color:"#698494"}}>📸 {obsExtras}</p>}
                 </div>
-                <p style={{fontSize:13,fontWeight:700,color:"#1a1a1a",margin:"0 0 0 8px",fontFamily:"'Cormorant Garamond',serif",flexShrink:0}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
+                <p style={{fontSize:13,fontWeight:700,color:isVinculado?"#bbb":"#1a1a1a",margin:"0 0 0 8px",fontFamily:"'Cormorant Garamond',serif",flexShrink:0,textDecoration:isVinculado?"line-through":"none"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
               </div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {isVinculado&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:"#e8eaf6",color:"#5c6bc0"}}>🔗 incluso no evento</span>}
                 <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span>
                 <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
                 {a.contrato_numero&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:"#e8f4ff",color:"#1565C0"}}>📄 {a.contrato_numero}</span>}
@@ -2541,7 +2544,7 @@ function ClientView() {
           servico:extraComEnsaio.label,servico_id:extraComEnsaio.id,
           modalidade:"Vinculado ao "+service?.label,modalidade_id:null,
           duracao_min:extraComEnsaio.duracao_min||60,nome_crianca:nomeCrianca||null,
-          data:dataEnsaio,hora:horaEnsaio,valor:extraComEnsaio.price||null,
+          data:dataEnsaio,hora:horaEnsaio,valor:0,
           status:"Pendente",pagamento_status:"Pendente",
           obs:`Ensaio vinculado ao evento: ${service?.label} em ${date} às ${time}`,
         });
@@ -3110,7 +3113,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
           cliente_id:cid,servico:extraComEnsaio.label,servico_id:extraComEnsaio.id,
           modalidade:"Vinculado ao "+service?.label,modalidade_id:null,
           duracao_min:extraComEnsaio.duracao_min||60,nome_crianca:nomeCrianca||null,
-          data:dataEnsaio,hora:horaEnsaio,valor:extraComEnsaio.price||null,
+          data:dataEnsaio,hora:horaEnsaio,valor:0,
           status:"Pendente",pagamento_status:"Pendente",
           obs:`Ensaio vinculado ao evento: ${service?.label} em ${date} às ${time}`,
         });
