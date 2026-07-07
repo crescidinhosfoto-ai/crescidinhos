@@ -658,6 +658,7 @@ const STATUS_COLORS = {
   "Cancelado":         {bg:"#fde8e8",color:"#c62828"},
   "Cancelado (multa)": {bg:"#fde8e8",color:"#b71c1c"},
 };
+const STATUS_EVENTOS_MARCADOS = ["A Realizar","Confirmado","Contrato","Concluído"];
 const PAG_COLORS = {
   "Pendente":  {bg:"#fff8e1",color:"#f57c00"},
   "Parcial":   {bg:"#e3f2fd",color:"#1565C0"},
@@ -1138,6 +1139,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
   const [filtroFin,setFiltroFin]=useState("todos");
   const [mesFin,setMesFin]=useState("todos");
   const [filhoSelecionado,setFilhoSelecionado]=useState(null);
+  const [trocaExpandId,setTrocaExpandId]=useState(null);
 
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,cls]=await Promise.all([getAgendamentos(),getClientes()]);setAgendamentos(ags||[]);setClientes(cls||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
@@ -1759,7 +1761,67 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
           </div>
           {mesesDisp.length>1&&(<div style={{overflowX:"auto",marginBottom:12}}><div style={{display:"flex",gap:5}}>{[["todos","Todos"],...mesesDisp.map(m=>[m,mesAno(m+"-01")])].map(([v,l])=><button key={v} onClick={()=>setMesFiltro(v)} style={{padding:"4px 10px",borderRadius:20,fontSize:11,fontWeight:600,whiteSpace:"nowrap",background:mesFiltro===v?"#b8967e":"#fff",color:mesFiltro===v?"#fff":"#888",border:"1.5px solid "+(mesFiltro===v?"#b8967e":"#e8e0d8"),cursor:"pointer"}}>{l}</button>)}</div></div>)}
           {filtered.length===0&&<p style={{textAlign:"center",color:"#bbb",fontSize:14,marginTop:40}}>Nenhum agendamento</p>}
-          {filtered.map(a=>{const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];const cl=a.clientes||{};return(<div key={a.id} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,background:"#fff"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}><div style={{flex:1,cursor:"pointer"}} onClick={()=>setSelected(a.id)}><p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p><p style={{margin:"3px 0 0",fontSize:12,color:"#555"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p><p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p><div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span><span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span></div></div><div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,marginLeft:8,flexShrink:0}}><p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p><button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button></div></div></div>);})}
+          {filtered.map(a=>{
+            const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
+            const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
+            const cl=a.clientes||{};
+            const podeTroca=STATUS_EVENTOS_MARCADOS.includes(a.status);
+            const trocaAberta=trocaExpandId===a.id;
+            return(
+              <div key={a.id} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,background:"#fff"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                  <div style={{flex:1,cursor:"pointer"}} onClick={()=>setSelected(a.id)}>
+                    <p style={{margin:0,fontWeight:600,fontSize:14,color:"#1a1a1a"}}>{cl.nome_mae||"—"}</p>
+                    <p style={{margin:"3px 0 0",fontSize:12,color:"#555"}}>{a.servico}{a.modalidade?` — ${a.modalidade}`:""}</p>
+                    <p style={{margin:"2px 0 0",fontSize:11,color:"#999"}}>{formatDateBR(a.data)} às {a.hora}</p>
+                    <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:st.bg,color:st.color}}>{a.status}</span>
+                      <span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:pc.bg,color:pc.color}}>💳 {a.pagamento_status||"Pendente"}</span>
+                      {Number(a.valor_permuta||0)>0&&<span style={{padding:"2px 8px",borderRadius:10,fontSize:10,fontWeight:600,background:"#f6f2fa",color:"#7b4fa3"}}>🔄 Troca R$ {Number(a.valor_permuta).toFixed(2).replace(".",",")}</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,marginLeft:8,flexShrink:0}}>
+                    <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
+                    {podeTroca&&<button onClick={()=>setTrocaExpandId(trocaAberta?null:a.id)} style={{padding:"3px 8px",borderRadius:6,background:"#f6f2fa",border:"1px solid #e3d5f0",cursor:"pointer",fontSize:11,color:"#7b4fa3",fontWeight:600,lineHeight:1.4,whiteSpace:"nowrap"}}>🔄 Troca</button>}
+                    <button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
+                  </div>
+                </div>
+                {podeTroca&&trocaAberta&&(
+                  <div style={{marginTop:10,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+                    <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Valor da mercadoria recebida</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max={Number(a.valor||0)}
+                      step="0.01"
+                      style={{...inp,fontSize:13,marginBottom:8}}
+                      placeholder="0,00"
+                      defaultValue={a.valor_permuta||""}
+                      onBlur={e=>{
+                        const max=Number(a.valor||0);
+                        let v=Number(e.target.value)||0;
+                        if(v<0)v=0;
+                        if(v>max)v=max;
+                        e.target.value=v||"";
+                        update(a.id,{valor_permuta:v});
+                      }}
+                    />
+                    <input
+                      type="text"
+                      style={{...inp,fontSize:13,marginBottom:0}}
+                      placeholder="O que foi recebido (ex: kit maternidade)"
+                      defaultValue={a.permuta_desc||""}
+                      onBlur={e=>update(a.id,{permuta_desc:e.target.value||null})}
+                    />
+                    <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
+                      💵 Saldo em dinheiro/pix: R$ {Math.max(Number(a.valor||0)-Number(a.valor_permuta||0),0).toFixed(2).replace(".",",")}
+                      {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </>
       )}
       {!loading&&tab==="clientes"&&(()=>{
