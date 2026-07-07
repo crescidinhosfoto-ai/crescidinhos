@@ -633,6 +633,7 @@ export default function ContractPanel({ agendamento, onUpdate }) {
           <option>Cartão de crédito — 3x</option>
           <option>50% entrada + 50% no dia do ensaio</option>
           <option>Entrada + parcelas (a combinar)</option>
+          <option>Troca / Permuta</option>
         </select>
       </Field>
 
