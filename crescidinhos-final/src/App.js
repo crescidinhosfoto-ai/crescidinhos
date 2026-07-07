@@ -658,7 +658,7 @@ const STATUS_COLORS = {
   "Cancelado":         {bg:"#fde8e8",color:"#c62828"},
   "Cancelado (multa)": {bg:"#fde8e8",color:"#b71c1c"},
 };
-const STATUS_EVENTOS_MARCADOS = ["A Realizar","Confirmado","Contrato","Concluído"];
+const STATUS_SEM_TROCA = ["Cancelado","Cancelado (multa)"];
 const PAG_COLORS = {
   "Pendente":  {bg:"#fff8e1",color:"#f57c00"},
   "Parcial":   {bg:"#e3f2fd",color:"#1565C0"},
@@ -1765,7 +1765,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             const st=STATUS_COLORS[a.status]||STATUS_COLORS["Pendente"];
             const pc=PAG_COLORS[a.pagamento_status]||PAG_COLORS["Pendente"];
             const cl=a.clientes||{};
-            const podeTroca=STATUS_EVENTOS_MARCADOS.includes(a.status);
+            const podeTroca=!STATUS_SEM_TROCA.includes(a.status);
             const trocaAberta=trocaExpandId===a.id;
             return(
               <div key={a.id} style={{padding:14,border:"1.5px solid #e8e0d8",borderRadius:12,marginBottom:10,background:"#fff"}}>
