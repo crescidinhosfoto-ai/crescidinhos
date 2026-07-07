@@ -1181,9 +1181,11 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
         const db=b.data_pagamento||b.data||"";
         return db.localeCompare(da);
       });
-    const totalRecebido=ativas.reduce((s,a)=>a.pagamento_status==="Pago"?s+Number(a.valor||0):s,0);
-    const totalParcial=ativas.reduce((s,a)=>a.pagamento_status==="Parcial"?s+Number(a.valor||0):s,0);
-    const totalPendente=ativas.reduce((s,a)=>(!a.pagamento_status||a.pagamento_status==="Pendente")?s+Number(a.valor||0):s,0);
+    const cashValor=a=>Math.max(Number(a.valor||0)-Number(a.valor_permuta||0),0);
+    const totalRecebido=ativas.reduce((s,a)=>a.pagamento_status==="Pago"?s+cashValor(a):s,0);
+    const totalParcial=ativas.reduce((s,a)=>a.pagamento_status==="Parcial"?s+cashValor(a):s,0);
+    const totalPendente=ativas.reduce((s,a)=>(!a.pagamento_status||a.pagamento_status==="Pendente")?s+cashValor(a):s,0);
+    const totalTrocas=ativas.reduce((s,a)=>s+Number(a.valor_permuta||0),0);
     const totalGeral=ativas.reduce((s,a)=>s+Number(a.valor||0),0);
     const pctRecebido=totalGeral>0?Math.round((totalRecebido/totalGeral)*100):0;
     return(
@@ -1220,6 +1222,14 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             <span style={{fontSize:10,color:"#f57c00"}}>A receber: R$ {(totalPendente+totalParcial).toFixed(2).replace(".",",")}</span>
           </div>
         </div>
+
+        {/* Camada separada — trocas/permutas, fora do caixa */}
+        {totalTrocas>0&&(
+          <div style={{padding:12,background:"#f6f2fa",border:"1.5px solid #e3d5f0",borderRadius:12,textAlign:"center",marginBottom:14}}>
+            <p style={{fontSize:9,color:"#7b4fa3",fontWeight:700,margin:"0 0 3px",textTransform:"uppercase",letterSpacing:"1px"}}>🔄 Total em Trocas (fora do caixa)</p>
+            <p style={{fontSize:16,fontWeight:700,color:"#7b4fa3",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {totalTrocas.toFixed(2).replace(".",",")}</p>
+          </div>
+        )}
 
         {/* Filtros */}
         <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
@@ -1268,6 +1278,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
                     ?<span style={{fontSize:10,color:"#f57c00"}}>⏳ Pagamento pendente</span>
                     :null
                 }
+                {Number(a.valor_permuta||0)>0&&<span style={{fontSize:10,color:"#7b4fa3",fontWeight:600}}>🔄 Troca: <strong>R$ {Number(a.valor_permuta).toFixed(2).replace(".",",")}</strong></span>}
               </div>
               {a.pagamento_link&&<div style={{marginTop:6}}>
                 <a href={a.pagamento_link} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:11,color:"#009EE3",fontWeight:600,textDecoration:"none"}}>🔗 Ver link de pagamento</a>
@@ -1361,6 +1372,39 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
               onBlur={e=>update(agendamento.id,{data_pagamento:e.target.value||null})}
             />
             <p style={{fontSize:10,color:"#aaa",margin:"4px 0 0"}}>Preencha a data real do recebimento — não precisa ser hoje.</p>
+          </div>
+
+          {/* Troca / Permuta — valor recebido em mercadoria, não entra no caixa */}
+          <div style={{marginTop:8,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+            <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Troca / Permuta — valor em mercadoria</label>
+            <input
+              type="number"
+              min="0"
+              max={Number(agendamento.valor||0)}
+              step="0.01"
+              style={{...inp,fontSize:13,marginBottom:8}}
+              placeholder="0,00"
+              defaultValue={agendamento.valor_permuta||""}
+              onBlur={e=>{
+                const max=Number(agendamento.valor||0);
+                let v=Number(e.target.value)||0;
+                if(v<0)v=0;
+                if(v>max)v=max;
+                e.target.value=v||"";
+                update(agendamento.id,{valor_permuta:v});
+              }}
+            />
+            <input
+              type="text"
+              style={{...inp,fontSize:13,marginBottom:0}}
+              placeholder="O que foi recebido (ex: kit maternidade)"
+              defaultValue={agendamento.permuta_desc||""}
+              onBlur={e=>update(agendamento.id,{permuta_desc:e.target.value||null})}
+            />
+            <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
+              💵 Saldo em dinheiro/pix: R$ {Math.max(Number(agendamento.valor||0)-Number(agendamento.valor_permuta||0),0).toFixed(2).replace(".",",")}
+              {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
+            </p>
           </div>
 
           {/* Parcelas programadas — dinâmico até 12x */}
