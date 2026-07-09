@@ -1156,6 +1156,45 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
       }
     }catch(e){alert("Erro: "+e.message);}
   };
+  const updateCliente=async(id,patch)=>{
+    try{
+      await atualizarCliente(id,patch);
+      setClientes(cs=>cs.map(c=>c.id===id?{...c,...patch}:c));
+    }catch(e){alert("Erro: "+e.message);}
+  };
+  // Registra o valor da troca no agendamento; se ultrapassar o valor do ensaio,
+  // o excedente vira saldo em haver da cliente (reconciliado pela diferença,
+  // pra não creditar duas vezes se o valor for editado depois).
+  const aplicarTroca=async(a,novoValor)=>{
+    let v=Number(novoValor)||0;
+    if(v<0)v=0;
+    const clienteId=a.cliente_id||a.clientes?.id;
+    const excedenteAnterior=Number(a.credito_gerado||0);
+    const excedenteNovo=Math.max(v-Number(a.valor||0),0);
+    await update(a.id,{valor_permuta:v,credito_gerado:excedenteNovo});
+    const delta=excedenteNovo-excedenteAnterior;
+    if(delta!==0&&clienteId){
+      const cli=clientes.find(c=>c.id===clienteId);
+      const novoSaldo=Math.max(Number(cli?.saldo_credito||0)+delta,0);
+      await updateCliente(clienteId,{saldo_credito:novoSaldo});
+    }
+  };
+  // Abate saldo em haver da cliente no valor deste agendamento (reconciliado pela diferença).
+  const aplicarCreditoUsado=async(a,novoValor)=>{
+    const clienteId=a.cliente_id||a.clientes?.id;
+    const cli=clientes.find(c=>c.id===clienteId);
+    const usoAnterior=Number(a.credito_usado||0);
+    const saldoDisponivel=Number(cli?.saldo_credito||0)+usoAnterior;
+    let v=Number(novoValor)||0;
+    if(v<0)v=0;
+    if(v>saldoDisponivel)v=saldoDisponivel;
+    await update(a.id,{credito_usado:v});
+    const delta=v-usoAnterior;
+    if(delta!==0&&clienteId){
+      const novoSaldo=Math.max(Number(cli?.saldo_credito||0)-delta,0);
+      await updateCliente(clienteId,{saldo_credito:novoSaldo});
+    }
+  };
   const agendamento=selected?agendamentos.find(a=>a.id===selected):null;
   const cliente=selectedCliente?clientes.find(c=>c.id===selectedCliente):null;
   const mesesDisp=[...new Set(agendamentos.map(a=>a.data?.substring(0,7)).filter(Boolean))].sort().reverse();
@@ -1183,7 +1222,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
         const db=b.data_pagamento||b.data||"";
         return db.localeCompare(da);
       });
-    const cashValor=a=>Math.max(Number(a.valor||0)-Number(a.valor_permuta||0),0);
+    const cashValor=a=>Math.max(Number(a.valor||0)-Number(a.valor_permuta||0)-Number(a.credito_usado||0),0);
     const totalRecebido=ativas.reduce((s,a)=>a.pagamento_status==="Pago"?s+cashValor(a):s,0);
     const totalParcial=ativas.reduce((s,a)=>a.pagamento_status==="Parcial"?s+cashValor(a):s,0);
     const totalPendente=ativas.reduce((s,a)=>(!a.pagamento_status||a.pagamento_status==="Pendente")?s+cashValor(a):s,0);
@@ -1377,37 +1416,67 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
           </div>
 
           {/* Troca / Permuta — valor recebido em mercadoria, não entra no caixa */}
-          <div style={{marginTop:8,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
-            <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Troca / Permuta — valor em mercadoria</label>
-            <input
-              type="number"
-              min="0"
-              max={Number(agendamento.valor||0)}
-              step="0.01"
-              style={{...inp,fontSize:13,marginBottom:8}}
-              placeholder="0,00"
-              defaultValue={agendamento.valor_permuta||""}
-              onBlur={e=>{
-                const max=Number(agendamento.valor||0);
-                let v=Number(e.target.value)||0;
-                if(v<0)v=0;
-                if(v>max)v=max;
-                e.target.value=v||"";
-                update(agendamento.id,{valor_permuta:v});
-              }}
-            />
-            <input
-              type="text"
-              style={{...inp,fontSize:13,marginBottom:0}}
-              placeholder="O que foi recebido (ex: kit maternidade)"
-              defaultValue={agendamento.permuta_desc||""}
-              onBlur={e=>update(agendamento.id,{permuta_desc:e.target.value||null})}
-            />
-            <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
-              💵 Saldo em dinheiro/pix: R$ {Math.max(Number(agendamento.valor||0)-Number(agendamento.valor_permuta||0),0).toFixed(2).replace(".",",")}
-              {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
-            </p>
-          </div>
+          {(()=>{
+            const clienteAg=clientes.find(c=>c.id===(agendamento.cliente_id||agendamento.clientes?.id));
+            const excedente=Math.max(Number(agendamento.valor_permuta||0)-Number(agendamento.valor||0),0);
+            const saldoCliente=Number(clienteAg?.saldo_credito||0);
+            return(
+              <>
+                <div style={{marginTop:8,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+                  <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Troca / Permuta — valor em mercadoria</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    style={{...inp,fontSize:13,marginBottom:8}}
+                    placeholder="0,00"
+                    defaultValue={agendamento.valor_permuta||""}
+                    onBlur={e=>{
+                      let v=Number(e.target.value)||0;
+                      if(v<0)v=0;
+                      e.target.value=v||"";
+                      aplicarTroca(agendamento,v);
+                    }}
+                  />
+                  <input
+                    type="text"
+                    style={{...inp,fontSize:13,marginBottom:0}}
+                    placeholder="O que foi recebido (ex: kit maternidade)"
+                    defaultValue={agendamento.permuta_desc||""}
+                    onBlur={e=>update(agendamento.id,{permuta_desc:e.target.value||null})}
+                  />
+                  <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
+                    💵 Saldo em dinheiro/pix: R$ {Math.max(Number(agendamento.valor||0)-Number(agendamento.valor_permuta||0),0).toFixed(2).replace(".",",")}
+                    {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
+                  </p>
+                  {excedente>0&&<p style={{fontSize:11,color:"#7b4fa3",fontWeight:700,margin:"6px 0 0"}}>
+                    💰 Mercadoria vale R$ {excedente.toFixed(2).replace(".",",")} a mais que o ensaio — esse valor foi creditado como saldo em haver de {clienteAg?.nome_mae||"cliente"}.
+                  </p>}
+                </div>
+
+                {(saldoCliente>0||Number(agendamento.credito_usado||0)>0)&&(
+                  <div style={{marginTop:8,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+                    <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>💰 Usar saldo em haver da cliente (disponível: R$ {(saldoCliente+Number(agendamento.credito_usado||0)).toFixed(2).replace(".",",")})</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      style={{...inp,fontSize:13,marginBottom:0}}
+                      placeholder="0,00"
+                      defaultValue={agendamento.credito_usado||""}
+                      onBlur={e=>{
+                        let v=Number(e.target.value)||0;
+                        if(v<0)v=0;
+                        e.target.value=v||"";
+                        aplicarCreditoUsado(agendamento,v);
+                      }}
+                    />
+                    <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>Esse valor abate do que falta pagar e sai do saldo em haver — também não entra no caixa.</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Parcelas programadas — dinâmico até 12x */}
           <ParcelasSection agendamento={agendamento} onUpdate={update} />
@@ -1549,6 +1618,13 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                 {[["E-mail",cliente.email],["WhatsApp",cliente.telefone],["CPF",cliente.cpf_mae],["RG",cliente.rg],["Nascimento",cliente.data_nascimento],["Total de ensaios",cliente.total_ensaios||ensaiosCliente.length],["Último ensaio",formatDateBR(cliente.ultimo_ensaio)]].map(([k,v])=><div key={k}><span style={{fontSize:10,color:"#aaa",display:"block"}}>{k}</span><span style={{fontSize:13,fontWeight:600,color:"#1a1a1a"}}>{v||"—"}</span></div>)}
               </div>
+              {Number(cliente.saldo_credito||0)>0&&(
+                <div style={{padding:"10px 12px",background:"#f6f2fa",border:"1.5px solid #e3d5f0",borderRadius:10,marginBottom:8}}>
+                  <span style={{fontSize:10,color:"#7b4fa3",fontWeight:700,display:"block"}}>💰 Saldo em haver</span>
+                  <span style={{fontSize:16,fontWeight:700,color:"#7b4fa3",fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(cliente.saldo_credito).toFixed(2).replace(".",",")}</span>
+                  <p style={{fontSize:10,color:"#8a6bb0",margin:"4px 0 0"}}>Crédito de trocas que sobrou de ensaios anteriores — pode ser usado em qualquer ensaio futuro.</p>
+                </div>
+              )}
               {(endereco.rua||endereco.cidade)&&(
                 <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #f0e8e0"}}>
                   <span style={{fontSize:10,color:"#aaa",display:"block",marginBottom:2}}>Endereço</span>
@@ -1786,39 +1862,65 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
                     <button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
                   </div>
                 </div>
-                {podeTroca&&trocaAberta&&(
-                  <div style={{marginTop:10,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
-                    <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Valor da mercadoria recebida</label>
-                    <input
-                      type="number"
-                      min="0"
-                      max={Number(a.valor||0)}
-                      step="0.01"
-                      style={{...inp,fontSize:13,marginBottom:8}}
-                      placeholder="0,00"
-                      defaultValue={a.valor_permuta||""}
-                      onBlur={e=>{
-                        const max=Number(a.valor||0);
-                        let v=Number(e.target.value)||0;
-                        if(v<0)v=0;
-                        if(v>max)v=max;
-                        e.target.value=v||"";
-                        update(a.id,{valor_permuta:v});
-                      }}
-                    />
-                    <input
-                      type="text"
-                      style={{...inp,fontSize:13,marginBottom:0}}
-                      placeholder="O que foi recebido (ex: kit maternidade)"
-                      defaultValue={a.permuta_desc||""}
-                      onBlur={e=>update(a.id,{permuta_desc:e.target.value||null})}
-                    />
-                    <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
-                      💵 Saldo em dinheiro/pix: R$ {Math.max(Number(a.valor||0)-Number(a.valor_permuta||0),0).toFixed(2).replace(".",",")}
-                      {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
-                    </p>
-                  </div>
-                )}
+                {podeTroca&&trocaAberta&&(()=>{
+                  const clienteAg=clientes.find(c=>c.id===(a.cliente_id||a.clientes?.id));
+                  const excedente=Math.max(Number(a.valor_permuta||0)-Number(a.valor||0),0);
+                  const saldoCliente=Number(clienteAg?.saldo_credito||0);
+                  return(
+                    <>
+                      <div style={{marginTop:10,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+                        <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>🔄 Valor da mercadoria recebida</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          style={{...inp,fontSize:13,marginBottom:8}}
+                          placeholder="0,00"
+                          defaultValue={a.valor_permuta||""}
+                          onBlur={e=>{
+                            let v=Number(e.target.value)||0;
+                            if(v<0)v=0;
+                            e.target.value=v||"";
+                            aplicarTroca(a,v);
+                          }}
+                        />
+                        <input
+                          type="text"
+                          style={{...inp,fontSize:13,marginBottom:0}}
+                          placeholder="O que foi recebido (ex: kit maternidade)"
+                          defaultValue={a.permuta_desc||""}
+                          onBlur={e=>update(a.id,{permuta_desc:e.target.value||null})}
+                        />
+                        <p style={{fontSize:10,color:"#8a6bb0",margin:"6px 0 0"}}>
+                          💵 Saldo em dinheiro/pix: R$ {Math.max(Number(a.valor||0)-Number(a.valor_permuta||0),0).toFixed(2).replace(".",",")}
+                          {" · "}Esse valor de troca não entra no caixa — aparece separado no Resumo.
+                        </p>
+                        {excedente>0&&<p style={{fontSize:11,color:"#7b4fa3",fontWeight:700,margin:"6px 0 0"}}>
+                          💰 Mercadoria vale R$ {excedente.toFixed(2).replace(".",",")} a mais que o ensaio — creditado como saldo em haver de {clienteAg?.nome_mae||"cliente"}.
+                        </p>}
+                      </div>
+                      {(saldoCliente>0||Number(a.credito_usado||0)>0)&&(
+                        <div style={{marginTop:8,padding:"10px 12px",background:"#f6f2fa",borderRadius:10,border:"1.5px solid #e3d5f0"}}>
+                          <label style={{fontSize:11,color:"#7b4fa3",fontWeight:700,display:"block",marginBottom:6}}>💰 Usar saldo em haver (disponível: R$ {(saldoCliente+Number(a.credito_usado||0)).toFixed(2).replace(".",",")})</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            style={{...inp,fontSize:13,marginBottom:0}}
+                            placeholder="0,00"
+                            defaultValue={a.credito_usado||""}
+                            onBlur={e=>{
+                              let v=Number(e.target.value)||0;
+                              if(v<0)v=0;
+                              e.target.value=v||"";
+                              aplicarCreditoUsado(a,v);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             );
           })}
