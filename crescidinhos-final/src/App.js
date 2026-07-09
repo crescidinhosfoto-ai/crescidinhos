@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, REGRAS, fmtPreco, calcularTotal } from "./config";
-import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
+import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar, sincronizarEventoGoogle, deletarEventoGoogle } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
 import DisponibilidadePanel from "./DisponibilidadePanel";
@@ -902,19 +902,43 @@ function AgendaView({ auth, onVerCliente }) {
   const carregar=useCallback(async()=>{setLoading(true);try{const [ags,comps]=await Promise.all([getAgendamentos(),getCompromissos()]);setAgendamentos(ags||[]);setCompromissos(comps||[]);}catch(e){console.error(e);}finally{setLoading(false);};},[]);
   useEffect(()=>{carregar();},[carregar]);
 
+  const syncComp=(token,c)=>sincronizarEventoGoogle(token,{
+    googleEventId:c.google_event_id||null,
+    summary:`${TIPO_ICON[c.tipo]||"📌"} ${c.titulo}`,
+    description:c.obs||undefined,
+    data:c.data,
+    diaInteiro:!!c.dia_inteiro,
+    hora:c.hora_inicio||"09:00",
+    horaFim:c.hora_fim||null,
+    colorId:"8",
+  });
+
   const sincronizarTodos=async()=>{
     if(!auth?.token?.access_token){alert('Faça login com o Google para sincronizar.');return;}
     setSincronizando(true);setSyncStatus(null);
     const hoje2=new Date().toISOString().substring(0,10);
-    const paraSync=agendamentos.filter(a=>(a.status==="Confirmado"||a.status==="A Realizar")&&a.data&&a.data>=hoje2&&a.hora);
+    const agsParaSync=agendamentos.filter(a=>(a.status==="Confirmado"||a.status==="A Realizar")&&a.data&&a.data>=hoje2&&a.hora);
+    const compsParaSync=compromissos.filter(c=>c.data&&c.data>=hoje2);
     let ok=0,erros=0;
-    for(const ag of paraSync){
+    for(const ag of agsParaSync){
       const r=await criarEventoGoogleCalendar(auth.token.access_token,ag);
-      if(r.ok)ok++;else{erros++;console.error("Sync erro:",ag.id,r.error);}
+      if(r.ok){
+        ok++;
+        if(r.id&&r.id!==ag.google_event_id)await atualizarAgendamento(ag.id,{google_event_id:r.id}).catch(()=>{});
+      }else{erros++;console.error("Sync erro:",ag.id,r.error);}
+      await new Promise(res=>setTimeout(res,300));
+    }
+    for(const c of compsParaSync){
+      const r=await syncComp(auth.token.access_token,c);
+      if(r.ok){
+        ok++;
+        if(r.id&&r.id!==c.google_event_id)await atualizarCompromisso(c.id,{google_event_id:r.id}).catch(()=>{});
+      }else{erros++;console.error("Sync erro compromisso:",c.id,r.error);}
       await new Promise(res=>setTimeout(res,300));
     }
     setSincronizando(false);
-    setSyncStatus({ok,total:paraSync.length,erros});
+    setSyncStatus({ok,total:agsParaSync.length+compsParaSync.length,erros});
+    carregar();
   };
 
   const hoje=new Date().toISOString().substring(0,10);
@@ -927,7 +951,42 @@ function AgendaView({ auth, onVerCliente }) {
   return (
     <div>
       {fichaSel&&<FichaRapida agendamento={fichaSel} onFechar={()=>setFichaSel(null)} onVerMais={()=>{setFichaSel(null);onVerCliente(fichaSel.id);}}/>}
-      {modalComp&&<ModalCompromisso comp={compEditando} onFechar={()=>{setModalComp(false);setCompEditando(null);}} onSalvar={async(id,payload)=>{id?await atualizarCompromisso(id,payload):await criarCompromisso(payload);await carregar();}} onSalvarLote={async(lista)=>{await criarCompromissos(lista);await carregar();}} onDeletar={async(id)=>{await deletarCompromisso(id);await carregar();}} onDeletarSerie={async(rid)=>{await deletarCompromissosSerie(rid);await carregar();}}/>}
+      {modalComp&&<ModalCompromisso comp={compEditando} onFechar={()=>{setModalComp(false);setCompEditando(null);}}
+        onSalvar={async(id,payload)=>{
+          const r=id?await atualizarCompromisso(id,payload):await criarCompromisso(payload);
+          const saved=r?.[0];
+          await carregar();
+          if(saved?.id&&auth?.token?.access_token){
+            syncComp(auth.token.access_token,saved).then(r2=>{
+              if(r2.ok&&r2.id&&r2.id!==saved.google_event_id)atualizarCompromisso(saved.id,{google_event_id:r2.id}).catch(()=>{});
+            }).catch(()=>{});
+          }
+        }}
+        onSalvarLote={async(lista)=>{
+          const criados=await criarCompromissos(lista);
+          await carregar();
+          if(auth?.token?.access_token&&criados?.length){
+            (async()=>{
+              for(const c of criados){
+                const r2=await syncComp(auth.token.access_token,c);
+                if(r2.ok&&r2.id)await atualizarCompromisso(c.id,{google_event_id:r2.id}).catch(()=>{});
+                await new Promise(res=>setTimeout(res,300));
+              }
+            })();
+          }
+        }}
+        onDeletar={async(id)=>{
+          const comp=compromissos.find(c=>c.id===id)||compEditando;
+          if(comp?.google_event_id&&auth?.token?.access_token)deletarEventoGoogle(auth.token.access_token,comp.google_event_id).catch(()=>{});
+          await deletarCompromisso(id);await carregar();
+        }}
+        onDeletarSerie={async(rid)=>{
+          if(auth?.token?.access_token){
+            compromissos.filter(c=>c.recorrencia_id===rid&&c.google_event_id).forEach(c=>deletarEventoGoogle(auth.token.access_token,c.google_event_id).catch(()=>{}));
+          }
+          await deletarCompromissosSerie(rid);await carregar();
+        }}
+      />}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
         <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:18,margin:0}}>📅 Próximos ensaios</h3>
         <div style={{display:"flex",gap:6}}>
@@ -1152,7 +1211,12 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
       setAgendamentos(as=>as.map(a=>a.id===id?{...a,...patch}:a));
       if(patch.status==="Confirmado"&&auth?.token?.access_token){
         const ag={...agendamentos.find(a=>a.id===id)||{},...patch};
-        criarEventoGoogleCalendar(auth.token.access_token,ag).catch(()=>{});
+        criarEventoGoogleCalendar(auth.token.access_token,ag).then(r=>{
+          if(r.ok&&r.id&&r.id!==ag.google_event_id){
+            atualizarAgendamento(id,{google_event_id:r.id}).catch(()=>{});
+            setAgendamentos(as=>as.map(a=>a.id===id?{...a,google_event_id:r.id}:a));
+          }
+        }).catch(()=>{});
       }
     }catch(e){alert("Erro: "+e.message);}
   };
@@ -1859,7 +1923,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
                   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,marginLeft:8,flexShrink:0}}>
                     <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
                     {podeTroca&&<button onClick={()=>setTrocaExpandId(trocaAberta?null:a.id)} style={{padding:"3px 8px",borderRadius:6,background:"#f6f2fa",border:"1px solid #e3d5f0",cursor:"pointer",fontSize:11,color:"#7b4fa3",fontWeight:600,lineHeight:1.4,whiteSpace:"nowrap"}}>🔄 Troca</button>}
-                    <button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
+                    <button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{if(a.google_event_id&&auth?.token?.access_token)deletarEventoGoogle(auth.token.access_token,a.google_event_id).catch(()=>{});await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
                   </div>
                 </div>
                 {podeTroca&&trocaAberta&&(()=>{
