@@ -125,60 +125,135 @@ export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
   }
 }
 
+const padDT = (n) => String(n).padStart(2, "0");
+
+// Soma dias a uma data 'YYYY-MM-DD' sem depender do fuso do navegador
+// (usado pro campo 'end.date' exclusivo dos eventos de dia inteiro do Google).
+function addDiasStr(dataStr, n) {
+  const [y, mo, d] = dataStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+
 /**
- * Cria um evento no Google Calendar do usuário autenticado
+ * Cria ou atualiza um evento no Google Calendar do usuário autenticado.
+ * Se `googleEventId` for passado, atualiza o evento existente (PATCH) em vez
+ * de criar um novo — evita duplicar eventos ao editar/ressincronizar.
  * @param {string} token - access_token do Google (auth.token.access_token)
- * @param {object} ag - agendamento com data, hora, servico, clientes, etc.
+ * @param {object} opts
+ * @param {string} [opts.googleEventId] - id de um evento já existente, pra atualizar
+ * @param {string} opts.summary
+ * @param {string} [opts.description]
+ * @param {string} opts.data - 'YYYY-MM-DD'
+ * @param {boolean} [opts.diaInteiro] - evento de dia inteiro (usado pra compromissos)
+ * @param {string} [opts.hora] - 'HH:MM', horário de início (ignorado se diaInteiro)
+ * @param {string} [opts.horaFim] - 'HH:MM', horário de fim explícito (opcional)
+ * @param {number} [opts.duracaoMin] - usado se horaFim não for passado
+ * @param {string} [opts.colorId]
  * @returns {Promise<{ok:boolean, id?:string, error?:string}>}
  */
-export async function criarEventoGoogleCalendar(token, ag) {
+export async function sincronizarEventoGoogle(token, opts) {
   try {
-    const cl = ag.clientes || {};
-    const [h, m] = (ag.hora || "09:00").split(":").map(Number);
-    const dur = ag.duracao_min || 60;
-    const pad = (n) => String(n).padStart(2, "0");
-    // Ancora no horário de Brasília (-03:00, sem horário de verão desde 2019) em vez do
-    // fuso local do navegador, que fazia o evento aparecer 3h à frente no Google Calendar.
-    const inicio = new Date(`${ag.data}T${pad(h)}:${pad(m)}:00-03:00`);
-    const fim = new Date(inicio.getTime() + dur * 60000);
-    // Converte o instante UTC de volta pra hora de parede de São Paulo antes de formatar.
-    const fmtDT = (d) => new Date(d.getTime() - 3 * 60 * 60000).toISOString().slice(0,19);
+    const { googleEventId, summary, description, data, diaInteiro, hora, horaFim, duracaoMin, colorId = "1" } = opts;
 
-    const evento = {
-      summary: `📸 ${ag.servico}${ag.modalidade ? " — " + ag.modalidade : ""} · ${cl.nome_mae || ""}`,
-      description: [
-        cl.nome_mae   ? `Cliente: ${cl.nome_mae}`   : null,
-        cl.telefone   ? `Tel: ${cl.telefone}`        : null,
-        ag.servico    ? `Serviço: ${ag.servico}`     : null,
-        ag.modalidade ? `Modalidade: ${ag.modalidade}` : null,
-        ag.valor      ? `Valor: R$ ${Number(ag.valor).toFixed(2).replace(".",",")}` : null,
-      ].filter(Boolean).join("\n"),
-      start: { dateTime: `${fmtDT(inicio)}-03:00`, timeZone: "America/Sao_Paulo" },
-      end:   { dateTime: `${fmtDT(fim)}-03:00`,    timeZone: "America/Sao_Paulo" },
-      colorId: "1",
-    };
-
-    const res = await fetch(
-      "https://www.googleapis.com/calendar/v3/calendars/primary/events",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(evento),
+    let evento;
+    if (diaInteiro) {
+      evento = {
+        summary,
+        description,
+        start: { date: data },
+        end: { date: addDiasStr(data, 1) },
+        colorId,
+      };
+    } else {
+      const [h, m] = (hora || "09:00").split(":").map(Number);
+      // Ancora no horário de Brasília (-03:00, sem horário de verão desde 2019) em vez do
+      // fuso local do navegador, que fazia o evento aparecer 3h à frente no Google Calendar.
+      const inicio = new Date(`${data}T${padDT(h)}:${padDT(m)}:00-03:00`);
+      let fim;
+      if (horaFim) {
+        const [hf, mf] = horaFim.split(":").map(Number);
+        fim = new Date(`${data}T${padDT(hf)}:${padDT(mf)}:00-03:00`);
+      } else {
+        fim = new Date(inicio.getTime() + (duracaoMin || 60) * 60000);
       }
-    );
+      // Converte o instante UTC de volta pra hora de parede de São Paulo antes de formatar.
+      const fmtDT = (d) => new Date(d.getTime() - 3 * 60 * 60000).toISOString().slice(0, 19);
+      evento = {
+        summary,
+        description,
+        start: { dateTime: `${fmtDT(inicio)}-03:00`, timeZone: "America/Sao_Paulo" },
+        end:   { dateTime: `${fmtDT(fim)}-03:00`,    timeZone: "America/Sao_Paulo" },
+        colorId,
+      };
+    }
+
+    const base = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+    const res = await fetch(googleEventId ? `${base}/${googleEventId}` : base, {
+      method: googleEventId ? "PATCH" : "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(evento),
+    });
 
     if (!res.ok) {
       const err = await res.text();
       return { ok: false, error: err };
     }
-    const data = await res.json();
-    return { ok: true, id: data.id };
+    const resData = await res.json();
+    return { ok: true, id: resData.id };
   } catch (e) {
     return { ok: false, error: e.message };
   }
+}
+
+/**
+ * Remove um evento do Google Calendar pelo id salvo (google_event_id).
+ * 404/410 (já não existe) é tratado como sucesso.
+ */
+export async function deletarEventoGoogle(token, googleEventId) {
+  if (!googleEventId) return { ok: true };
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${googleEventId}`,
+      { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok && res.status !== 410 && res.status !== 404) {
+      const err = await res.text();
+      return { ok: false, error: err };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Cria/atualiza o evento de um agendamento de cliente no Google Calendar.
+ * @param {string} token - access_token do Google (auth.token.access_token)
+ * @param {object} ag - agendamento com data, hora, servico, clientes, google_event_id, etc.
+ * @returns {Promise<{ok:boolean, id?:string, error?:string}>}
+ */
+export async function criarEventoGoogleCalendar(token, ag) {
+  const cl = ag.clientes || {};
+  return sincronizarEventoGoogle(token, {
+    googleEventId: ag.google_event_id || null,
+    summary: `📸 ${ag.servico}${ag.modalidade ? " — " + ag.modalidade : ""} · ${cl.nome_mae || ""}`,
+    description: [
+      cl.nome_mae   ? `Cliente: ${cl.nome_mae}`   : null,
+      cl.telefone   ? `Tel: ${cl.telefone}`        : null,
+      ag.servico    ? `Serviço: ${ag.servico}`     : null,
+      ag.modalidade ? `Modalidade: ${ag.modalidade}` : null,
+      ag.valor      ? `Valor: R$ ${Number(ag.valor).toFixed(2).replace(".",",")}` : null,
+    ].filter(Boolean).join("\n"),
+    data: ag.data,
+    hora: ag.hora || "09:00",
+    duracaoMin: ag.duracao_min || 60,
+    colorId: "1",
+  });
 }
 
 // Mantidos para compatibilidade
