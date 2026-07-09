@@ -136,9 +136,13 @@ export async function criarEventoGoogleCalendar(token, ag) {
     const cl = ag.clientes || {};
     const [h, m] = (ag.hora || "09:00").split(":").map(Number);
     const dur = ag.duracao_min || 60;
-    const inicio = new Date(`${ag.data}T${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:00`);
+    const pad = (n) => String(n).padStart(2, "0");
+    // Ancora no horário de Brasília (-03:00, sem horário de verão desde 2019) em vez do
+    // fuso local do navegador, que fazia o evento aparecer 3h à frente no Google Calendar.
+    const inicio = new Date(`${ag.data}T${pad(h)}:${pad(m)}:00-03:00`);
     const fim = new Date(inicio.getTime() + dur * 60000);
-    const fmtDT = (d) => d.toISOString().slice(0,19);
+    // Converte o instante UTC de volta pra hora de parede de São Paulo antes de formatar.
+    const fmtDT = (d) => new Date(d.getTime() - 3 * 60 * 60000).toISOString().slice(0,19);
 
     const evento = {
       summary: `📸 ${ag.servico}${ag.modalidade ? " — " + ag.modalidade : ""} · ${cl.nome_mae || ""}`,
