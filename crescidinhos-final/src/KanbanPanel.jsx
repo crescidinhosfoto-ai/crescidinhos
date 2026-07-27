@@ -53,7 +53,7 @@ export default function KanbanPanel() {
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await sb("conversas?select=*&order=atualizado_em.desc");
+      const res = await sb("conversas?select=*&order=ultima_mensagem_em.desc.nullslast,atualizado_em.desc");
       setConversas(res || []);
     } catch (e) {
       console.error("Kanban:", e.message);
@@ -357,7 +357,7 @@ function CardConversa({ conv, cor, menuAberto, onAbrirCard, onToggleMenu, onMove
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
           <span style={{ fontSize: 11, color: "#a09080" }}>
-            {tempoRelativo(conv.atualizado_em)}
+            {tempoRelativo(conv.ultima_mensagem_em || conv.atualizado_em)}
           </span>
           <a href={`https://wa.me/${conv.telefone.replace(/\D/g, '')}`}
             target="_blank" rel="noopener noreferrer"
