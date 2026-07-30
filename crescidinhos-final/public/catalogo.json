@@ -1,0 +1,533 @@
+{
+ "atualizado_em": "2026-07-30T16:24:43.055Z",
+ "observacao": "Gerado automaticamente de src/config.js. Não editar à mão — altere o config.js.",
+ "estudio": {
+  "cidade": "Bauru e Região",
+  "agendamento": "app.crescidinhosfoto.com.br"
+ },
+ "regras": {
+  "tolerancia_atraso_min": 15,
+  "prazo_cancelamento_horas": 48,
+  "prazo_selecao_fotos_dias": 5,
+  "prazo_entrega_dias": 10,
+  "foto_extra_valor": 12,
+  "desconto_extras": 0.1
+ },
+ "servicos": [
+  {
+   "id": "chamego",
+   "nome": "Chamego",
+   "grupo": "ensaio",
+   "categoria": "acompanhamento",
+   "descricao": "Acompanhe a melhor fase do seu filho. Você pode escolher 1 cenário temático e faremos mais o cenário com o nosso mascote. Para você lembrar como eles crescem rápido.",
+   "modalidades": [
+    {
+     "nome": "A cada 3 meses",
+     "preco": 230,
+     "preco_texto": "R$ 230",
+     "detalhe": "35 fotos editadas · 1h · Estúdio",
+     "fotos": 35,
+     "duracao": "1h"
+    },
+    {
+     "nome": "12 meses completo",
+     "preco": 160,
+     "preco_texto": "R$ 160",
+     "detalhe": "20 fotos por sessão · 1h · Estúdio",
+     "fotos": 20,
+     "duracao": "1h"
+    }
+   ],
+   "extras": []
+  },
+  {
+   "id": "afeto",
+   "nome": "Afeto",
+   "grupo": "ensaio",
+   "categoria": "acompanhamento",
+   "descricao": "Acompanhe a melhor fase do seu filho. Você pode escolher 1 cenário temático, 1 cenário família e faremos mais o cenário com o nosso mascote. Para você lembrar como eles crescem rápido de um jeito mais completo.",
+   "modalidades": [
+    {
+     "nome": "A cada 3 meses",
+     "preco": 280,
+     "preco_texto": "R$ 280",
+     "detalhe": "55 fotos editadas · 1h · Estúdio",
+     "fotos": 55,
+     "duracao": "1h"
+    },
+    {
+     "nome": "12 meses completo",
+     "preco": 180,
+     "preco_texto": "R$ 180",
+     "detalhe": "40 fotos por sessão · 1h · Estúdio",
+     "fotos": 40,
+     "duracao": "1h"
+    }
+   ],
+   "extras": []
+  },
+  {
+   "id": "gestante",
+   "nome": "Gestante / Revelação",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Da descoberta ou entre o período de 28 a 38 semanas. Registramos esse momento único no conforto do estúdio ou em locações dentro de Bauru.",
+   "modalidades": [
+    {
+     "nome": "Estúdio — Life",
+     "preco": 380,
+     "preco_texto": "R$ 380",
+     "detalhe": "20 fotos · 2h · 1 cenário clean + 1 cenário Família",
+     "fotos": 20,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Estúdio — Plus",
+     "preco": 480,
+     "preco_texto": "R$ 480",
+     "detalhe": "30 fotos · 2h · 1 cenário clean + 1 cenário Família",
+     "fotos": 30,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Externa",
+     "preco": 580,
+     "preco_texto": "R$ 580",
+     "detalhe": "50 fotos · 2h · Locações dentro de Bauru",
+     "fotos": 50,
+     "duracao": "2h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "newborn",
+   "nome": "Newborn",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Verificar dia com a fotógrafa, devido à demanda e o tempo do serviço. Bebês preferencialmente até 10 dias de vida. Sessão com pausas e total segurança, 1 cenário para o registro do bebê e 1 cenário para registro de família.",
+   "modalidades": [
+    {
+     "nome": "Sessão Newborn",
+     "preco": 480,
+     "preco_texto": "R$ 480",
+     "detalhe": "20 fotos editadas · 3h · Sessão com pausas e segurança total",
+     "fotos": 20,
+     "duracao": "3h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "adulto",
+   "nome": "Adulto / Corporativo",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Ensaio adulto, perfil profissional e corporativo no estúdio, com 2 cenários: 1 conforme o perfil do cliente e 1 clean. Ou no seu local de trabalho.",
+   "modalidades": [
+    {
+     "nome": "Estúdio — Life",
+     "preco": 380,
+     "preco_texto": "R$ 380",
+     "detalhe": "20 fotos · 2h · 2 cenários",
+     "fotos": 20,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Estúdio — Plus",
+     "preco": 480,
+     "preco_texto": "R$ 480",
+     "detalhe": "30 fotos · 2h · 2 cenários",
+     "fotos": 30,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Externa",
+     "preco": 420,
+     "preco_texto": "R$ 420",
+     "detalhe": "40 fotos · 2h · Local de trabalho ou externo · Dentro de Bauru",
+     "fotos": 40,
+     "duracao": "2h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "familia",
+   "nome": "Família",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Ensaio de família registrando com amor e a personalidade de cada família — até 5 participantes.",
+   "modalidades": [
+    {
+     "nome": "Estúdio — Life",
+     "preco": 380,
+     "preco_texto": "R$ 380",
+     "detalhe": "20 fotos · 2h · Estúdio",
+     "fotos": 20,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Estúdio — Plus",
+     "preco": 480,
+     "preco_texto": "R$ 480",
+     "detalhe": "30 fotos · 2h · Estúdio",
+     "fotos": 30,
+     "duracao": "2h"
+    },
+    {
+     "nome": "Externa",
+     "preco": 420,
+     "preco_texto": "R$ 420",
+     "detalhe": "40 fotos · 2h · Luz natural e momentos únicos · Dentro de Bauru",
+     "fotos": 40,
+     "duracao": "2h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "sazonal",
+   "nome": "Campanha Sazonal",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Dia das Mães, Dia dos Pais, Páscoa, Junina, Natal e muito mais. Entre em contato para saber as campanhas disponíveis.",
+   "modalidades": [
+    {
+     "nome": "Consultar disponibilidade",
+     "preco": null,
+     "preco_texto": "consultar",
+     "detalhe": "Valor conforme a campanha · 1h · Entre em contato para saber as próximas datas",
+     "fotos": null,
+     "duracao": "1h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "infantil",
+   "nome": "Infantil Avulso",
+   "grupo": "ensaio",
+   "categoria": null,
+   "descricao": "Ensaios infantis avulsos — estúdio ou externo. Momentos da infância registrados com amor e diversão.",
+   "modalidades": [
+    {
+     "nome": "Ensaio Duo",
+     "preco": 280,
+     "preco_texto": "R$ 280",
+     "detalhe": "60 fotos · 1h · 1 cenário temático + 1 cenário família",
+     "fotos": 60,
+     "duracao": "1h"
+    },
+    {
+     "nome": "Ensaio One",
+     "preco": 180,
+     "preco_texto": "R$ 180",
+     "detalhe": "40 fotos · 1h · 1 cenário temático",
+     "fotos": 40,
+     "duracao": "1h"
+    },
+    {
+     "nome": "Smash the Cake básico",
+     "preco": 380,
+     "preco_texto": "R$ 380",
+     "detalhe": "60 fotos · 1h · 1 cenário temático básico + 1 cenário família",
+     "fotos": 60,
+     "duracao": "1h"
+    },
+    {
+     "nome": "Smash the Cake completo",
+     "preco": 620,
+     "preco_texto": "R$ 620",
+     "detalhe": "A partir de 70 fotos · 1h · 1 cenário personalizado + família + bolo + arco de balão",
+     "fotos": 70,
+     "duracao": "1h"
+    },
+    {
+     "nome": "Ensaio Clean",
+     "preco": 280,
+     "preco_texto": "R$ 280",
+     "detalhe": "20 fotos · 1h · Fundo branco ou colorido · Acessórios cobrados separadamente",
+     "fotos": 20,
+     "duracao": "1h"
+    },
+    {
+     "nome": "Externo",
+     "preco": 320,
+     "preco_texto": "R$ 320",
+     "detalhe": "40 fotos · 1h · Criança em ambiente externo · Luz natural · Dentro de Bauru",
+     "fotos": 40,
+     "duracao": "1h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Arco de balão",
+     "preco": 140
+    }
+   ]
+  },
+  {
+   "id": "aniversario",
+   "nome": "Aniversário",
+   "grupo": "evento",
+   "categoria": null,
+   "descricao": "Cobertura fotográfica do seu evento, todas as fotos tratadas e entregues em até 10 dias. Valor para dentro de Bauru.",
+   "modalidades": [
+    {
+     "nome": "Básico 3h",
+     "preco": 450,
+     "preco_texto": "R$ 450",
+     "detalhe": "Cobertura 3h · Todas as fotos tratadas · Entrega em até 10 dias",
+     "fotos": null,
+     "duracao": "3h"
+    },
+    {
+     "nome": "Completo 4h",
+     "preco": 580,
+     "preco_texto": "R$ 580",
+     "detalhe": "Cobertura 4h · Todas as fotos tratadas · Entrega em até 10 dias",
+     "fotos": null,
+     "duracao": "4h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Ensaio Duo",
+     "preco": 280
+    },
+    {
+     "nome": "Smash Básico",
+     "preco": 380
+    },
+    {
+     "nome": "Smash Completo",
+     "preco": 620
+    },
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Balões",
+     "preco": 160
+    },
+    {
+     "nome": "Álbum impresso",
+     "preco": 750
+    }
+   ]
+  },
+  {
+   "id": "batizado",
+   "nome": "Batizado / Confraternização / Chá Revelação",
+   "grupo": "evento",
+   "categoria": null,
+   "descricao": "Cobertura fotográfica da sua celebração especial, todas as fotos tratadas e entregues em até 10 dias. Valor para dentro de Bauru.",
+   "modalidades": [
+    {
+     "nome": "1h30",
+     "preco": 280,
+     "preco_texto": "R$ 280",
+     "detalhe": "Cobertura 1h30 · Todas as fotos tratadas · Entrega em até 10 dias",
+     "fotos": null,
+     "duracao": "1h30"
+    },
+    {
+     "nome": "2h",
+     "preco": 360,
+     "preco_texto": "R$ 360",
+     "detalhe": "Cobertura 2h · Todas as fotos tratadas · Entrega em até 10 dias",
+     "fotos": null,
+     "duracao": "2h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Ensaio Duo",
+     "preco": 280
+    },
+    {
+     "nome": "Smash Básico",
+     "preco": 380
+    },
+    {
+     "nome": "Smash Completo",
+     "preco": 620
+    },
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "Balões",
+     "preco": 160
+    },
+    {
+     "nome": "Álbum impresso",
+     "preco": 750
+    }
+   ]
+  },
+  {
+   "id": "15anos",
+   "nome": "15 Anos",
+   "grupo": "evento",
+   "categoria": null,
+   "descricao": "Um momento único que merece ser eternizado com todo cuidado e emoção.",
+   "modalidades": [
+    {
+     "nome": "Cobertura do evento (6h)",
+     "preco": 1650,
+     "preco_texto": "R$ 1650",
+     "detalhe": "Cobertura completa 6h",
+     "fotos": null,
+     "duracao": "6h"
+    }
+   ],
+   "extras": [
+    {
+     "nome": "Ensaio Estúdio — Life (20 fotos)",
+     "preco": 380
+    },
+    {
+     "nome": "Ensaio Estúdio — Plus (30 fotos)",
+     "preco": 480
+    },
+    {
+     "nome": "Ensaio Externo (40 fotos)",
+     "preco": 580
+    },
+    {
+     "nome": "Álbum impresso",
+     "preco": 750
+    },
+    {
+     "nome": "Quadros",
+     "preco": 280
+    },
+    {
+     "nome": "+1 Fotógrafo",
+     "preco": 450
+    },
+    {
+     "nome": "Making off",
+     "preco": 400
+    },
+    {
+     "nome": "Hora adicional",
+     "preco": 275
+    }
+   ]
+  },
+  {
+   "id": "cofrinho",
+   "nome": "Cofrinho de Recordações",
+   "grupo": "cofrinho",
+   "categoria": null,
+   "descricao": "Pague mensalmente e resgate em ensaios ou fotos extras. Resgate mínimo após 3 meses.",
+   "modalidades": [
+    {
+     "nome": "Sementinha 🌱",
+     "preco": 50,
+     "preco_texto": "R$ 50",
+     "detalhe": "R$ 50/mês · Créditos acumulam mensalmente",
+     "fotos": null,
+     "duracao": null
+    },
+    {
+     "nome": "Broto 🌿",
+     "preco": 100,
+     "preco_texto": "R$ 100",
+     "detalhe": "R$ 100/mês · Créditos acumulam mensalmente",
+     "fotos": null,
+     "duracao": null
+    },
+    {
+     "nome": "Florido 🌸",
+     "preco": 150,
+     "preco_texto": "R$ 150",
+     "detalhe": "R$ 150/mês · Créditos acumulam mensalmente",
+     "fotos": null,
+     "duracao": null
+    },
+    {
+     "nome": "Crescido 🌳",
+     "preco": 200,
+     "preco_texto": "R$ 200",
+     "detalhe": "R$ 200/mês · Créditos acumulam mensalmente",
+     "fotos": null,
+     "duracao": null
+    }
+   ],
+   "extras": []
+  },
+  {
+   "id": "vale",
+   "nome": "Vale Presente",
+   "grupo": "vale",
+   "categoria": null,
+   "descricao": "Presenteie alguém especial com um ensaio na Crescidinhos. O valor é escolhido por você.",
+   "modalidades": [
+    {
+     "nome": "Valor livre",
+     "preco": null,
+     "preco_texto": "consultar",
+     "detalhe": "Você escolhe o valor — a presenteada escolhe o ensaio",
+     "fotos": null,
+     "duracao": null
+    }
+   ],
+   "extras": []
+  }
+ ]
+}
