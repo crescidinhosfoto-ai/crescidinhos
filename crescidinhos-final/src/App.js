@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, REGRAS, fmtPreco, calcularTotal } from "./config";
+import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
@@ -3221,9 +3221,48 @@ function PhotographerLogin({ onLogin }) {
 }
 
 // ─── PHOTOGRAPHER PANEL ───────────────────────────────────────────
+// Espelha o catálogo de config.js no Supabase, para a Clarice consultar.
+// O config.js continua sendo a fonte única — isto só propaga.
+// Roda quando a fotógrafa abre o painel; se nada mudou, não escreve.
+async function sincronizarCatalogo() {
+  const catalogo = {
+    atualizado_em: new Date().toISOString(),
+    regras: {
+      tolerancia_atraso_min: REGRAS.toleranciaAtrasoMin,
+      prazo_cancelamento_horas: REGRAS.prazoCancelamentoHoras,
+      prazo_selecao_fotos_dias: REGRAS.prazoSelecaoFotosDias,
+      prazo_entrega_dias: REGRAS.prazoEntregaDias,
+      foto_extra_valor: REGRAS.fotoExtraValor,
+    },
+    servicos: SERVICES.map(s=>({
+      nome: s.label, grupo: s.grupo, descricao: s.detail,
+      modalidades: (s.modalities||[]).map(m=>({
+        nome: m.label,
+        preco: m.price==null ? "consultar" : `R$ ${m.price}`,
+        detalhe: m.detail,
+      })),
+    })),
+  };
+  // Só reenvia quando algo mudou de fato — evita escrever a cada abertura.
+  // A chave pública do app não escreve nessa tabela, então quem grava é o n8n.
+  const assinatura = JSON.stringify({ ...catalogo, atualizado_em: undefined });
+  try {
+    if (localStorage.getItem("catalogo_sync") === assinatura) return;
+    await fetch(WEBHOOK_CATALOGO, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ catalogo }),
+    });
+    localStorage.setItem("catalogo_sync", assinatura);
+  } catch (e) {
+    console.warn("catálogo não sincronizou:", e.message);   // nunca quebra o painel
+  }
+}
+
 function PhotographerPanel({ auth, onLogout }) {
   const [tab,setTab]=useState("agenda");
   const [abrirAgId,setAbrirAgId]=useState(null);
+  useEffect(()=>{ sincronizarCatalogo(); },[]);
   return(
     <div>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18,padding:"10px 14px",background:"#fff",borderRadius:12,border:"1.5px solid #e8e0d8"}}>

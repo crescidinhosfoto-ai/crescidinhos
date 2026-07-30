@@ -26,6 +26,9 @@ export const WEBHOOK_URL =
 export const WEBHOOK_CONFIRMAR =
   "https://ribbitingboar-n8n.cloudfy.live/webhook/confirmar-agendamento";
 
+export const WEBHOOK_CATALOGO =
+  "https://ribbitingboar-n8n.cloudfy.live/webhook/sincronizar-catalogo";
+
 export const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 
