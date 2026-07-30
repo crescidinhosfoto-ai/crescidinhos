@@ -1151,9 +1151,28 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
     try{
       await atualizarAgendamento(id,patch);
       setAgendamentos(as=>as.map(a=>a.id===id?{...a,...patch}:a));
-      if(patch.status==="Confirmado"&&auth?.token?.access_token){
+      if(patch.status==="Confirmado"){
         const ag={...agendamentos.find(a=>a.id===id)||{},...patch};
-        criarEventoGoogleCalendar(auth.token.access_token,ag).catch(()=>{});
+        // Agenda no Google só se a fotógrafa estiver logada com a conta Google
+        if(auth?.token?.access_token){
+          criarEventoGoogleCalendar(auth.token.access_token,ag).catch(()=>{});
+        }
+        // Avisa a cliente pelo WhatsApp — o n8n monta e envia a mensagem.
+        // Nome e telefone vivem na tabela de clientes, não no agendamento.
+        const cli=clientes.find(c=>c.id===(ag.cliente_id||ag.clientes?.id));
+        fetch(WEBHOOK_CONFIRMAR,{method:"POST",headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            id:ag.id,                        // vira external_reference no Mercado Pago
+            nome_mae:cli?.nome_mae||"",
+            nome_crianca:cli?.nome_crianca||"",
+            telefone:cli?.telefone||"",
+            email:cli?.email||"",
+            servico:ag.servico||"",
+            modalidade:ag.modalidade||"",
+            data:ag.data||"",
+            hora:ag.hora||"",
+            valor:Number(ag.valor||0),       // usado para gerar o link de pagamento
+          })}).catch(()=>{});
       }
     }catch(e){alert("Erro: "+e.message);}
   };
