@@ -2,7 +2,7 @@
 // Painel Kanban para acompanhar o funil de atendimento da Clarice v2
 
 import { useState, useEffect, useCallback } from "react";
-import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+import { SUPABASE_URL, SUPABASE_KEY, linkWhatsAppEmpresa } from "./config";
 
 const sb = async (path, options = {}) => {
   const { headers: extra = {}, ...rest } = options;
@@ -359,7 +359,7 @@ function CardConversa({ conv, cor, menuAberto, onAbrirCard, onToggleMenu, onMove
           <span style={{ fontSize: 11, color: "#a09080" }}>
             {tempoRelativo(conv.ultima_mensagem_em || conv.atualizado_em)}
           </span>
-          <a href={`https://wa.me/${conv.telefone.replace(/\D/g, '')}`}
+          <a href={linkWhatsAppEmpresa(conv.telefone)}
             target="_blank" rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
             style={{

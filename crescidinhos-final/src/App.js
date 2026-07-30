@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useGoogleLogin } from "@react-oauth/google";
-import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, fmtPreco, calcularTotal } from "./config";
+import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
@@ -685,7 +685,7 @@ function FichaRapida({ agendamento, onVerMais, onFechar }) {
           <button onClick={onFechar} style={{background:"#f5f0eb",border:"none",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:18,color:"#999",lineHeight:1}}>✕</button>
         </div>
         <div style={{display:"flex",gap:8,marginBottom:14}}>
-          <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{flex:1,padding:"9px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:12,fontWeight:600,textAlign:"center"}}>💬 WhatsApp</a>
+          <a href={linkWhatsAppEmpresa(cl.telefone)} target="_blank" rel="noreferrer" style={{flex:1,padding:"9px",borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:12,fontWeight:600,textAlign:"center"}}>💬 WhatsApp</a>
           <a href={`mailto:${cl.email}`} style={{flex:1,padding:"9px",borderRadius:10,background:"#e3f2fd",color:"#1565C0",textDecoration:"none",fontSize:12,fontWeight:600,textAlign:"center"}}>✉️ E-mail</a>
         </div>
         {Object.keys(anamnese).length>0?(
@@ -1597,7 +1597,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
         <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
           <GaleriaPanel agendamento={agendamento}/>
         </div>
-        <a href={`https://wa.me/55${(cl.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
+        <a href={linkWhatsAppEmpresa(cl.telefone)} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box"}}>💬 Abrir WhatsApp</a>
       </div>
     );
   }
@@ -1817,7 +1817,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             </div>
           );
         })}
-        <a href={`https://wa.me/55${(cliente.telefone||"").replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box",marginTop:12}}>💬 Abrir WhatsApp</a>
+        <a href={linkWhatsAppEmpresa(cliente.telefone)} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:"100%",padding:13,borderRadius:10,background:"#25D366",color:"#fff",textDecoration:"none",fontSize:14,fontWeight:600,boxSizing:"border-box",marginTop:12}}>💬 Abrir WhatsApp</a>
       </div>
     );
   }

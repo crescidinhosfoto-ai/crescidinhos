@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { gerarContratoHTML, gerarNumeroContrato, fmtData } from "./ContractGenerator";
-import { SERVICES } from "./config";
+import { SERVICES, linkWhatsAppEmpresa } from "./config";
 
 const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
@@ -485,7 +485,7 @@ export default function ContractPanel({ agendamento, onUpdate }) {
             📋 Copiar link
           </button>
           <a
-            href={`https://wa.me/${(cl.telefone||"").replace(/\D/g,"")}?text=${encodeURIComponent("Olá, " + (cl.nome_mae?.split(" ")[0]||"") + "! 🎀\n\nSeu contrato da Crescidinhos Fotografia está pronto para assinar!\n\n" + linkCliente + "\n\n_Qualquer dúvida, é só chamar! 🐘_")}`}
+            href={linkWhatsAppEmpresa(cl.telefone, "Olá, " + (cl.nome_mae?.split(" ")[0]||"") + "! 🎀\n\nSeu contrato da Crescidinhos Fotografia está pronto para assinar!\n\n" + linkCliente + "\n\n_Qualquer dúvida, é só chamar! 🐘_")}
             target="_blank" rel="noreferrer"
             style={{ flex: 1, padding: "11px 8px", borderRadius: 9, background: "#25D366", color: "#fff", textDecoration: "none", fontSize: 13, fontWeight: 700, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
             💬 Enviar WhatsApp
@@ -534,7 +534,7 @@ export default function ContractPanel({ agendamento, onUpdate }) {
               style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#f5f0eb", border: "1.5px solid #e8e0d8", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "#72243E" }}>
               📋 Copiar link
             </button>
-            <a href={`https://wa.me/${(cl.telefone||"").replace(/\D/g,"")}?text=${encodeURIComponent("Olá! 🎀 Seu contrato está pronto para assinar: " + linkCliente)}`}
+            <a href={linkWhatsAppEmpresa(cl.telefone, "Olá! 🎀 Seu contrato está pronto para assinar: " + linkCliente)}
               target="_blank" rel="noreferrer"
               style={{ flex: 1, padding: "8px", borderRadius: 8, background: "#25D366", color: "#fff", textDecoration: "none", fontSize: 12, fontWeight: 600, textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center" }}>
               💬 Enviar WhatsApp

@@ -29,6 +29,24 @@ export const WEBHOOK_CONFIRMAR =
 export const WEBHOOK_CATALOGO =
   "https://ribbitingboar-n8n.cloudfy.live/webhook/sincronizar-catalogo";
 
+// Link de WhatsApp para USO INTERNO (Kanban, CRM, contratos).
+// No Android, força o WhatsApp Business — sem isso o sistema entrega ao
+// WhatsApp pessoal, que costuma estar como padrão. Se o Business não
+// estiver instalado, cai no link normal.
+// Links das páginas públicas NÃO usam esta função: o cliente deve abrir
+// no WhatsApp que ele tiver.
+export const linkWhatsAppEmpresa = (telefone, texto = "") => {
+  const n = String(telefone || "").replace(/\D/g, "");
+  if (!n) return "";
+  const num = n.startsWith("55") ? n : "55" + n;
+  const web = `https://wa.me/${num}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+  const ehAndroid = typeof navigator !== "undefined" && /android/i.test(navigator.userAgent);
+  if (!ehAndroid) return web;
+  const q = `phone=${num}${texto ? `&text=${encodeURIComponent(texto)}` : ""}`;
+  return `intent://send?${q}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;` +
+         `S.browser_fallback_url=${encodeURIComponent(web)};end`;
+};
+
 export const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 
