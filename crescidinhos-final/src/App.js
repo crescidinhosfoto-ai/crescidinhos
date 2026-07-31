@@ -49,7 +49,20 @@ const salvarClientePublico = async (dados) => {
 const getClienteByEmail    = (email) => sb(`clientes?email=eq.${encodeURIComponent(email)}&limit=1`);
 const criarCliente         = (data) => sb("clientes", { method: "POST", body: JSON.stringify(data) });
 const atualizarCliente     = (id, data) => sb(`clientes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
-const criarAgendamento     = (data) => sb("agendamentos", { method: "POST", body: JSON.stringify(data) });
+// Criação de agendamento passa pelo n8n: o site não lê mais a tabela,
+// então não conseguiria receber de volta a linha criada. O webhook
+// grava com service_role e devolve só o id.
+const criarAgendamento = async (data) => {
+  const res = await fetch(`${N8N_CLIENTE}/agendamento-criar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Não foi possível criar o agendamento.");
+  const d = await res.json();
+  if (!d?.id) throw new Error("Não foi possível criar o agendamento.");
+  return [{ id: d.id }];   // mesma forma de antes: os chamadores leem [0].id
+};
 const getAgendamentos      = () => sb("agendamentos?select=*,clientes(*)&order=data.asc,hora.asc");
 const getClientes          = () => sb("clientes?select=*,agendamentos(*)&order=created_at.desc");
 const getAgendamentosByCliente = (cid) => sb(`agendamentos?cliente_id=eq.${cid}&order=data.desc`);
