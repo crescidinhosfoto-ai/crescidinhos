@@ -5,9 +5,11 @@
 
 import { useState, useEffect, useRef } from "react";
 
-// Página pública: quem abre pelo link não está logado, então o sb()
-// usa a chave publicável. Na etapa 3 isto passa a ir por webhook.
-import { sb } from "./supabaseAuth";
+// Página pública: quem abre pelo link não está logado. Em vez de falar
+// com o banco usando a chave do site — que permitia listar as 114
+// clientes —, agora pede o contrato ao n8n informando o UUID do link.
+// Sem o UUID exato, nada é devolvido.
+const N8N_CONTRATO = "https://ribbitingboar-n8n.cloudfy.live/webhook";
 
 function getContratoId() {
   const parts = window.location.pathname.split("/");
@@ -188,9 +190,10 @@ export default function ContractPage() {
 
   async function carregarContrato() {
     try {
-      const r = await sb(`agendamentos?id=eq.${id}&select=*,clientes(*)`);
-      if (!r || r.length === 0) { setEstado("naoencontrado"); return; }
-      const ag = r[0];
+      const res = await fetch(`${N8N_CONTRATO}/contrato-ler?id=${encodeURIComponent(id)}`);
+      const dados = res.ok ? await res.json() : null;
+      if (!dados?.encontrado) { setEstado("naoencontrado"); return; }
+      const ag = dados.agendamento;
       if (!ag.contrato_html) { setEstado("erro"); return; }
       setAgendamento(ag);
       setSigCliente(ag.signature || null);
@@ -220,7 +223,13 @@ export default function ContractPage() {
       const payload = { [campo]: dataUrl };
       if (ambos) { payload.signed_at = dateStr; payload.status = "Contrato"; }
 
-      await sb(`agendamentos?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(payload) });
+      // Só campos de assinatura passam; o n8n recusa o resto.
+      const resAssin = await fetch(`${N8N_CONTRATO}/contrato-assinar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, campos: payload }),
+      });
+      if (!resAssin.ok) throw new Error("Não foi possível salvar a assinatura.");
 
       if (campo === "signature")             setSigCliente(dataUrl);
       if (campo === "signature_contratada")  setSigContratada(dataUrl);

@@ -597,8 +597,10 @@ function scriptAssinatura(d) {
   return `
 <script>
 // ── Configuração ──────────────────────────────────────────────────
-const SUPA_URL = 'https://uuorxycrxadhjbrebrlg.supabase.co';
-const SUPA_KEY = 'sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3';
+// Esta página roda solta, fora do app — ia com a chave do Supabase
+// embutida, e quem recebesse o contrato tinha acesso ao banco inteiro.
+// Agora fala com o n8n, que só responde para o UUID exato do contrato.
+const N8N_CONTRATO = 'https://ribbitingboar-n8n.cloudfy.live/webhook';
 const AGENDAMENTO_ID = '${d.agendamentoId}';
 const CONTRATO_ID    = '${d.numeroContrato}';
 const TEM_MENOR      = ${d.temMenor ? "true" : "false"};
@@ -693,13 +695,10 @@ function inicializar() {
 // ── Carrega assinaturas já salvas no Supabase ─────────────────────
 async function carregarAssinaturas() {
   try {
-    const res = await fetch(
-      SUPA_URL + '/rest/v1/agendamentos?id=eq.' + AGENDAMENTO_ID + '&select=signature,signature_contratada,signature_responsavel,signed_at',
-      { headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY } }
-    );
+    const res = await fetch(N8N_CONTRATO + '/contrato-ler?id=' + encodeURIComponent(AGENDAMENTO_ID));
     const data = await res.json();
-    if(!data || !data[0]) return;
-    const ag = data[0];
+    if(!data || !data.encontrado) return;
+    const ag = data.agendamento;
 
     if(ag.signature) {
       sigCliente = ag.signature;
@@ -793,15 +792,10 @@ async function salvarNoSupabase() {
   document.getElementById('sig-status').textContent = '⏳ Salvando assinatura...';
 
   try {
-    const res = await fetch(SUPA_URL + '/rest/v1/agendamentos?id=eq.' + AGENDAMENTO_ID, {
-      method: 'PATCH',
-      headers: {
-        'apikey': SUPA_KEY,
-        'Authorization': 'Bearer ' + SUPA_KEY,
-        'Content-Type': 'application/json',
-        'Prefer': 'return=representation',
-      },
-      body: JSON.stringify(payload),
+    const res = await fetch(N8N_CONTRATO + '/contrato-assinar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: AGENDAMENTO_ID, campos: payload }),
     });
     if(!res.ok) throw new Error('HTTP ' + res.status);
 
