@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { supabase, sb, entrarComGoogle, sair, carregarSessao, getTokenGoogle } from "./supabaseAuth";
+import { supabase, sb, entrarComGoogle, sair, carregarSessao, getSessao, getTokenGoogle } from "./supabaseAuth";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
@@ -2030,6 +2030,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [authTela,setAuthTela]=useState('verificando');
   // valores: 'verificando','email','pin','bio','setup','setup-pin','setup-bio'
   const [email,setEmail]=useState('');
+  const [codigoInput,setCodigoInput]=useState('');
   const [pinInput,setPinInput]=useState('');
   const [bioDisponivel,setBioDisponivel]=useState(false);
   const [temPIN,setTemPIN]=useState(false);
@@ -2045,10 +2046,17 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         .then(ok=>setBioDisponivel(ok)).catch(()=>setBioDisponivel(false));
     }
     if(clienteInicial){
-      // Auto-login direto do cadastro
-      setLogado(clienteInicial);
-      getAgendamentosByCliente(clienteInicial.id).then(r=>setAgendamentos(r||[])).catch(()=>{});
-      if(onLoaded)onLoaded();
+      // Recém-cadastrada. Se já provou o e-mail, entra direto; senão
+      // manda o código agora — é o mesmo endereço que ela acabou de digitar.
+      if(getSessao()){
+        setLogado(clienteInicial);
+        getAgendamentosByCliente(clienteInicial.id).then(r=>setAgendamentos(r||[])).catch(()=>{});
+        if(onLoaded)onLoaded();
+      } else {
+        setEmail(clienteInicial.email||'');
+        if(clienteInicial.email)enviarCodigo(clienteInicial.email);
+        else setAuthTela('email');
+      }
     } else {
       verificarSessao();
     }
@@ -2075,23 +2083,66 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
   };
 
+  // Carrega os dados da cliente. Só roda depois que ela provou ser dona
+  // do e-mail — antes disso o banco nem devolve a linha.
+  const concluirLogin=async(em)=>{
+    const r=await getClienteByEmail(em);
+    if(!(r&&r.length>0)){
+      setErroAuth('Não encontramos cadastro com esse e-mail. Fale com a Crescidinhos 🌸');
+      setAuthTela('email');
+      return false;
+    }
+    const cl=r[0];
+    setLogado(cl);
+    const ags=await getAgendamentosByCliente(cl.id);
+    setAgendamentos(ags||[]);
+    localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
+    const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
+    const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
+    setTemPIN(hasPIN);setTemBio(hasBio);
+    if(!hasPIN&&!hasBio){setAuthTela('setup');}
+    else setAuthTela(null);
+    return true;
+  };
+
+  // Antes bastava digitar um e-mail conhecido para entrar na conta de
+  // qualquer cliente. Agora mandamos um código de 6 dígitos e só entra
+  // quem abre a caixa de entrada.
+  const enviarCodigo=async(emailParam)=>{
+    const em=(emailParam||email||'').trim().toLowerCase();
+    if(!em)return;
+    setLoading(true);setErroAuth('');
+    try{
+      // De propósito não dizemos se o e-mail existe: isso evitaria
+      // que alguém descobrisse quem é cliente testando endereços.
+      const {error}=await supabase.auth.signInWithOtp({email:em,options:{shouldCreateUser:true}});
+      if(error)throw error;
+      setEmail(em);
+      setAuthTela('codigo');
+    }catch(e){setErroAuth('Não conseguimos enviar o código. Tente de novo em instantes.');}
+    setLoading(false);
+  };
+
+  const conferirCodigo=async()=>{
+    if(codigoInput.length<6){setErroAuth('O código tem 6 dígitos');return;}
+    setLoading(true);setErroAuth('');
+    try{
+      const {error}=await supabase.auth.verifyOtp({email,token:codigoInput,type:'email'});
+      if(error){setErroAuth('Código inválido ou expirado.');setLoading(false);return;}
+      await concluirLogin(email);
+    }catch(e){setErroAuth('Erro ao conferir. Tente novamente.');}
+    setLoading(false);
+  };
+
+  // PIN e digital destrancam o aparelho. Se a sessão do banco ainda
+  // vale, entra direto; se venceu, pede código novo.
   const loginComEmail=async(emailParam)=>{
     const em=emailParam||email;
     if(!em)return;
     setLoading(true);setErroAuth('');
     try{
-      const r=await getClienteByEmail(em);
-      if(r&&r.length>0){
-        const cl=r[0];
-        setLogado(cl);
-        const ags=await getAgendamentosByCliente(cl.id);
-        setAgendamentos(ags||[]);
-        localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
-        const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
-        const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
-        setTemPIN(hasPIN);setTemBio(hasBio);
-        if(!hasPIN&&!hasBio){setAuthTela('setup');}
-      } else {setErroAuth('E-mail não encontrado. Verifique ou fale com a Crescidinhos.');}
+      if(getSessao())await concluirLogin(em);
+      else await enviarCodigo(em);
     }catch(e){setErroAuth('Erro ao verificar. Tente novamente.');}
     setLoading(false);
   };
@@ -2214,14 +2265,34 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
           <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Acesse seus agendamentos, contratos e Cofrinho 🌸</p>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:16}}>
             <Field label="Seu e-mail cadastrado">
-              <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>{setEmail(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&loginComEmail()}/>
+              <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>{setEmail(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&enviarCodigo()}/>
             </Field>
             {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'-8px 0 12px',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={()=>loginComEmail()} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
-              {loading?"Verificando...":"Acessar minha área →"}
+            <button onClick={()=>enviarCodigo()} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
+              {loading?"Enviando código...":"Receber código por e-mail →"}
             </button>
           </div>
           <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
+        </div>
+      );
+    }
+
+    if(authTela==='codigo'){
+      return(
+        <div style={{textAlign:"center",padding:"48px 16px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>📬</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Confira seu e-mail</h2>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Mandamos um código de 6 dígitos para<br/><strong style={{color:"#1a1a1a"}}>{email}</strong></p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,marginBottom:16}}>
+            <input style={{...inp,textAlign:'center',fontSize:26,letterSpacing:10,fontWeight:600,padding:'12px 8px'}} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&conferirCodigo()}/>
+            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'12px 0 0',textAlign:'center'}}>{erroAuth}</p>}
+            <button onClick={conferirCodigo} disabled={loading||codigoInput.length<6} style={{width:"100%",marginTop:16,padding:13,borderRadius:10,background:codigoInput.length===6?"#1a1a1a":"#e8e0d8",color:codigoInput.length===6?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:codigoInput.length===6?"pointer":"default"}}>
+              {loading?"Conferindo...":"Entrar 🌸"}
+            </button>
+          </div>
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6,marginBottom:8}}>Não chegou? Olhe no spam.</p>
+          <button onClick={()=>{setCodigoInput('');setErroAuth('');enviarCodigo();}} disabled={loading} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>Enviar outro código</button>
+          <button onClick={()=>{setCodigoInput('');setErroAuth('');setAuthTela('email');}} style={{display:'block',margin:'4px auto 0',padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#aaa'}}>← Usar outro e-mail</button>
         </div>
       );
     }
