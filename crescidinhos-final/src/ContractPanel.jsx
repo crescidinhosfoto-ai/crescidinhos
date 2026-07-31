@@ -5,11 +5,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { gerarContratoHTML, gerarNumeroContrato, fmtData } from "./ContractGenerator";
-import { SERVICES, linkWhatsAppEmpresa } from "./config";
-import { sb } from "./supabaseAuth";
+import { SERVICES, linkWhatsAppEmpresa, SUPABASE_KEY } from "./config";
+import { sb, getSessao } from "./supabaseAuth";
 
-const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
-const EVOLUTION_KEY = "gNnhqK2sv964EPigBYm1WJkBc91gu1t4";
+// A chave da Evolution saiu daqui: ela ia no bundle do site, então
+// qualquer um podia mandar WhatsApp pelo número do estúdio. Agora quem
+// guarda a chave é o n8n, que só envia depois de conferir o crachá.
+const N8N_WHATSAPP  = "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-whatsapp";
 const N8N_EMAIL     = "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-contrato-email";
 const APP_URL       = "https://app.crescidinhosfoto.com.br";
 
@@ -18,10 +20,15 @@ const APP_URL       = "https://app.crescidinhosfoto.com.br";
 async function enviarWhatsApp(numero, mensagem) {
   const tel = numero.replace(/\D/g, "");
   if (!tel || tel.length < 10) return;
-  await fetch(EVOLUTION_URL, {
+  const sessao = getSessao();
+  if (!sessao) return;
+  await fetch(N8N_WHATSAPP, {
     method: "POST",
-    headers: { "Content-Type": "application/json", apikey: EVOLUTION_KEY },
-    body: JSON.stringify({ number: `55${tel}`, text: mensagem }),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${sessao.access_token}`,
+    },
+    body: JSON.stringify({ numero: tel, mensagem, chavePublica: SUPABASE_KEY }),
   }).catch(() => {});
 }
 
