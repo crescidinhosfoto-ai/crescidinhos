@@ -90,19 +90,22 @@ const SERVICOS_EVENTO   = ["aniversario","batizado","quinze-anos"];
 const SERVICOS_EXTERNOS = ["gestante-externa","adulto-externo","familia-externa"];
 const requerDadosEvento = (serviceId) => SERVICOS_EVENTO.includes(serviceId) || SERVICOS_EXTERNOS.includes(serviceId);
 
-// ─── EVOLUTION API WhatsApp ───────────────────────────────────────
-const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
-const EVOLUTION_KEY = "gNnhqK2sv964EPigBYm1WJkBc91gu1t4";
-const enviarWhatsApp = async (numero, mensagem) => {
-  const tel = numero.replace(/\D/g,"");
-  if(!tel||tel.length<10) return;
+// ─── AVISOS POR WhatsApp ──────────────────────────────────────────
+// A chave da Evolution saiu daqui: ia no bundle do site, então qualquer
+// um mandava mensagem pelo número do estúdio. Agora o site só diz "o
+// agendamento tal aconteceu, é deste tipo" — quem lê o cadastro, escreve
+// o texto e escolhe o destinatário é o n8n. Assim não há como usar isto
+// para mandar mensagem qualquer para número qualquer.
+const N8N_NOTIFICAR = "https://ribbitingboar-n8n.cloudfy.live/webhook/notificar";
+const avisarWhatsApp = async (agendamentoId, tipo) => {
+  if(!agendamentoId) return;
   try {
-    await fetch(EVOLUTION_URL, {
+    await fetch(N8N_NOTIFICAR, {
       method:"POST",
-      headers:{"Content-Type":"application/json","apikey":EVOLUTION_KEY},
-      body:JSON.stringify({number:`55${tel}`,text:mensagem})
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({agendamentoId,tipo})
     });
-  } catch(e){ console.error("WA error:",e); }
+  } catch(e){ console.error("aviso não saiu:",e); }
 };
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -2749,7 +2752,7 @@ function ClientView() {
         const extrasStr=extras.length>0?`\nAdicionais: ${extras.map(e=>e.label).join(', ')}`:'';
         const tituloMP=`Vale Presente Crescidinhos — ${servicoLabel}${modalidadeLabel?' ('+modalidadeLabel+')':''}`;
         const linkMP=await criarLinkMercadoPago(tituloMP,valor,`VALE-${codigo}`);
-        await criarAgendamento({
+        const agVale=await criarAgendamento({
           cliente_id:cid,
           servico:servicoLabel,servico_id:isLivre?'vale':service?.id,
           modalidade:modalidadeLabel,modalidade_id:isLivre?'vale-livre':modality?.id,
@@ -2757,12 +2760,7 @@ function ClientView() {
           obs:`VALE:${codigo}`,
           pagamento_link:linkMP||null,
         });
-        const msgFotografa=`🎁 *Novo Vale Presente!*\n\nCompradora: ${cadastro.nome_mae}\nPara: ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\nValor: R$ ${valor.toFixed(2).replace('.',',')}\nCódigo: ${codigo}\nWhatsApp: ${cadastro.telefone}${linkMP?'\n\n💳 Link: '+linkMP:''}\n\nAguardando pagamento.`;
-        const linkTxt=linkMP?`\n\n💳 *Pague agora:* ${linkMP}`:'';
-        const msgCompradora=`🎁 *Seu Vale Presente foi criado!*\n\nOlá, ${cadastro.nome_mae?.split(' ')[0]}! 🌸\n\nAqui estão os dados do vale que você presenteou:\n\n🎀 *Ensaio:* ${servicoLabel}${modalidadeLabel?' — '+modalidadeLabel:''}${extrasStr}\n💰 *Valor:* R$ ${valor.toFixed(2).replace('.',',')}\n🔑 *Código:* ${codigo}${linkTxt}\n\nEncaminhe este código para a presenteada — ela usará para resgatar o ensaio no app da Crescidinhos. 🌸\n\n_Crescidinhos Fotografia_`;
-        await enviarWhatsApp("14996845521",msgFotografa);
-        const telCompradora=tel.replace(/\D/g,'');
-        if(telCompradora.length>=10) await enviarWhatsApp(telCompradora,msgCompradora).catch(()=>{});
+        await avisarWhatsApp(agVale?.[0]?.id,'vale');
         setCodigoGerado(codigo);
         setLinkPagamento(linkMP||'');
         setLoading(false);limparSessao();setSubmitted(true);
@@ -2773,7 +2771,7 @@ function ClientView() {
       if(resgatandoVale&&valeEncontrado){
         const valorVale=Number(valeEncontrado.valor||0);
         const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
-        await criarAgendamento({
+        const agResgate=await criarAgendamento({
           cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
           modalidade:modality?.label,modalidade_id:modality?.id||null,
           duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
@@ -2784,7 +2782,7 @@ function ClientView() {
         });
         await marcarValeUsado(valeEncontrado.id);
         const dataFmt=date?`${date.split("-").reverse().join("/")}`:"-";
-        await enviarWhatsApp("14996845521",`🎁 *Vale Presente resgatado!*\n\nPresenteada: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nCódigo: ${valeCodeInput.toUpperCase()}\n\nAcesse o painel para confirmar.`);
+        await avisarWhatsApp(agResgate?.[0]?.id,'vale_resgatado');
         setLoading(false);limparSessao();setSubmitted(true);
         return;
       }
@@ -2792,7 +2790,7 @@ function ClientView() {
       // ── COFRINHO — confirma automático e gera link MP ──
       if(service?.grupo==="cofrinho"){
         const mpRes=await criarAssinaturaCofrinho(cid,cadastro.email);
-        await criarAgendamento({
+        const agCofrinho=await criarAgendamento({
           cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
           modalidade:modality?.label,modalidade_id:modality?.id||null,
           valor:modality?.price||null,
@@ -2802,7 +2800,7 @@ function ClientView() {
           await atualizarCliente(cid,{cofrinho:{status:"pendente",preapproval_id:mpRes.preapproval_id,saldo:0,meses_pagos:0}});
           setLinkCofrinho(mpRes.init_point);
         }
-        await enviarWhatsApp("14996845521",`🪙 *Novo Cofrinho!*\n\nCliente: ${cadastro.nome_mae}\nPlano: ${service?.label}${modality?.label?" — "+modality.label:""}\nWhatsApp: ${cadastro.telefone}\n\nJá confirmado automaticamente.`);
+        await avisarWhatsApp(agCofrinho?.[0]?.id,'cofrinho');
         setLoading(false);limparSessao();setSubmitted(true);
         return;
       }
@@ -2810,7 +2808,7 @@ function ClientView() {
       // ── Agendamento normal ──
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       const extrasParaSalvar=extras.filter(e=>!e.precisaAgenda).map(e=>({id:e.id,label:e.label,price:e.price}));
-      await criarAgendamento({
+      const agPrincipal=await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
         duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
@@ -2836,7 +2834,7 @@ function ClientView() {
       const dataEnsaioFmt=dataEnsaio?`${dataEnsaio.split("-").reverse().join("/")}`:"-";
       const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}${dadosEvento.local_nome?"\nLocal: "+dadosEvento.local_nome:""}`: "";
       const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:"";
-      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cadastro.nome_mae}\nServiço: ${service?.label}${modality?.label?" — "+modality.label:""}\nData: ${dataFmt} às ${time||"-"}\nWhatsApp: ${cadastro.telefone}${msgEvento}${msgEnsaio}\n\nAcesse o painel para confirmar.`);
+      await avisarWhatsApp(agPrincipal?.[0]?.id,'agendamento');
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,duracao_min:modality?.duracao_min||60,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false);limparSessao();setSubmitted(true);
@@ -3406,7 +3404,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
       // ── COFRINHO — confirma automático e gera link MP ──
       if(service?.grupo==="cofrinho"){
         const mpRes=await criarAssinaturaCofrinho(cid,cliente.email);
-        await criarAgendamento({
+        const agCofrinho=await criarAgendamento({
           cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
           modalidade:modality?.label,modalidade_id:modality?.id||null,
           valor:modality?.price||null,
@@ -3416,14 +3414,14 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
           await atualizarCliente(cid,{cofrinho:{status:"pendente",preapproval_id:mpRes.preapproval_id,saldo:0,meses_pagos:0}});
           setLinkCofrinho(mpRes.init_point);
         }
-        await enviarWhatsApp("14996845521",`🪙 *Novo Cofrinho!*\n\nCliente: ${cliente.nome_mae}\nPlano: ${service?.label}${modality?.label?" — "+modality.label:""}\nWhatsApp: ${cliente.telefone}\n\nJá confirmado automaticamente.`);
+        await avisarWhatsApp(agCofrinho?.[0]?.id,'cofrinho');
         setLoading(false);setSubmitted(true);
         return;
       }
 
       const calc=service?.descontoExtras?calcularTotal(modality?.price||0,extras,true):{total:modality?.price||0};
       const extrasParaSalvar=extras.filter(e=>!e.precisaAgenda).map(e=>({id:e.id,label:e.label,price:e.price}));
-      await criarAgendamento({
+      const agPrincipal=await criarAgendamento({
         cliente_id:cid,servico:service?.label,servico_id:service?.id||null,
         modalidade:modality?.label,modalidade_id:modality?.id||null,
         duracao_min:modality?.duracao_min||60,nome_crianca:nomeCrianca||null,
@@ -3447,7 +3445,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
       const dataEnsaioFmt=dataEnsaio?dataEnsaio.split('-').reverse().join('/'):null;
       const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:'';
       const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}`:'';
-      await enviarWhatsApp("14996845521",`🌸 *Novo agendamento!*\n\nCliente: ${cliente.nome_mae}\nServiço: ${service?.label}${modality?.label?' — '+modality.label:''}\nData: ${dataFmt} às ${time||'-'}\nWhatsApp: ${cliente.telefone}${msgEvento}${msgEnsaio}\n\nAcesse o painel para confirmar.`);
+      await avisarWhatsApp(agPrincipal?.[0]?.id,'agendamento');
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cliente.nome_mae,email:cliente.email,phone:cliente.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,grupo:service?.grupo,data:date,hora:time,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
       setSubmitted(true);
     }catch(e){console.error(e);alert('Erro ao enviar. Tente novamente.');}
