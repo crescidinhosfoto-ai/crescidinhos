@@ -14,6 +14,38 @@ import KanbanPanel from "./KanbanPanel";
 // quando ela está logada, e a chave publicável quando não.
 
 const getClienteByTelefone = (tel) => sb(`clientes?telefone=eq.${encodeURIComponent(tel)}&limit=1`);
+
+// ─── CADASTRO NO FLUXO PÚBLICO ────────────────────────────────────
+// Quem digita um telefone no agendamento não está logado. Antes o site
+// lia a linha inteira da cliente — CPF, RG, nascimento, endereço — e
+// devolvia para o navegador de quem quer que tivesse digitado o número.
+// E ao salvar, sobrescrevia o cadastro, então dava para adulterar o
+// registro de qualquer cliente sabendo o telefone dela.
+//
+// Agora as duas coisas passam pelo n8n: a busca devolve só nome, e-mail
+// e telefone, e o salvar nunca sobrescreve campo que já tem conteúdo.
+const N8N_CLIENTE = "https://ribbitingboar-n8n.cloudfy.live/webhook";
+
+const buscarClientePublico = async (tel) => {
+  try {
+    const res = await fetch(`${N8N_CLIENTE}/cliente-buscar?telefone=${encodeURIComponent(tel)}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d && d.encontrado ? d : null;
+  } catch { return null; }
+};
+
+const salvarClientePublico = async (dados) => {
+  const res = await fetch(`${N8N_CLIENTE}/cliente-salvar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(dados),
+  });
+  if (!res.ok) throw new Error("Não foi possível salvar seu cadastro.");
+  const d = await res.json();
+  if (!d?.id) throw new Error("Não foi possível salvar seu cadastro.");
+  return d.id;
+};
 const getClienteByEmail    = (email) => sb(`clientes?email=eq.${encodeURIComponent(email)}&limit=1`);
 const criarCliente         = (data) => sb("clientes", { method: "POST", body: JSON.stringify(data) });
 const atualizarCliente     = (id, data) => sb(`clientes?id=eq.${id}`, { method: "PATCH", body: JSON.stringify(data) });
@@ -2692,11 +2724,13 @@ function ClientView() {
     if(tel.length<10)return;
     setVerificando(true);
     try{
-      const r=await getClienteByTelefone(tel);
-      if(r&&r.length>0){
-        const cl=r[0];
+      // Só nome, e-mail e telefone voltam do servidor. CPF, RG,
+      // nascimento e endereço a cliente informa de novo — eram esses
+      // que vazavam para quem digitasse um telefone qualquer.
+      const cl=await buscarClientePublico(tel);
+      if(cl){
         setClienteExistente(cl);
-        setCadastro({nome_mae:cl.nome_mae||"",email:cl.email||"",cpf:cl.cpf_mae||"",telefone:tel,temFilho:cl.filhos?.length>0?"Sim":cl.anamnese?.nome_crianca?"Sim":"",rg:"",data_nascimento:"",endereco_cep:"",endereco_rua:"",endereco_complemento:"",endereco_bairro:"",endereco_cidade:"Bauru"});
+        setCadastro({nome_mae:cl.nome_mae||"",email:cl.email||"",cpf:"",telefone:tel,temFilho:cl.tem_filho?"Sim":"",rg:"",data_nascimento:"",endereco_cep:"",endereco_rua:"",endereco_complemento:"",endereco_bairro:"",endereco_cidade:"Bauru"});
       }else{setClienteExistente(null);}
     }catch(e){}
     setVerificando(false);
@@ -2726,18 +2760,13 @@ function ClientView() {
     try{
       const tel=cadastro.telefone.replace(/\D/g,"");
       let cid;
-      const ex=await getClienteByTelefone(tel);
       const filhosData=cadastro.temFilho==="Sim"&&!clienteExistente?filhos:[];
       const anamnese=filhosData[0]||{};
       const enderecoObj={cep:cadastro.endereco_cep,rua:cadastro.endereco_rua,complemento:cadastro.endereco_complemento,bairro:cadastro.endereco_bairro,cidade:cadastro.endereco_cidade};
       const camposCliente={nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf,rg:cadastro.rg||null,data_nascimento:cadastro.data_nascimento||null,endereco:enderecoObj};
-      if(ex&&ex.length>0){
-        cid=ex[0].id;
-        await atualizarCliente(cid,{nome_mae:cadastro.nome_mae,email:cadastro.email,cpf_mae:cadastro.cpf||null,updated_at:new Date().toISOString()});
-      }else{
-        const nc=await criarCliente({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
-        cid=nc[0].id;
-      }
+      // Cria ou completa o cadastro no servidor. Campo que já tem
+      // conteúdo nunca é sobrescrito daqui — correção passa pelo painel.
+      cid=await salvarClientePublico({...camposCliente,telefone:tel,atipico:anamnese.atipico==="Sim",filhos:filhosData,anamnese,ultimo_ensaio:date,total_ensaios:1});
       const nomeCrianca=clienteExistente
         ?(cadastro.nomeCriancaSel&&cadastro.nomeCriancaSel!=="__nova"?cadastro.nomeCriancaSel:cadastro.nomeCriancaNova||"")
         :(anamnese.nome_crianca||"");
@@ -3382,12 +3411,11 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
     if(tel.length<10){setErroCl('Digite um WhatsApp válido com DDD');return;}
     setBuscando(true);setErroCl('');
     try{
-      const r=await getClienteByTelefone(tel);
-      if(r&&r.length>0){
-        const cl=r[0];
+      const cl=await buscarClientePublico(tel);
+      if(cl){
         setCliente(cl);
-        const filhos=cl.filhos||[];
-        if(filhos.length>0){setParaFilho(true);setFilhoNome(filhos[0].nome_crianca||'');}
+        // O nome da criança não vem mais do servidor; ela digita.
+        if(cl.tem_filho){setParaFilho(true);}
       } else {
         setErroCl('Cadastro não encontrado. Clique em "Cadastre-se" para criar seu perfil.');
       }
@@ -3757,16 +3785,10 @@ function CadastroView({ onCadastrado, onJaTenho }) {
         atipico:anamnese.atipico==='Sim',filhos:filhosData,anamnese,
         updated_at:new Date().toISOString()
       };
-      const ex=await getClienteByTelefone(tel);
-      let cl;
-      if(ex&&ex.length>0){
-        await atualizarCliente(ex[0].id,payload);
-        const r=await getClienteByTelefone(tel);
-        cl=r[0];
-      }else{
-        const nc=await criarCliente(payload);
-        cl=nc[0];
-      }
+      // Mesma regra do agendamento: o servidor cria ou completa, e
+      // nunca sobrescreve o que já está preenchido.
+      const cid=await salvarClientePublico({...payload,telefone:tel});
+      const cl={id:cid,nome_mae:payload.nome_mae,email:payload.email,telefone:tel};
       localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
       onCadastrado(cl);
     }catch(e){setErro('Erro ao salvar: '+(e.message||'Tente novamente.'));}
