@@ -2,24 +2,8 @@
 // Painel Kanban para acompanhar o funil de atendimento da Clarice v2
 
 import { useState, useEffect, useCallback } from "react";
-import { SUPABASE_URL, SUPABASE_KEY, linkWhatsAppEmpresa } from "./config";
-
-const sb = async (path, options = {}) => {
-  const { headers: extra = {}, ...rest } = options;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...extra,
-    },
-    ...rest,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const t = await res.text();
-  return t ? JSON.parse(t) : null;
-};
+import { linkWhatsAppEmpresa } from "./config";
+import { sb } from "./supabaseAuth";
 
 const COLUNAS = [
   { slug: "novo_lead",         label: "Novo Lead",          cor: "#698494" },

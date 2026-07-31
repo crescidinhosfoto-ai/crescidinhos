@@ -2,7 +2,8 @@
 // Lê disponibilidade direto do Supabase (tabela disponibilidades)
 // Bloqueia automaticamente horários já agendados, considerando duração do serviço
 
-import { SUPABASE_URL, SUPABASE_KEY, SERVICES } from "./config";
+import { SERVICES } from "./config";
+import { sbSilencioso } from "./supabaseAuth";
 
 // Busca duração do serviço no config pelo servico_id ou label
 function getDuracaoMin(ag) {
@@ -20,21 +21,9 @@ function getDuracaoMin(ag) {
   return 60; // fallback: 1h
 }
 
-const sbGet = async (path) => {
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-    });
-    if (!res.ok) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return null;
-  }
-};
+// Não estoura em erro: a tela de agendamento precisa seguir de pé
+// mesmo se uma consulta falhar. sbSilencioso devolve null nesse caso.
+const sbGet = (path) => sbSilencioso(path);
 
 /**
  * Busca quais datas do mês têm horários liberados no Supabase

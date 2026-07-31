@@ -2,7 +2,7 @@
 // Painel para a Thais liberar datas e horários disponíveis no Supabase
 
 import { useState, useEffect, useCallback } from "react";
-import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+import { sb } from "./supabaseAuth";
 
 // Gera todos os horários do dia em intervalos de 30 min: 00:00 até 23:30
 const HORARIOS_DIA = Array.from({ length: 48 }, (_, i) => {
@@ -11,23 +11,7 @@ const HORARIOS_DIA = Array.from({ length: 48 }, (_, i) => {
   return `${String(h).padStart(2, "0")}:${m}`;
 });
 
-const sb = async (path, options = {}) => {
-  // Desestrutura headers separado para não sobrescrever apikey/Authorization
-  const { headers: extraHeaders = {}, ...restOptions } = options;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...extraHeaders,
-    },
-    ...restOptions,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
+// sb() vem de supabaseAuth.js — manda o crachá da fotógrafa.
 
 const C = {
   primary: "#b8967e", light: "#f5f0eb", border: "#e8e0d8",

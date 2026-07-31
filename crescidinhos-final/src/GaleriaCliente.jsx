@@ -2,25 +2,10 @@
 // Galeria de seleção de fotos para o cliente
 
 import { useState, useEffect, useCallback } from "react";
-import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+import { sbSilencioso as sb, sb as sbEstrito } from "./supabaseAuth";
 
-const sb = async (path) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-  });
-  if (!res.ok) return null;
-  const t = await res.text();
-  return t ? JSON.parse(t) : null;
-};
-
-const sbPatch = async (path, data) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    method: "PATCH",
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) throw new Error(await res.text());
-};
+const sbPatch = (path, data) =>
+  sbEstrito(path, { method: "PATCH", body: JSON.stringify(data) });
 
 const C = { primary: "#b8967e", light: "#f5f0eb", border: "#e8e0d8", text: "#3d2b1f", muted: "#a09080", green: "#2e7d32", red: "#c62828" };
 

@@ -3,24 +3,18 @@
 
 import { useState, useEffect, useRef } from "react";
 import { SUPABASE_URL, SUPABASE_KEY } from "./config";
+import { sb, getSessao } from "./supabaseAuth";
 
-const sb = async (path, opts = {}) => {
-  const { headers: h = {}, ...rest } = opts;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", Prefer: "return=representation", ...h },
-    ...rest,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const t = await res.text();
-  return t ? JSON.parse(t) : null;
-};
+// O Storage não passa pelo sb(), então monta o cabeçalho aqui —
+// mesma regra: crachá da fotógrafa quando logada.
+const crachaStorage = () => getSessao()?.access_token || SUPABASE_KEY;
 
 const uploadFoto = async (file, agId) => {
   const ext = file.name.split(".").pop();
   const path = `${agId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
   const res = await fetch(`${SUPABASE_URL}/storage/v1/object/galerias/${path}`, {
     method: "POST",
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": file.type },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${crachaStorage()}`, "Content-Type": file.type },
     body: file,
   });
   if (!res.ok) throw new Error(await res.text());
@@ -30,7 +24,7 @@ const uploadFoto = async (file, agId) => {
 const deletarFoto = async (path) => {
   await fetch(`${SUPABASE_URL}/storage/v1/object/galerias/${path}`, {
     method: "DELETE",
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${crachaStorage()}` },
   });
 };
 

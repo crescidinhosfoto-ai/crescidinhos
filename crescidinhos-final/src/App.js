@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useGoogleLogin } from "@react-oauth/google";
+import { supabase, sb, entrarComGoogle, sair, carregarSessao, getTokenGoogle } from "./supabaseAuth";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
@@ -10,24 +10,8 @@ import GaleriaCliente from "./GaleriaCliente";
 import KanbanPanel from "./KanbanPanel";
 
 // ─── SUPABASE ────────────────────────────────────────────────────
-const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
-const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
-
-const sb = async (path, options = {}) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...options.headers,
-    },
-    ...options,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
+// O sb() agora mora em supabaseAuth.js: manda o crachá da fotógrafa
+// quando ela está logada, e a chave publicável quando não.
 
 const getClienteByTelefone = (tel) => sb(`clientes?telefone=eq.${encodeURIComponent(tel)}&limit=1`);
 const getClienteByEmail    = (email) => sb(`clientes?email=eq.${encodeURIComponent(email)}&limit=1`);
@@ -910,7 +894,7 @@ function AgendaView({ auth, onVerCliente }) {
     const paraSync=agendamentos.filter(a=>(a.status==="Confirmado"||a.status==="A Realizar")&&a.data&&a.data>=hoje2&&a.hora);
     let ok=0,erros=0;
     for(const ag of paraSync){
-      const r=await criarEventoGoogleCalendar(auth.token.access_token,ag);
+      const r=await criarEventoGoogleCalendar(getTokenGoogle(),ag);
       if(r.ok)ok++;else{erros++;console.error("Sync erro:",ag.id,r.error);}
       await new Promise(res=>setTimeout(res,300));
     }
@@ -1154,8 +1138,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
       if(patch.status==="Confirmado"){
         const ag={...agendamentos.find(a=>a.id===id)||{},...patch};
         // Agenda no Google só se a fotógrafa estiver logada com a conta Google
-        if(auth?.token?.access_token){
-          criarEventoGoogleCalendar(auth.token.access_token,ag).catch(()=>{});
+        if(getTokenGoogle()){
+          criarEventoGoogleCalendar(getTokenGoogle(),ag).catch(()=>{});
         }
         // Avisa a cliente pelo WhatsApp — o n8n monta e envia a mensagem.
         // Nome e telefone vivem na tabela de clientes, não no agendamento.
@@ -3201,12 +3185,14 @@ function ClientView() {
 }
 
 // ─── PHOTOGRAPHER LOGIN ───────────────────────────────────────────
-function PhotographerLogin({ onLogin }) {
-  const login=useGoogleLogin({
-    onSuccess:async(t)=>{try{const r=await fetch("https://www.googleapis.com/oauth2/v3/userinfo",{headers:{Authorization:`Bearer ${t.access_token}`}});const info=await r.json();onLogin({token:t,email:info.email});}catch{alert("Não foi possível verificar o usuário.");}},
-    onError:()=>alert("Erro ao fazer login."),
-    scope:"https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/userinfo.email",
-  });
+// O login agora passa pelo Supabase: além de identificar a fotógrafa,
+// ele devolve o crachá que o banco exige para liberar os dados. O token
+// do Google Calendar vem junto, então a agenda segue igual.
+function PhotographerLogin() {
+  const login=async()=>{
+    try{await entrarComGoogle();}
+    catch(e){alert("Erro ao fazer login: "+e.message);}
+  };
   return(
     <div style={{textAlign:"center",padding:"48px 24px"}}>
       <div style={{fontSize:40,marginBottom:16}}>📷</div>
@@ -3853,6 +3839,16 @@ export default function App() {
   const [auth,setAuth]=useState(null);
   const [clienteAutoLogin,setClienteAutoLogin]=useState(null);
 
+  // Restaura o login da fotógrafa ao abrir e acompanha entrada/saída.
+  // O Supabase renova o crachá sozinho, então ela não é deslogada no meio.
+  useEffect(()=>{
+    carregarSessao().then(s=>{if(s)setAuth({email:s.user?.email});});
+    const {data:sub}=supabase.auth.onAuthStateChange((_e,s)=>{
+      setAuth(s?{email:s.user?.email}:null);
+    });
+    return ()=>sub.subscription.unsubscribe();
+  },[]);
+
   if(window.location.pathname.startsWith("/contrato/")){
     return <ContractPage/>;
   }
@@ -3918,8 +3914,8 @@ export default function App() {
         )}
 
         {/* ── FOTÓGRAFA ── */}
-        {view==="photographer"&&!auth&&<PhotographerLogin onLogin={setAuth}/>}
-        {view==="photographer"&&auth&&<PhotographerPanel auth={auth} onLogout={()=>{setAuth(null);setView("home");}}/>}
+        {view==="photographer"&&!auth&&<PhotographerLogin/>}
+        {view==="photographer"&&auth&&<PhotographerPanel auth={auth} onLogout={async()=>{await sair();setAuth(null);setView("home");}}/>}
       </div>
     </div>
   );

@@ -6,29 +6,14 @@
 import { useState, useEffect, useRef } from "react";
 import { gerarContratoHTML, gerarNumeroContrato, fmtData } from "./ContractGenerator";
 import { SERVICES, linkWhatsAppEmpresa } from "./config";
+import { sb } from "./supabaseAuth";
 
-const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
-const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 const EVOLUTION_URL = "https://ribbitingboar-evolution.cloudfy.live/message/sendText/crescidinhos";
 const EVOLUTION_KEY = "gNnhqK2sv964EPigBYm1WJkBc91gu1t4";
 const N8N_EMAIL     = "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-contrato-email";
 const APP_URL       = "https://app.crescidinhosfoto.com.br";
 
-const sb = async (path, options = {}) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...options.headers,
-    },
-    ...options,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
+// sb() vem de supabaseAuth.js — manda o crachá da fotógrafa.
 
 async function enviarWhatsApp(numero, mensagem) {
   const tel = numero.replace(/\D/g, "");

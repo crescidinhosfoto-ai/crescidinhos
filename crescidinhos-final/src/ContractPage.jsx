@@ -5,24 +5,9 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
-const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
-
-const sb = async (path, options = {}) => {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...options.headers,
-    },
-    ...options,
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const text = await res.text();
-  return text ? JSON.parse(text) : null;
-};
+// Página pública: quem abre pelo link não está logado, então o sb()
+// usa a chave publicável. Na etapa 3 isto passa a ir por webhook.
+import { sb } from "./supabaseAuth";
 
 function getContratoId() {
   const parts = window.location.pathname.split("/");
