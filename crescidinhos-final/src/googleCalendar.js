@@ -1,117 +1,53 @@
 // googleCalendar.js — Crescidinhos Fotografia
-// Lê disponibilidade direto do Supabase (tabela disponibilidades)
-// Bloqueia automaticamente horários já agendados, considerando duração do serviço
+// Disponibilidade de horários + criação de evento no Google Calendar
 
-import { SERVICES } from "./config";
-import { sbSilencioso } from "./supabaseAuth";
+// A disponibilidade agora é calculada no n8n, não aqui.
+//
+// Antes, para saber quais horários estavam livres, o navegador lia a
+// agenda pessoal da fotógrafa, os compromissos e todos os agendamentos
+// do dia — e fazia a conta. Isso significava entregar a agenda inteira
+// para qualquer pessoa que abrisse a tela de agendamento.
+//
+// Agora o site pergunta "quais horários estão livres neste dia, para um
+// ensaio de X minutos?" e recebe só a lista. A conta é a mesma; o que
+// muda é que o dado sensível não sai mais do servidor.
+const N8N_AGENDA = "https://ribbitingboar-n8n.cloudfy.live/webhook";
 
-// Busca duração do serviço no config pelo servico_id ou label
-function getDuracaoMin(ag) {
-  if (ag.duracao_min && ag.duracao_min > 0) return ag.duracao_min;
-  // Tenta achar pela modalidade no config
-  if (ag.servico_id || ag.modalidade_id) {
-    for (const svc of SERVICES) {
-      for (const mod of svc.modalities || []) {
-        if (mod.id === ag.modalidade_id || mod.id === ag.servico_id) {
-          return mod.duracao_min || 60;
-        }
-      }
-    }
+const pedir = async (rota) => {
+  try {
+    const res = await fetch(`${N8N_AGENDA}/${rota}`);
+    if (!res.ok) return [];
+    const dados = await res.json();
+    return Array.isArray(dados) ? dados : [];
+  } catch (err) {
+    console.warn("[Disp] falhou:", err);
+    return [];
   }
-  return 60; // fallback: 1h
-}
-
-// Não estoura em erro: a tela de agendamento precisa seguir de pé
-// mesmo se uma consulta falhar. sbSilencioso devolve null nesse caso.
-const sbGet = (path) => sbSilencioso(path);
+};
 
 /**
- * Busca quais datas do mês têm horários liberados no Supabase
+ * Datas do mês que têm horário liberado
  * @param {number} ano
  * @param {number} mes - 1-12
  * @returns {Promise<string[]>} ex: ["2026-05-24","2026-05-27"]
  */
 export async function fetchDatasDisponiveis(ano, mes) {
-  try {
-    const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
-    // Calcula o último dia real do mês (evita erro com meses de 30 dias ou fevereiro)
-    const ultimoDia = new Date(ano, mes, 0).getDate(); // mes já é 1-indexed aqui
-    const fimMes = `${mesStr}-${String(ultimoDia).padStart(2, "0")}`;
-    const res = await sbGet(
-      `disponibilidades?data=gte.${mesStr}-01&data=lte.${fimMes}&select=data`
-    );
-    return (res || []).map((d) => d.data);
-  } catch (err) {
-    console.warn("[Disp] datas error:", err);
-    return [];
-  }
+  const mesStr = `${ano}-${String(mes).padStart(2, "0")}`;
+  // Último dia real do mês (evita erro com meses de 30 dias ou fevereiro)
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const fim = `${mesStr}-${String(ultimoDia).padStart(2, "0")}`;
+  return pedir(`agenda-datas?inicio=${mesStr}-01&fim=${fim}`);
 }
 
 /**
- * Busca horários disponíveis para uma data, bloqueando os já ocupados
+ * Horários livres de uma data, já descontando o que está ocupado
  * @param {string} data - formato 'YYYY-MM-DD'
- * @param {number} duracaoMin - duração do serviço em minutos (default 60)
+ * @param {number} duracaoMin - duração do serviço em minutos
  * @returns {Promise<string[]>} ex: ["09:00","10:00"]
  */
 export async function fetchHorariosDisponiveis(data, duracaoMin = 60) {
-  try {
-    // 1. Horários liberados pela Thais para este dia
-    const dispRes = await sbGet(
-      `disponibilidades?data=eq.${data}&select=horarios`
-    );
-    if (!dispRes || dispRes.length === 0) return [];
-    const horariosLiberados = dispRes[0].horarios || [];
-    if (horariosLiberados.length === 0) return [];
-
-    // 2. Agendamentos ativos do dia para calcular bloqueios
-    const agsRes = await sbGet(
-      `agendamentos?data=eq.${data}&status=not.in.(Cancelado)&select=hora,duracao_min,servico_id,modalidade_id`
-    );
-    const agendados = agsRes || [];
-
-    // 3a. Compromissos pessoais que bloqueiam horário
-    const diaInteiroRes = await sbGet(
-      `compromissos?data=eq.${data}&dia_inteiro=eq.true&bloqueia_horario=eq.true&select=id&limit=1`
-    );
-    if (diaInteiroRes?.length > 0) return [];
-
-    const compRes = await sbGet(
-      `compromissos?data=eq.${data}&dia_inteiro=eq.false&bloqueia_horario=eq.true&select=hora_inicio,hora_fim`
-    );
-    const intervalosCompromissos = (compRes || [])
-      .filter(c => c.hora_inicio && c.hora_fim)
-      .map(c => {
-        const [hi, mi] = c.hora_inicio.split(":").map(Number);
-        const [hf, mf] = c.hora_fim.split(":").map(Number);
-        return [hi * 60 + mi, hf * 60 + mf];
-      });
-
-    // 3b. Monta intervalos bloqueados [inicio_min, fim_min)
-    const intervalosOcupados = [
-      ...agendados
-        .filter((ag) => ag.hora)
-        .map((ag) => {
-          const [h, m] = ag.hora.split(":").map(Number);
-          const inicio = h * 60 + m;
-          const dur = getDuracaoMin(ag);
-          return [inicio, inicio + dur];
-        }),
-      ...intervalosCompromissos,
-    ];
-
-    // 4. Filtra slots: o slot é válido se [slot, slot+duracaoMin) não colide com ocupados
-    return horariosLiberados.filter((slot) => {
-      const [sh, sm] = slot.split(":").map(Number);
-      const slotInicio = sh * 60 + sm;
-      const slotFim = slotInicio + duracaoMin;
-      return !intervalosOcupados.some(
-        ([inicio, fim]) => slotInicio < fim && slotFim > inicio
-      );
-    });
-  } catch (err) {
-    console.warn("[Disp] horarios error:", err);
-    return [];
-  }
+  if (!data) return [];
+  return pedir(`agenda-horarios?data=${data}&duracao=${duracaoMin}`);
 }
 
 /**
