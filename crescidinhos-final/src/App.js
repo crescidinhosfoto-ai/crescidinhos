@@ -2112,6 +2112,13 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
   const verificarSessao=async()=>{
     try{
+      // Chegou pelo link do e-mail? Então o Supabase já criou a sessão
+      // ao abrir a página — entra direto, sem pedir código nem PIN.
+      const sessaoSupabase=getSessao();
+      if(sessaoSupabase?.user?.email){
+        await concluirLogin(sessaoSupabase.user.email);
+        return;
+      }
       const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
       if(sess&&sess.expires>Date.now()&&sess.email){
         const em=sess.email;
@@ -2163,7 +2170,12 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     try{
       // De propósito não dizemos se o e-mail existe: isso evitaria
       // que alguém descobrisse quem é cliente testando endereços.
-      const {error}=await supabase.auth.signInWithOtp({email:em,options:{shouldCreateUser:true}});
+      // O e-mail leva o código E um link. Quem preferir digitar, digita;
+      // quem clicar no link cai de volta aqui já logado.
+      const {error}=await supabase.auth.signInWithOtp({email:em,options:{
+        shouldCreateUser:true,
+        emailRedirectTo:window.location.origin,
+      }});
       if(error)throw error;
       setEmail(em);
       setAuthTela('codigo');
@@ -3946,7 +3958,15 @@ export default function App() {
   // Restaura o login da fotógrafa ao abrir e acompanha entrada/saída.
   // O Supabase renova o crachá sozinho, então ela não é deslogada no meio.
   useEffect(()=>{
-    carregarSessao().then(s=>{if(s)setAuth({email:s.user?.email});});
+    carregarSessao().then(s=>{
+      if(!s)return;
+      setAuth({email:s.user?.email});
+      // Cliente que clicou no link do e-mail volta na home já logada.
+      // Leva ela direto para a área dela, senão fica sem entender.
+      if(s.user?.email&&s.user.email!==PHOTOGRAPHER.email){
+        setView("minha-area");
+      }
+    });
     const {data:sub}=supabase.auth.onAuthStateChange((_e,s)=>{
       setAuth(s?{email:s.user?.email}:null);
     });
