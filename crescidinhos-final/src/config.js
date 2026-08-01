@@ -47,6 +47,10 @@ export const linkWhatsAppEmpresa = (telefone, texto = "") => {
          `S.browser_fallback_url=${encodeURIComponent(web)};end`;
 };
 
+// Pixel do Meta — cole aqui o ID que aparece no Gerenciador de Eventos.
+// Vazio = nenhum rastreamento acontece. Só números, ex: "1234567890123456"
+export const META_PIXEL_ID = "";
+
 export const SUPABASE_URL = "https://uuorxycrxadhjbrebrlg.supabase.co";
 export const SUPABASE_KEY = "sb_publishable_AxWQH9wnxrygp3NfiOVxvA_8dqvTzZ3";
 

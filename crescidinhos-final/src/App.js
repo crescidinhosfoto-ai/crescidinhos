@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase, sb, entrarComGoogle, sair, carregarSessao, getSessao, getTokenGoogle } from "./supabaseAuth";
+import { pixelViuCatalogo, pixelAgendou } from "./pixel";
 import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
@@ -2184,7 +2185,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   };
 
   const conferirCodigo=async()=>{
-    if(codigoInput.length<6){setErroAuth('O código tem 6 dígitos');return;}
+    if(codigoInput.length<6){setErroAuth('Digite o código completo que chegou no e-mail');return;}
     setLoading(true);setErroAuth('');
     try{
       const {error}=await supabase.auth.verifyOtp({email,token:codigoInput,type:'email'});
@@ -2342,11 +2343,11 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>📬</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Confira seu e-mail</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Mandamos um código de 6 dígitos para<br/><strong style={{color:"#1a1a1a"}}>{email}</strong></p>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Mandamos um código para<br/><strong style={{color:"#1a1a1a"}}>{email}</strong></p>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,marginBottom:16}}>
-            <input style={{...inp,textAlign:'center',fontSize:26,letterSpacing:10,fontWeight:600,padding:'12px 8px'}} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} placeholder="000000" value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&conferirCodigo()}/>
+            <input style={{...inp,textAlign:'center',fontSize:26,letterSpacing:6,fontWeight:600,padding:'12px 8px'}} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={10} placeholder="000000" value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&conferirCodigo()}/>
             {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'12px 0 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={conferirCodigo} disabled={loading||codigoInput.length<6} style={{width:"100%",marginTop:16,padding:13,borderRadius:10,background:codigoInput.length===6?"#1a1a1a":"#e8e0d8",color:codigoInput.length===6?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:codigoInput.length===6?"pointer":"default"}}>
+            <button onClick={conferirCodigo} disabled={loading||codigoInput.length<6} style={{width:"100%",marginTop:16,padding:13,borderRadius:10,background:codigoInput.length>=6?"#1a1a1a":"#e8e0d8",color:codigoInput.length>=6?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:codigoInput.length>=6?"pointer":"default"}}>
               {loading?"Conferindo...":"Entrar 🌸"}
             </button>
           </div>
@@ -2889,6 +2890,7 @@ function ClientView() {
       const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}${dadosEvento.local_nome?"\nLocal: "+dadosEvento.local_nome:""}`: "";
       const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:"";
       await avisarWhatsApp(agPrincipal?.[0]?.id,'agendamento');
+      pixelAgendou(service?.label,calc?.total||modality?.price);
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cadastro.nome_mae,email:cadastro.email,phone:cadastro.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,duracao_min:modality?.duracao_min||60,grupo:service?.grupo,data:date,hora:time,filhos:filhosData,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
     }catch(e){console.error(e);}
     setLoading(false);limparSessao();setSubmitted(true);
@@ -3499,6 +3501,7 @@ function CatalogView({ clientePreenchido=null, onVoltar=null, onPrecisaCadastro=
       const msgEnsaio=extraComEnsaio&&dataEnsaio?`\n📸 ${extraComEnsaio.label}: ${dataEnsaioFmt} às ${horaEnsaio}`:'';
       const msgEvento=dadosEvento.nome_aniversariante?`\nAniversariante: ${dadosEvento.nome_aniversariante}`:'';
       await avisarWhatsApp(agPrincipal?.[0]?.id,'agendamento');
+      pixelAgendou(service?.label,calc?.total||modality?.price);
       await fetch(WEBHOOK_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nome_mae:cliente.nome_mae,email:cliente.email,phone:cliente.telefone,servico:service?.label,servico_id:service?.id,modalidade:modality?.label,modalidade_id:modality?.id,grupo:service?.grupo,data:date,hora:time,extras:extras.map(e=>e.label),valor:calc.total,dados_evento:dadosEvento,ensaio_data:dataEnsaio||null,ensaio_hora:horaEnsaio||null})}).catch(()=>{});
       setSubmitted(true);
     }catch(e){console.error(e);alert('Erro ao enviar. Tente novamente.');}
@@ -4004,7 +4007,7 @@ export default function App() {
           <div>
             <p style={{fontSize:14,color:P.muted,marginBottom:24,lineHeight:1.8,textAlign:"center"}}>Bem-vinda! O que você gostaria de fazer? 🌸</p>
             <div style={{display:"flex",flexDirection:"column",gap:12}}>
-              <Btn4 onClick={()=>setView("catalogo")} bg={P.ardosia} cor="#fff" borda={P.ardosia} emoji="📸" titulo="Catálogo e Serviços" sub="Veja os ensaios e escolha sua data"/>
+              <Btn4 onClick={()=>{pixelViuCatalogo();setView("catalogo");}} bg={P.ardosia} cor="#fff" borda={P.ardosia} emoji="📸" titulo="Catálogo e Serviços" sub="Veja os ensaios e escolha sua data"/>
               <Btn4 onClick={()=>setView("cadastro")} bg={P.rosa} cor="#fff" borda={P.rosa} emoji="✨" titulo="Cadastre-se" sub="Crie seu perfil e acesse sua área"/>
               <Btn4 onClick={()=>setView("minha-area")} bg="#fff" cor={P.texto} borda={P.rosaClaro} emoji="👤" titulo="Área do Cliente" sub="Agendamentos, contratos e fotos"/>
               <Btn4 onClick={()=>setView("photographer")} bg={P.rosaPale} cor={P.muted} borda={P.rosaClaro} emoji="🗂" titulo="Área da Fotógrafa" sub="Painel de gerenciamento"/>
@@ -4033,7 +4036,7 @@ export default function App() {
           <ClientePanel
             clienteInicial={clienteAutoLogin}
             onLoaded={()=>setClienteAutoLogin(null)}
-            onIrCatalogo={()=>setView("catalogo")}
+            onIrCatalogo={()=>{pixelViuCatalogo();setView("catalogo");}}
           />
         )}
 
