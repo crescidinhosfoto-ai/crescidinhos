@@ -29,6 +29,9 @@ export const WEBHOOK_CONFIRMAR =
 export const WEBHOOK_CATALOGO =
   "https://ribbitingboar-n8n.cloudfy.live/webhook/sincronizar-catalogo";
 
+export const WEBHOOK_ENVIAR_CODIGO =
+  "https://ribbitingboar-n8n.cloudfy.live/webhook/enviar-codigo-email";
+
 // Link de WhatsApp para USO INTERNO (Kanban, CRM, contratos).
 // No Android, força o WhatsApp Business — sem isso o sistema entrega ao
 // WhatsApp pessoal, que costuma estar como padrão. Se o Business não

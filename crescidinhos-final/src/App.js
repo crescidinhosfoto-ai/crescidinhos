@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase, sb, entrarComGoogle, sair, carregarSessao, getSessao, getTokenGoogle } from "./supabaseAuth";
 import { pixelViuCatalogo, pixelAgendou } from "./pixel";
-import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
+import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, WEBHOOK_ENVIAR_CODIGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
