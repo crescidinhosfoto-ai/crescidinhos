@@ -2169,23 +2169,11 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(!em)return;
     setLoading(true);setErroAuth('');
     try{
-      // Chama webhook n8n + Gmail diretamente para enviar código
-      const codigoAleatorio = Math.random().toString().substring(2,8);
-      const resWH = await fetch(WEBHOOK_ENVIAR_CODIGO, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({email:em, codigo:codigoAleatorio})
-      });
-      console.log('Webhook enviou código para '+em, 'Status:', resWH.status);
-      if(!resWH.ok) {
-        const errText = await resWH.text();
-        console.error('Erro webhook:', resWH.status, errText);
-        throw new Error('Erro ao enviar código');
-      }
-      // Armazena código temporário (para testes)
-      sessionStorage.setItem('_codigo_temp_'+em, codigoAleatorio);
+      const {data, error} = await supabase.auth.signInWithOtp({email:em});
+      if(error) throw new Error(error.message);
       setEmail(em);
       setAuthTela('codigo');
+      console.log('Código enviado para '+em);
     }catch(e){setErroAuth('Não conseguimos enviar o código. Tente de novo em instantes.');}
     setLoading(false);
   };
