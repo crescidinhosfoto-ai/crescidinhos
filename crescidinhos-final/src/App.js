@@ -2169,22 +2169,28 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(!em)return;
     setLoading(true);setErroAuth('');
     try{
-      const {data, error} = await supabase.auth.signInWithOtp({email:em});
-      if(error) {
-        console.warn('Supabase OTP falhou, tentando webhook N8n');
-        const codigoAleatorio = Math.random().toString().substring(2,8);
-        const resWH = await fetch(WEBHOOK_ENVIAR_CODIGO, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({email:em, codigo:codigoAleatorio})
-        });
-        if(!resWH.ok) throw new Error('Erro ao enviar código');
-        sessionStorage.setItem('_codigo_temp_'+em, codigoAleatorio);
-      }
+      const codigoAleatorio = Math.random().toString().substring(2,8);
+      const resend_key = import.meta.env.VITE_RESEND_API_KEY;
+      if(!resend_key) throw new Error('Chave Resend não configurada');
+      const resEmail = await fetch('https://api.resend.com/emails', {
+        method:'POST',
+        headers:{
+          'Authorization':`Bearer ${resend_key}`,
+          'Content-Type':'application/json'
+        },
+        body:JSON.stringify({
+          from:'Crescidinhos <onboarding@resend.dev>',
+          to:em,
+          subject:'Seu código de acesso - Crescidinhos',
+          html:`<h2>Seu código de acesso é:</h2><p style="font-size:24px;font-weight:bold;letter-spacing:2px;">${codigoAleatorio}</p><p>Cole este código no app para entrar na sua área.</p>`
+        })
+      });
+      if(!resEmail.ok) throw new Error('Erro ao enviar email');
+      sessionStorage.setItem('_codigo_temp_'+em, codigoAleatorio);
       setEmail(em);
       setAuthTela('codigo');
       console.log('Código enviado para '+em);
-    }catch(e){setErroAuth('Não conseguimos enviar o código. Tente de novo em instantes.');}
+    }catch(e){console.error(e);setErroAuth('Não conseguimos enviar o código. Tente de novo em instantes.');}
     setLoading(false);
   };
 
