@@ -2170,7 +2170,17 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     setLoading(true);setErroAuth('');
     try{
       const {data, error} = await supabase.auth.signInWithOtp({email:em});
-      if(error) throw new Error(error.message);
+      if(error) {
+        console.warn('Supabase OTP falhou, tentando webhook N8n');
+        const codigoAleatorio = Math.random().toString().substring(2,8);
+        const resWH = await fetch(WEBHOOK_ENVIAR_CODIGO, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({email:em, codigo:codigoAleatorio})
+        });
+        if(!resWH.ok) throw new Error('Erro ao enviar código');
+        sessionStorage.setItem('_codigo_temp_'+em, codigoAleatorio);
+      }
       setEmail(em);
       setAuthTela('codigo');
       console.log('Código enviado para '+em);
@@ -2182,8 +2192,13 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(codigoInput.length<6){setErroAuth('Digite o código completo que chegou no e-mail');return;}
     setLoading(true);setErroAuth('');
     try{
-      const {error}=await supabase.auth.verifyOtp({email,token:codigoInput,type:'email'});
-      if(error){setErroAuth('Código inválido ou expirado.');setLoading(false);return;}
+      const codigoLocal = sessionStorage.getItem('_codigo_temp_'+email);
+      if(codigoLocal) {
+        if(codigoInput !== codigoLocal) {setErroAuth('Código inválido.');setLoading(false);return;}
+      } else {
+        const {error}=await supabase.auth.verifyOtp({email,token:codigoInput,type:'email'});
+        if(error){setErroAuth('Código inválido ou expirado.');setLoading(false);return;}
+      }
       await concluirLogin(email);
     }catch(e){setErroAuth('Erro ao conferir. Tente novamente.');}
     setLoading(false);
