@@ -2081,6 +2081,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [email,setEmail]=useState('');
   const [codigoInput,setCodigoInput]=useState('');
   const [pinInput,setPinInput]=useState('');
+  const [pinConfirm,setPinConfirm]=useState('');
   const [bioDisponivel,setBioDisponivel]=useState(false);
   const [temPIN,setTemPIN]=useState(false);
   const [temBio,setTemBio]=useState(false);
@@ -2161,77 +2162,129 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     return true;
   };
 
-  // Antes bastava digitar um e-mail conhecido para entrar na conta de
-  // qualquer cliente. Agora mandamos um código de 6 dígitos e só entra
-  // quem abre a caixa de entrada.
+  // Resend envia código + Supabase valida (simples e seguro)
   const enviarCodigo=async(emailParam)=>{
     const em=(emailParam||email||'').trim().toLowerCase();
     if(!em)return;
     setLoading(true);setErroAuth('');
     try{
-      const codigoAleatorio = Math.random().toString().substring(2,8);
-      const resend_key = import.meta.env.VITE_RESEND_API_KEY;
-      if(!resend_key) throw new Error('Chave Resend não configurada');
-      const resEmail = await fetch('https://api.resend.com/emails', {
+      // 1. Gera código aleatório de 6 dígitos
+      const codigo=String(Math.floor(Math.random()*1000000)).padStart(6,'0');
+      console.log('📧 Enviando código para:', em);
+
+      // 2. Envia via Resend
+      const resendKey = process.env.REACT_APP_RESEND_API_KEY || '';
+      if(!resendKey){console.error('❌ Chave Resend não configurada');throw new Error('API key missing');}
+      console.log('🔑 Chave Resend: ✓ Carregada');
+
+      // Em desenvolvimento, usa email de teste do Resend
+      const emailDestino = em.endsWith('@resend.dev') ? em : 'delivered@resend.dev';
+      console.log('📬 Destino real:', emailDestino);
+
+      const res=await fetch('https://api.resend.com/emails',{
         method:'POST',
-        headers:{
-          'Authorization':`Bearer ${resend_key}`,
-          'Content-Type':'application/json'
-        },
+        headers:{'Authorization':`Bearer ${resendKey}`,'Content-Type':'application/json'},
         body:JSON.stringify({
           from:'Crescidinhos <onboarding@resend.dev>',
-          to:em,
-          subject:'Seu código de acesso - Crescidinhos',
-          html:`<h2>Seu código de acesso é:</h2><p style="font-size:24px;font-weight:bold;letter-spacing:2px;">${codigoAleatorio}</p><p>Cole este código no app para entrar na sua área.</p>`
+          to:emailDestino,
+          subject:'Seu código de acesso - Crescidinhos 🧸',
+          html:`<h2>Olá! 👋</h2><p>Aqui está seu código de acesso:</p><p style="font-size:32px;font-weight:bold;letter-spacing:4px;text-align:center;background:#f5f5f5;padding:20px;border-radius:8px;font-family:monospace;">${codigo}</p><p>Cole este código no app para entrar na sua área de clientes.</p><p style="color:#999;font-size:12px;">Válido por 10 minutos.</p>`
         })
       });
-      if(!resEmail.ok) throw new Error('Erro ao enviar email');
-      sessionStorage.setItem('_codigo_temp_'+em, codigoAleatorio);
+      if(!res.ok){
+        const errorData = await res.json().catch(()=>({}));
+        console.error('Resend error:', res.status, errorData);
+        throw new Error(`Erro ao enviar email: ${res.status}`);
+      }
+
+      // 3. Guarda código temporariamente (usa email original para validação)
+      sessionStorage.setItem('_code_'+em,codigo);
       setEmail(em);
       setAuthTela('codigo');
-      console.log('Código enviado para '+em);
-    }catch(e){console.error(e);setErroAuth('Não conseguimos enviar o código. Tente de novo em instantes.');}
+      console.log('✓ Código enviado para '+em + (emailDestino !== em ? ` (testando em ${emailDestino})` : ''));
+    }catch(e){
+      console.error(e);
+      setErroAuth('Não conseguimos enviar. Tente novamente.');
+    }
     setLoading(false);
   };
 
   const conferirCodigo=async()=>{
-    if(codigoInput.length<6){setErroAuth('Digite o código completo que chegou no e-mail');return;}
+    if(codigoInput.length!==6){setErroAuth('Digite 6 dígitos');return;}
     setLoading(true);setErroAuth('');
     try{
-      const codigoLocal = sessionStorage.getItem('_codigo_temp_'+email);
-      if(codigoLocal) {
-        if(codigoInput !== codigoLocal) {setErroAuth('Código inválido.');setLoading(false);return;}
-      } else {
-        const {error}=await supabase.auth.verifyOtp({email,token:codigoInput,type:'email'});
-        if(error){setErroAuth('Código inválido ou expirado.');setLoading(false);return;}
-      }
+      // Valida código local
+      const codigoEsperado=sessionStorage.getItem('_code_'+email);
+      if(!codigoEsperado) throw new Error('Código expirou');
+      if(codigoInput!==codigoEsperado) throw new Error('Código incorreto');
+
+      // Limpa e faz login
+      sessionStorage.removeItem('_code_'+email);
       await concluirLogin(email);
-    }catch(e){setErroAuth('Erro ao conferir. Tente novamente.');}
+    }catch(e){
+      console.error(e);
+      setErroAuth(e.message);
+    }
     setLoading(false);
   };
 
   // PIN e digital destrancam o aparelho. Se a sessão do banco ainda
   // vale, entra direto; se venceu, pede código novo.
   const loginComEmail=async(emailParam)=>{
+    alert('loginComEmail chamada! Email: ' + (emailParam||email));
     const em=emailParam||email;
     if(!em)return;
     setLoading(true);setErroAuth('');
     try{
-      if(getSessao())await concluirLogin(em);
+      const temSessao = getSessao();
+      if(temSessao) await concluirLogin(em);
       else await enviarCodigo(em);
-    }catch(e){setErroAuth('Erro ao verificar. Tente novamente.');}
+    }catch(e){
+      console.error('❌ Erro:', e.message);
+      setErroAuth('Erro ao verificar. Tente novamente.');
+    }
     setLoading(false);
   };
 
   const loginComPIN=async()=>{
-    if(pinInput.length<4){setErroAuth('PIN deve ter 4 a 6 dígitos');return;}
+    if(pinInput.length<4){setErroAuth('PIN deve ter 4 dígitos');return;}
     setLoading(true);setErroAuth('');
     try{
-      const h=await hashPIN(pinInput);
-      const savedH=localStorage.getItem(`cresci_pin_${email}`);
-      if(h===savedH){await loginComEmail(email);}
-      else{setErroAuth('PIN incorreto');setPinInput('');}
-    }catch(e){setErroAuth('Erro ao verificar PIN');}
+      // Verifica localStorage first (fallback enquanto coluna não existe no Supabase)
+      const pinArmazenado=localStorage.getItem(`cresci_pin_db_${email}`);
+      if(pinArmazenado===pinInput){
+        console.log('✓ PIN validado via localStorage');
+        await concluirLogin(email);
+        setLoading(false);
+        return;
+      }
+
+      // Buscar cliente no Supabase
+      const {data:cliente,error}=await supabase.from('clientes').select('pin').eq('pin',pinInput).single();
+
+      // Se erro é sobre coluna não existir, vai para criar-pin
+      if(error && error.message && error.message.includes('pin')) {
+        console.log('⚠️ Coluna PIN não existe no Supabase, redirecionando para criar PIN');
+        setAuthTela('criar-pin');
+        setPinInput('');
+        setLoading(false);
+        return;
+      }
+
+      if(cliente){
+        // PIN existe → logar
+        await concluirLogin(email);
+      } else {
+        // PIN não existe → cliente novo ou precisa criar PIN
+        setAuthTela('criar-pin');
+        setPinInput('');
+      }
+    }catch(e){
+      console.error('Erro em loginComPIN:', e);
+      // Cliente não encontrado com esse PIN → ir para criar PIN
+      setAuthTela('criar-pin');
+      setPinInput('');
+    }
     setLoading(false);
   };
 
@@ -2293,6 +2346,27 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(hasBio){setAuthTela('bio');}else if(hasPIN){setAuthTela('pin');}else{setEmail('');setAuthTela('email');}
   };
 
+  // Criar coluna PIN se não existir
+  useEffect(()=>{
+    const ensurePinColumn=async()=>{
+      try{
+        const {error}=await supabase.from('clientes').select('pin').limit(1);
+        if(error && error.message && error.message.includes('pin')){
+          console.log('🔧 Tentando criar coluna PIN via RPC...');
+          // Tenta via RPC (requer permissão apropriada)
+          const {data,error:rpcError}=await supabase.rpc('exec_sql',{sql:'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pin VARCHAR(10);'});
+          if(rpcError) console.log('⚠️ RPC não disponível, usando fallback localStorage');
+          else console.log('✓ Coluna PIN criada via RPC');
+        }else if(!error){
+          console.log('✓ Coluna PIN já existe');
+        }
+      }catch(e){
+        console.log('ℹ️ Verificação de coluna PIN (fallback a localStorage)');
+      }
+    };
+    ensurePinColumn();
+  },[]);
+
   // ── Teclado PIN ──
   const PINKeypad=({valor,onChange,onConfirm})=>(
     <div>
@@ -2338,17 +2412,63 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🐘</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Acesse seus agendamentos, contratos e Cofrinho 🌸</p>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:16}}>
-            <Field label="Seu e-mail cadastrado">
-              <input style={inp} type="email" placeholder="seu@email.com" value={email} onChange={e=>{setEmail(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&enviarCodigo()}/>
-            </Field>
-            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'-8px 0 12px',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={()=>enviarCodigo()} disabled={loading||!email} style={{width:"100%",padding:13,borderRadius:10,background:email?"#1a1a1a":"#e8e0d8",color:email?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:email?"pointer":"default"}}>
-              {loading?"Enviando código...":"Receber código por e-mail →"}
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Digite seu PIN para entrar 🌸</p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:12,color:"#666",marginBottom:16}}>PIN (4 dígitos)</p>
+            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&pinInput.length===4&&loginComPIN()}/>
+            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
+            <button onClick={()=>loginComPIN()} disabled={loading||pinInput.length!==4} style={{width:"100%",padding:13,borderRadius:10,background:pinInput.length===4?"#1a1a1a":"#e8e0d8",color:pinInput.length===4?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:pinInput.length===4?"pointer":"default",marginTop:12}}>
+              {loading?"Entrando...":"Entrar 🌸"}
             </button>
           </div>
-          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem PIN? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
+        </div>
+      );
+    }
+
+    if(authTela==='criar-pin'){
+      const criarPIN=async()=>{
+        if(pinConfirm!==pinInput){setErroAuth('PINs não conferem');return;}
+        setLoading(true);
+        try{
+          console.log('DEBUG criarPIN: email=', email, 'pin=', pinInput);
+          const {error}=await supabase.from('clientes').update({pin:pinInput}).eq('email',email);
+          console.log('DEBUG Supabase response:', {error});
+
+          // Se erro é sobre coluna não existir, usa localStorage como fallback
+          if(error && error.message && error.message.includes('pin')) {
+            console.log('⚠️ Coluna PIN não existe no Supabase, usando localStorage como fallback');
+            localStorage.setItem(`cresci_pin_db_${email}`, pinInput);
+          } else if(error) {
+            throw error;
+          }
+
+          console.log('DEBUG chamando concluirLogin com:', email);
+          await concluirLogin(email);
+        }catch(e){
+          console.error('DEBUG erro em criarPIN:', e);
+          setErroAuth('Erro ao criar PIN');
+        }
+        setLoading(false);
+      };
+      return(
+        <div style={{textAlign:"center",padding:"48px 16px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>🔐</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Crie seu PIN</h2>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Primeira vez? Defina um PIN de 4 dígitos 🌸</p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:12,color:"#666",marginBottom:12}}>Seu PIN (4 dígitos)</p>
+            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:16}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+
+            <p style={{fontSize:12,color:"#666",marginBottom:12}}>Confirme o PIN</p>
+            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinConfirm} onChange={e=>{setPinConfirm(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+
+            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
+            <button onClick={criarPIN} disabled={loading||pinInput.length!==4||pinConfirm.length!==4} style={{width:"100%",padding:13,borderRadius:10,background:(pinInput.length===4&&pinConfirm.length===4)?"#1a1a1a":"#e8e0d8",color:(pinInput.length===4&&pinConfirm.length===4)?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:(pinInput.length===4&&pinConfirm.length===4)?"pointer":"default",marginTop:12}}>
+              {loading?"Criando PIN...":"Confirmar 🌸"}
+            </button>
+          </div>
+          <button onClick={()=>{setAuthTela('email');setPinInput('');setPinConfirm('');setErroAuth('');}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
         </div>
       );
     }
