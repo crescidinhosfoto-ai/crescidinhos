@@ -2079,6 +2079,8 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [authTela,setAuthTela]=useState('verificando');
   // valores: 'verificando','email','pin','bio','setup','setup-pin','setup-bio'
   const [email,setEmail]=useState('');
+  const [telefone,setTelefone]=useState('');
+  const [clienteEncontrado,setClienteEncontrado]=useState(null);
   const [codigoInput,setCodigoInput]=useState('');
   const [pinInput,setPinInput]=useState('');
   const [pinConfirm,setPinConfirm]=useState('');
@@ -2113,6 +2115,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   },[]);
 
   const verificarSessao=async()=>{
+    console.log('🟡 verificarSessao chamada');
     try{
       // Chegou pelo link do e-mail? Então o Supabase já criou a sessão
       // ao abrir a página — entra direto, sem pedir código nem PIN.
@@ -2131,8 +2134,8 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         if(hasBio){setAuthTela('bio');}
         else if(hasPIN){setAuthTela('pin');}
         else{await loginComEmail(em);return;}
-      } else {setAuthTela('email');}
-    }catch(e){setAuthTela('email');}
+      } else {setAuthTela('telefone');}
+    }catch(e){setAuthTela('telefone');}
   };
 
   const hashPIN=async(pin)=>{
@@ -2242,6 +2245,31 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     }catch(e){
       console.error('❌ Erro:', e.message);
       setErroAuth('Erro ao verificar. Tente novamente.');
+    }
+    setLoading(false);
+  };
+
+  const buscarClientePorTelefone=async()=>{
+    if(telefone.length<10){setErroAuth('Telefone inválido');return;}
+    setLoading(true);setErroAuth('');
+    try{
+      const telefoneLimpo=telefone.replace(/\D/g,'');
+      const {data:clientes,error}=await supabase.from('clientes').select('id,email,nome_mae').ilike('telefone',`%${telefoneLimpo}%`);
+      if(error) throw error;
+
+      if(clientes&&clientes.length>0){
+        const cliente=clientes[0];
+        setClienteEncontrado(cliente);
+        setEmail(cliente.email);
+        setAuthTela('criar-pin');
+        setPinInput('');
+        setPinConfirm('');
+      }else{
+        setErroAuth('Cliente não encontrado com este número');
+      }
+    }catch(e){
+      console.error('Erro ao buscar cliente:', e);
+      setErroAuth('Erro ao buscar cliente');
     }
     setLoading(false);
   };
@@ -2407,7 +2435,27 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       return <div style={{textAlign:'center',padding:'80px 16px'}}><div style={{fontSize:48}}>🐘</div><p style={{color:'#aaa',marginTop:12,fontSize:13}}>Carregando...</p></div>;
     }
 
-    if(authTela==='email'||(!authTela&&!logado)){
+    if(authTela==='telefone'||(!authTela&&!logado)){
+      console.log('🔵 RENDERIZANDO TELA DE TELEFONE - authTela:', authTela);
+      return(
+        <div style={{textAlign:"center",padding:"48px 16px"}}>
+          <div style={{fontSize:48,marginBottom:16}}>🐘</div>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Digite seu número de celular 🌸</p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
+            <p style={{fontSize:12,color:"#666",marginBottom:16}}>Celular</p>
+            <input style={{...inp,textAlign:'center',fontSize:16,padding:'12px',marginBottom:12}} type="tel" inputMode="tel" placeholder="(11) 98765-4321" value={telefone} onChange={e=>{setTelefone(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&telefone.length>=10&&buscarClientePorTelefone()}/>
+            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
+            <button onClick={buscarClientePorTelefone} disabled={loading||telefone.length<10} style={{width:"100%",padding:13,borderRadius:10,background:telefone.length>=10?"#1a1a1a":"#e8e0d8",color:telefone.length>=10?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:telefone.length>=10?"pointer":"default",marginTop:12}}>
+              {loading?"Procurando...":"Procurar 🔍"}
+            </button>
+          </div>
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
+        </div>
+      );
+    }
+
+    if(authTela==='email'){
       return(
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🐘</div>
@@ -2455,7 +2503,8 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🔐</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Crie seu PIN</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Primeira vez? Defina um PIN de 4 dígitos 🌸</p>
+          {clienteEncontrado&&<p style={{fontSize:13,color:"#888",marginBottom:4}}>Bem-vinda, <strong>{clienteEncontrado.nome_mae}</strong></p>}
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Defina um PIN de 4 dígitos 🌸</p>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
             <p style={{fontSize:12,color:"#666",marginBottom:12}}>Seu PIN (4 dígitos)</p>
             <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:16}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
@@ -2468,7 +2517,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
               {loading?"Criando PIN...":"Confirmar 🌸"}
             </button>
           </div>
-          <button onClick={()=>{setAuthTela('email');setPinInput('');setPinConfirm('');setErroAuth('');}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
+          <button onClick={()=>{setAuthTela(clienteEncontrado?'telefone':'email');setPinInput('');setPinConfirm('');setErroAuth('');setClienteEncontrado(null);setTelefone('');}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
         </div>
       );
     }
