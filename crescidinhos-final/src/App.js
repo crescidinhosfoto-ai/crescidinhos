@@ -2234,7 +2234,6 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   // PIN e digital destrancam o aparelho. Se a sessão do banco ainda
   // vale, entra direto; se venceu, pede código novo.
   const loginComEmail=async(emailParam)=>{
-    alert('loginComEmail chamada! Email: ' + (emailParam||email));
     const em=emailParam||email;
     if(!em)return;
     setLoading(true);setErroAuth('');
