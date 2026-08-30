@@ -108,9 +108,10 @@ function blocoPartes(d) {
     <div class="party-title">Contratante</div>
     <div class="party-field"><strong>${d.nomeCliente || "_______________"}</strong></div>
     <div class="party-field">CPF: ${d.cpfCliente || "___.___.___-__"}</div>
+    <div class="party-field">RG: ${d.rgCliente || "_______________"}</div>
     <div class="party-field">E-mail: ${d.emailCliente || "_______________"}</div>
     <div class="party-field">WhatsApp: ${d.whatsappCliente || "_______________"}</div>
-    ${d.enderecoCliente ? `<div class="party-field">${d.enderecoCliente}</div>` : ""}
+    <div class="party-field">Endereço: ${d.enderecoCliente || "_______________"}</div>
     ${d.temMenor && d.nomeResponsavel ? `<div class="party-field">Responsável legal: <strong>${d.nomeResponsavel}</strong></div>` : ""}
   </div>
 </div>`;

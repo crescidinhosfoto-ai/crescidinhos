@@ -17,6 +17,16 @@ const APP_URL       = "https://app.crescidinhosfoto.com.br";
 
 // sb() vem de supabaseAuth.js — manda o crachá da fotógrafa.
 
+// Junta as peças do endereço numa linha só para o contrato. O cadastro
+// guarda rua, complemento, bairro, cidade e CEP em colunas separadas;
+// o contrato quer uma linha. Peça vazia não deixa vírgula sobrando.
+function montarEndereco(c = {}) {
+  const rua = [c.rua, c.complemento].filter(p => String(p || "").trim()).join(", ");
+  const local = [c.bairro, c.cidade].filter(p => String(p || "").trim()).join(", ");
+  const cep = String(c.cep || "").trim();
+  return [rua, local, cep && `CEP ${cep}`].filter(Boolean).join(" — ");
+}
+
 async function enviarWhatsApp(numero, mensagem) {
   const tel = numero.replace(/\D/g, "");
   if (!tel || tel.length < 10) return;
@@ -118,6 +128,12 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
   const [form, setForm] = useState({
     cpf: agendamento?.cpf_mae || cl.cpf_mae || "",
+    // RG e endereço vinham do cadastro mas nunca chegavam ao contrato:
+    // o molde não tinha linha de RG, e `enderecoCliente` jamais era
+    // montado. Dos 85 contratos de clientes com endereço cadastrado, a
+    // rua aparecia em 1 e o RG em nenhum.
+    rg: cl.rg || "",
+    endereco: montarEndereco(cl),
     valor: agendamento?.valor || "",
     formaPagamento: agendamento?.forma_pagamento || "",
     autorizaImagem: autorizaImagemInicial,
@@ -261,6 +277,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       prazoEntrega: ["aniversario","batizado","quinze-anos"].includes(catKey) ? "10 dias corridos" : "20 dias úteis",
       nomeCliente: cl.nome_mae || "",
       cpfCliente: form.cpf,
+      rgCliente: form.rg,
+      enderecoCliente: form.endereco,
       emailCliente: cl.email || "",
       whatsappCliente: cl.telefone || "",
       temMenor,
@@ -305,6 +323,25 @@ export default function ContractPanel({ agendamento, onUpdate }) {
           status: "Contrato",
         }),
       });
+
+      // 1b. Devolve CPF, RG e endereço para o cadastro da cliente. Se a
+      // Thais completou algo aqui na hora de gerar, fica salvo e o
+      // próximo contrato já vem preenchido — em vez de pedir de novo.
+      if (cl.id) {
+        const doCadastro = montarEndereco(cl);
+        const mudou = {};
+        if (form.cpf && form.cpf !== cl.cpf_mae) mudou.cpf_mae = form.cpf;
+        if (form.rg && form.rg !== cl.rg) mudou.rg = form.rg;
+        // Só grava o endereço se ela digitou algo diferente do que já
+        // estava — assim uma linha montada não sobrescreve as colunas.
+        if (form.endereco && form.endereco !== doCadastro) mudou.rua = form.endereco;
+        if (Object.keys(mudou).length) {
+          await sb(`clientes?id=eq.${cl.id}`, {
+            method: "PATCH",
+            body: JSON.stringify({ ...mudou, updated_at: new Date().toISOString() }),
+          }).catch(e => console.error("Não foi possível atualizar o cadastro:", e));
+        }
+      }
 
       // 2. WhatsApp para o cliente
       const primeiroNome = cl.nome_mae?.split(" ")[0] || "cliente";
@@ -590,6 +627,24 @@ export default function ContractPanel({ agendamento, onUpdate }) {
         />
       </Field>
 
+      <Field label="RG da cliente">
+        <input
+          style={inp}
+          placeholder="00.000.000-0"
+          value={form.rg}
+          onChange={e => set("rg", e.target.value)}
+        />
+      </Field>
+
+      <Field label="Endereço da cliente">
+        <input
+          style={inp}
+          placeholder="Rua, nº — Bairro, Cidade — CEP"
+          value={form.endereco}
+          onChange={e => set("endereco", e.target.value)}
+        />
+      </Field>
+
       <Field label="Valor total (R$)">
         <input
           style={inp}
@@ -742,6 +797,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
       {(()=>{
         const faltando=[];
         if(!form.cpf) faltando.push("CPF da cliente");
+        if(!form.rg) faltando.push("RG da cliente");
+        if(!form.endereco) faltando.push("Endereço da cliente");
         if(!form.valor) faltando.push("Valor total");
         if(!form.formaPagamento) faltando.push("Forma de pagamento");
         if(isEvento && !form.localEvento) faltando.push("Local do evento");
@@ -756,8 +813,8 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
       <button
         onClick={abrirPreview}
-        disabled={!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento)}
-        style={btnStyle(!form.cpf || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento) ? "#ccc" : "#72243E")}
+        disabled={!form.cpf || !form.rg || !form.endereco || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento)}
+        style={btnStyle(!form.cpf || !form.rg || !form.endereco || !form.valor || !form.formaPagamento || (isEvento && !form.localEvento) ? "#ccc" : "#72243E")}
       >
         👁 Pré-visualizar contrato
       </button>
