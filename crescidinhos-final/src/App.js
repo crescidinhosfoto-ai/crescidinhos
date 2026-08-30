@@ -1696,7 +1696,22 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
     const endereco=cliente.endereco||{};
     const salvarEdicaoCliente=async()=>{setSalvandoEditCliente(true);try{await atualizarCliente(cliente.id,editClienteForm);setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm}:c));setEditandoCliente(false);}catch(e){alert("Erro: "+e.message);}setSalvandoEditCliente(false);};
-    const excluirClienteFn=async()=>{try{await deletarAgendamentosCliente(cliente.id);await deletarCliente(cliente.id);setSelectedCliente(null);setConfirmDeleteCliente(false);carregar();}catch(e){alert("Erro ao excluir: "+e.message);}};
+    // Excluir cliente apaga os agendamentos dela junto — e é dentro do
+    // agendamento que mora o contrato, com as assinaturas. Contrato
+    // assinado é a prova do que foi combinado: não se apaga. Então a
+    // exclusão para aqui quando existe qualquer assinatura.
+    const ensaiosAssinados=ensaiosCliente.filter(a=>a.signature||a.signature_contratada||a.signature_responsavel);
+    const ensaiosComContrato=ensaiosCliente.filter(a=>a.contrato_html);
+    const temAssinatura=ensaiosAssinados.length>0;
+
+    const excluirClienteFn=async()=>{
+      if(temAssinatura){setConfirmDeleteCliente(false);return;}
+      try{
+        await deletarAgendamentosCliente(cliente.id);
+        await deletarCliente(cliente.id);
+        setSelectedCliente(null);setConfirmDeleteCliente(false);carregar();
+      }catch(e){alert("Erro ao excluir: "+e.message);}
+    };
     return(
       <div>
         <button onClick={()=>{setSelectedCliente(null);setEditandoCliente(false);setConfirmDeleteCliente(false);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:13,marginBottom:16,padding:0}}>← Voltar</button>
@@ -1746,12 +1761,27 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
         {confirmDeleteCliente&&(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:"#fff",borderRadius:14,padding:24,maxWidth:360,width:"100%"}}>
-              <p style={{fontSize:16,fontWeight:700,color:"#c62828",margin:"0 0 8px"}}>⚠️ Excluir cliente</p>
-              <p style={{fontSize:13,color:"#555",margin:"0 0 20px",lineHeight:1.6}}>Isso excluirá <strong>{cliente.nome_mae}</strong> e todos os seus {ensaiosCliente.length} agendamento(s). Esta ação não pode ser desfeita.</p>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>setConfirmDeleteCliente(false)} style={{flex:1,padding:11,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13}}>Cancelar</button>
-                <button onClick={excluirClienteFn} style={{flex:2,padding:11,borderRadius:8,background:"#c62828",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>Confirmar exclusão</button>
-              </div>
+              {temAssinatura?(<>
+                <p style={{fontSize:16,fontWeight:700,color:"#c62828",margin:"0 0 8px"}}>🔒 Não dá para excluir</p>
+                <p style={{fontSize:13,color:"#555",margin:"0 0 12px",lineHeight:1.6}}>
+                  <strong>{cliente.nome_mae}</strong> tem <strong>{ensaiosAssinados.length} contrato(s) assinado(s)</strong>. Excluir a cliente apagaria os ensaios dela — e o contrato mora dentro do ensaio, junto com as assinaturas.
+                </p>
+                <p style={{fontSize:12,color:"#856404",background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"8px 10px",margin:"0 0 16px",lineHeight:1.5}}>
+                  Contrato assinado é a prova do que foi combinado. Se ela não é mais cliente, cancele os ensaios em aberto e deixe o histórico onde está.
+                </p>
+                <button onClick={()=>setConfirmDeleteCliente(false)} style={{width:"100%",padding:11,borderRadius:8,background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>Entendi</button>
+              </>):(<>
+                <p style={{fontSize:16,fontWeight:700,color:"#c62828",margin:"0 0 8px"}}>⚠️ Excluir cliente</p>
+                <p style={{fontSize:13,color:"#555",margin:"0 0 20px",lineHeight:1.6}}>
+                  Isso excluirá <strong>{cliente.nome_mae}</strong>, {ensaiosCliente.length} agendamento(s)
+                  {ensaiosComContrato.length>0&&<> e <strong>{ensaiosComContrato.length} contrato(s) ainda sem assinatura</strong></>}.
+                  {" "}Esta ação não pode ser desfeita.
+                </p>
+                <div style={{display:"flex",gap:10}}>
+                  <button onClick={()=>setConfirmDeleteCliente(false)} style={{flex:1,padding:11,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13}}>Cancelar</button>
+                  <button onClick={excluirClienteFn} style={{flex:2,padding:11,borderRadius:8,background:"#c62828",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>Confirmar exclusão</button>
+                </div>
+              </>)}
             </div>
           </div>
         )}
@@ -1968,7 +1998,11 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
                   <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6,marginLeft:8,flexShrink:0}}>
                     <p style={{fontSize:14,fontWeight:700,color:"#1a1a1a",margin:0,fontFamily:"'Cormorant Garamond',serif"}}>R$ {Number(a.valor||0).toFixed(2).replace(".",",")}</p>
                     {podeTroca&&<button onClick={()=>setTrocaExpandId(trocaAberta?null:a.id)} style={{padding:"3px 8px",borderRadius:6,background:"#f6f2fa",border:"1px solid #e3d5f0",cursor:"pointer",fontSize:11,color:"#7b4fa3",fontWeight:600,lineHeight:1.4,whiteSpace:"nowrap"}}>🔄 Troca</button>}
-                    <button onClick={async(e)=>{e.stopPropagation();if(!window.confirm(`Deletar agendamento de ${cl.nome_mae||"cliente"}?`))return;try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
+                    <button onClick={async(e)=>{e.stopPropagation();
+                      if(a.signature||a.signature_contratada||a.signature_responsavel){alert("Este agendamento tem contrato assinado e não pode ser apagado.\n\nContrato assinado é a prova do que foi combinado. Para desmarcar, use o status Cancelado.");return;}
+                      const aviso=a.contrato_html?`Deletar agendamento de ${cl.nome_mae||"cliente"}?\n\n⚠️ Isso apaga junto o contrato já gerado (ainda sem assinatura).`:`Deletar agendamento de ${cl.nome_mae||"cliente"}?`;
+                      if(!window.confirm(aviso))return;
+                      try{await deletarAgendamento(a.id);await carregar();}catch(err){alert("Erro: "+err.message);}}} style={{padding:"3px 8px",borderRadius:6,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:11,color:"#c62828",fontWeight:600,lineHeight:1.4}}>🗑</button>
                   </div>
                 </div>
                 {podeTroca&&trocaAberta&&(()=>{
