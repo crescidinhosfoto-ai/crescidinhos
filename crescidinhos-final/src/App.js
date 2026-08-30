@@ -2161,14 +2161,37 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         getAgendamentosByCliente(clienteInicial.id).then(r=>setAgendamentos(r||[])).catch(()=>{});
         if(onLoaded)onLoaded();
       } else {
+        // Recém-cadastrada: ela acabou de preencher o próprio telefone,
+        // então vai direto criar o PIN e entrar.
+        //
+        // Antes daqui saía um código por e-mail — e era assim que TODO
+        // cadastro terminava travado. A chave do Resend está vazia no
+        // build de produção, `enviarCodigo` estourava na primeira linha,
+        // e o catch guardava o erro sem trocar de tela. Como a tela
+        // começa em 'verificando', a mãe ficava no "Carregando..." para
+        // sempre — sem mensagem, porque aquela tela retorna antes.
+        setTelefone(clienteInicial.telefone||'');
         setEmail(clienteInicial.email||'');
-        if(clienteInicial.email)enviarCodigo(clienteInicial.email);
-        else setAuthTela('email');
+        setClienteEncontrado({nome:String(clienteInicial.nome_mae||'').trim().split(/\s+/)[0]||''});
+        setAuthTela('criar-pin');
       }
     } else {
       verificarSessao();
     }
   },[]);
+
+  // Rede de segurança: "Carregando..." nunca pode ser um estado final.
+  // Se em 15 segundos ninguém decidiu para onde ir — chamada pendurada,
+  // erro que esqueceu de trocar a tela, caminho novo que ninguém previu
+  // — cai na tela do telefone, de onde ela consegue entrar. Antes o
+  // único jeito de sair dessa tela era fechar o app.
+  useEffect(()=>{
+    if(authTela!=='verificando')return;
+    const relogio=setTimeout(()=>{
+      setAuthTela(tela=>tela==='verificando'?'telefone':tela);
+    },15000);
+    return()=>clearTimeout(relogio);
+  },[authTela]);
 
   const verificarSessao=async()=>{
     console.log('🟡 verificarSessao chamada');
