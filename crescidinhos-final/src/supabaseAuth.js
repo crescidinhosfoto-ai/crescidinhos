@@ -94,18 +94,35 @@ export async function sair() {
 // chamadas continuarem iguais. A diferença é o Authorization:
 // crachá da fotógrafa quando logada, chave publicável quando não.
 
+// Toda leitura do banco passa por aqui, e nenhuma tinha prazo. Quando a
+// resposta não vinha, a promessa ficava pendurada para sempre: a tela
+// seguia "carregando" sem erro e sem botão, e a única saída era fechar
+// o app. Doze segundos e desiste com mensagem.
+const TEMPO_LIMITE_MS = 12000;
+
 export const sb = async (path, options = {}) => {
   const cracha = sessaoAtual?.access_token || SUPABASE_KEY;
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    ...options,
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${cracha}`,
-      "Content-Type": "application/json",
-      Prefer: "return=representation",
-      ...options.headers,
-    },
-  });
+  const cancelador = new AbortController();
+  const relogio = setTimeout(() => cancelador.abort(), TEMPO_LIMITE_MS);
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      ...options,
+      signal: cancelador.signal,
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${cracha}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+        ...options.headers,
+      },
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("A conexão demorou demais.");
+    throw e;
+  } finally {
+    clearTimeout(relogio);
+  }
   if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
   return text ? JSON.parse(text) : null;

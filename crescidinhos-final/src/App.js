@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase, sb, entrarComGoogle, sair, carregarSessao, getSessao, getTokenGoogle } from "./supabaseAuth";
 import { pixelViuCatalogo, pixelAgendou } from "./pixel";
-import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, WEBHOOK_ENVIAR_CODIGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal } from "./config";
+import { PHOTOGRAPHER, SERVICES, TIMES, WEBHOOK_URL, WEBHOOK_CONFIRMAR, WEBHOOK_CATALOGO, WEBHOOK_ENVIAR_CODIGO, REGRAS, linkWhatsAppEmpresa, fmtPreco, calcularTotal, SUPABASE_URL, SUPABASE_KEY } from "./config";
 import { fetchHorariosDisponiveis, fetchDatasDisponiveis, criarEventoGoogleCalendar } from "./googleCalendar";
 import ContractPanel from "./ContractPanel";
 import ContractPage from "./ContractPage";
@@ -16,6 +16,62 @@ import KanbanPanel from "./KanbanPanel";
 
 const getClienteByTelefone = (tel) => sb(`clientes?telefone=eq.${encodeURIComponent(tel)}&limit=1`);
 
+// ─── PRAZO NAS CHAMADAS ──────────────────────────────────────────
+// Nenhuma chamada daqui tinha prazo. Quando o n8n demorava ou não
+// respondia, a promessa nunca terminava: a tela ficava girando para
+// sempre, sem mensagem e sem botão para tentar de novo. Era a queixa
+// de "fica carregando e não abre". Agora toda chamada tem 12 segundos
+// e falha com um erro que a tela sabe mostrar.
+const TEMPO_LIMITE_MS = 12000;
+
+const fetchComPrazo = async (url, opcoes = {}, ms = TEMPO_LIMITE_MS) => {
+  const cancelador = new AbortController();
+  const relogio = setTimeout(() => cancelador.abort(), ms);
+  try {
+    return await fetch(url, { ...opcoes, signal: cancelador.signal });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("A conexão demorou demais.");
+    throw e;
+  } finally {
+    clearTimeout(relogio);
+  }
+};
+
+// ─── TRANCA DA ÁREA DO CLIENTE ───────────────────────────────────
+// Antes o PIN era guardado no localStorage do celular, em texto puro, e
+// conferido no navegador. O Safari do iPhone apaga esse armazenamento
+// depois de ~7 dias sem uso — a mãe abria o app e o cadastro dela tinha
+// "sumido". E a conferência procurava o PIN digitado na tabela inteira,
+// sem amarrar à pessoa, então dois PINs iguais abriam a conta errada.
+// Agora quem guarda e confere é a Edge Function `area-cliente`, que lê
+// uma tabela que o navegador não alcança.
+const AREA_CLIENTE = `${SUPABASE_URL}/functions/v1/area-cliente`;
+
+const chamarAreaCliente = async (acao, dados = {}) => {
+  const res = await fetchComPrazo(AREA_CLIENTE, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+    },
+    body: JSON.stringify({ acao, ...dados }),
+  });
+  if (!res.ok) throw new Error("Não conseguimos falar com o servidor.");
+  return res.json();
+};
+
+// Recado em português para cada recusa da tranca.
+const RECADO_ACESSO = {
+  telefone_incompleto: "Digite o telefone com DDD.",
+  nao_encontrada: "Não encontramos cadastro com esse telefone. Fale com a Crescidinhos 🌸",
+  ambiguo: "Encontramos mais de um cadastro com esse número. Fale com a Crescidinhos 🌸",
+  ja_tem_pin: "Esse cadastro já tem PIN. Use o PIN que você criou.",
+  sem_pin: "Você ainda não criou um PIN.",
+  pin_invalido: "O PIN precisa ter de 4 a 6 números.",
+  erro_servidor: "Tivemos um problema aqui. Tente de novo em instantes.",
+};
+
 // ─── CADASTRO NO FLUXO PÚBLICO ────────────────────────────────────
 // Quem digita um telefone no agendamento não está logado. Antes o site
 // lia a linha inteira da cliente — CPF, RG, nascimento, endereço — e
@@ -29,7 +85,7 @@ const N8N_CLIENTE = "https://ribbitingboar-n8n.cloudfy.live/webhook";
 
 const buscarClientePublico = async (tel) => {
   try {
-    const res = await fetch(`${N8N_CLIENTE}/cliente-buscar?telefone=${encodeURIComponent(tel)}`);
+    const res = await fetchComPrazo(`${N8N_CLIENTE}/cliente-buscar?telefone=${encodeURIComponent(tel)}`);
     if (!res.ok) return null;
     const d = await res.json();
     return d && d.encontrado ? d : null;
@@ -37,7 +93,7 @@ const buscarClientePublico = async (tel) => {
 };
 
 const salvarClientePublico = async (dados) => {
-  const res = await fetch(`${N8N_CLIENTE}/cliente-salvar`, {
+  const res = await fetchComPrazo(`${N8N_CLIENTE}/cliente-salvar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(dados),
@@ -54,7 +110,7 @@ const atualizarCliente     = (id, data) => sb(`clientes?id=eq.${id}`, { method: 
 // então não conseguiria receber de volta a linha criada. O webhook
 // grava com service_role e devolve só o id.
 const criarAgendamento = async (data) => {
-  const res = await fetch(`${N8N_CLIENTE}/agendamento-criar`, {
+  const res = await fetchComPrazo(`${N8N_CLIENTE}/agendamento-criar`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -2125,22 +2181,26 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         return;
       }
       const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
-      if(sess&&sess.expires>Date.now()&&sess.email){
-        const em=sess.email;
-        setEmail(em);
-        const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
-        const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
-        setTemPIN(hasPIN);setTemBio(hasBio);
-        if(hasBio){setAuthTela('bio');}
-        else if(hasPIN){setAuthTela('pin');}
-        else{await loginComEmail(em);return;}
-      } else {setAuthTela('telefone');}
-    }catch(e){setAuthTela('telefone');}
-  };
-
-  const hashPIN=async(pin)=>{
-    const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pin));
-    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      if(sess&&sess.expires>Date.now()&&sess.telefone){
+        // O telefone volta da sessão porque é ele que a tranca usa para
+        // saber contra quem conferir o PIN. Sem isso, quem reabria o app
+        // caía numa tela de PIN que não tinha como validar nada.
+        setTelefone(sess.telefone);
+        setEmail(sess.email||'');
+        setTemPIN(true);
+        const temDigital=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===sess.email;
+        setTemBio(temDigital);
+        setAuthTela(temDigital?'bio':'pin');
+        return;
+      }
+      // Sessão velha, de aparelho novo ou sem telefone guardado: começa
+      // pelo telefone. Antes caía no envio de código por e-mail, que
+      // manda tudo para uma caixa de teste e nunca chega na cliente.
+      setAuthTela('telefone');
+    }catch(e){
+      console.error('verificarSessao:',e);
+      setAuthTela('telefone');
+    }
   };
 
   // Carrega os dados da cliente. Só roda depois que ela provou ser dona
@@ -2156,11 +2216,19 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     setLogado(cl);
     const ags=await getAgendamentosByCliente(cl.id);
     setAgendamentos(ags||[]);
-    localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,expires:Date.now()+(7*24*60*60*1000)}));
-    const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
+    localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,expires:Date.now()+(7*24*60*60*1000)}));
+    setTelefone(cl.telefone||'');
+    // Quem sabe se existe PIN é o servidor. Antes a resposta vinha do
+    // localStorage do aparelho, que o iPhone apaga sozinho — e aí o app
+    // mandava a mãe criar um PIN novo por cima do que ela já tinha.
+    let temPin=false;
+    try{
+      const s=await chamarAreaCliente('iniciar',{telefone:(cl.telefone||'').replace(/\D/g,'')});
+      temPin=!!s.tem_pin;
+    }catch(e){console.error('Não foi possível conferir o PIN:',e);}
     const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
-    setTemPIN(hasPIN);setTemBio(hasBio);
-    if(!hasPIN&&!hasBio){setAuthTela('setup');}
+    setTemPIN(temPin);setTemBio(hasBio);
+    if(!temPin&&!hasBio){setAuthTela('setup');}
     else setAuthTela(null);
     return true;
   };
@@ -2233,84 +2301,75 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
   // PIN e digital destrancam o aparelho. Se a sessão do banco ainda
   // vale, entra direto; se venceu, pede código novo.
-  const loginComEmail=async(emailParam)=>{
-    const em=emailParam||email;
-    if(!em)return;
-    setLoading(true);setErroAuth('');
+  // A tranca do servidor já conferiu quem é — não precisa procurar de
+  // novo pelo e-mail. Some com a segunda ida ao banco que podia travar.
+  const entrarComCliente=async(cl)=>{
+    setLogado(cl);
     try{
-      const temSessao = getSessao();
-      if(temSessao) await concluirLogin(em);
-      else await enviarCodigo(em);
+      const ags=await getAgendamentosByCliente(cl.id);
+      setAgendamentos(ags||[]);
     }catch(e){
-      console.error('❌ Erro:', e.message);
-      setErroAuth('Erro ao verificar. Tente novamente.');
+      // Sem os ensaios ela ainda entra: a área abre com a lista vazia,
+      // em vez de ficar presa na tela de carregando.
+      console.error('Não foi possível carregar os ensaios:',e);
+      setAgendamentos([]);
     }
-    setLoading(false);
+    localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,expires:Date.now()+(7*24*60*60*1000)}));
+    setEmail(cl.email||'');
+    setAuthTela(null);
   };
 
   const buscarClientePorTelefone=async()=>{
-    if(telefone.length<10){setErroAuth('Telefone inválido');return;}
+    const limpo=telefone.replace(/\D/g,'');
+    if(limpo.length<10){setErroAuth('Digite o telefone com DDD.');return;}
     setLoading(true);setErroAuth('');
     try{
-      const telefoneLimpo=telefone.replace(/\D/g,'');
-      const {data:clientes,error}=await supabase.from('clientes').select('id,email,nome_mae').ilike('telefone',`%${telefoneLimpo}%`);
-      if(error) throw error;
-
-      if(clientes&&clientes.length>0){
-        const cliente=clientes[0];
-        setClienteEncontrado(cliente);
-        setEmail(cliente.email);
-        setAuthTela('criar-pin');
-        setPinInput('');
-        setPinConfirm('');
-      }else{
-        setErroAuth('Cliente não encontrado com este número');
+      // Quem responde é o servidor. O navegador não lê mais a tabela de
+      // clientes por telefone, e a resposta traz só o primeiro nome da
+      // mãe — nunca o nome da criança nem o cadastro inteiro.
+      const r=await chamarAreaCliente('iniciar',{telefone:limpo});
+      if(!r.ok){
+        setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
+        setLoading(false);return;
       }
+      setClienteEncontrado({nome:r.nome});
+      setPinInput('');setPinConfirm('');
+      // Se já existe PIN, pede o PIN. Antes ia direto para "criar PIN",
+      // e era por aí que dava para tomar a conta de quem já tinha um.
+      setAuthTela(r.tem_pin?'pin':'criar-pin');
     }catch(e){
-      console.error('Erro ao buscar cliente:', e);
-      setErroAuth('Erro ao buscar cliente');
+      console.error('Erro ao buscar cliente:',e);
+      setErroAuth(e.message||'Não conseguimos verificar agora. Tente de novo.');
     }
     setLoading(false);
   };
 
   const loginComPIN=async()=>{
-    if(pinInput.length<4){setErroAuth('PIN deve ter 4 dígitos');return;}
+    if(pinInput.length<4){setErroAuth('O PIN tem de 4 a 6 números.');return;}
     setLoading(true);setErroAuth('');
     try{
-      // Verifica localStorage first (fallback enquanto coluna não existe no Supabase)
-      const pinArmazenado=localStorage.getItem(`cresci_pin_db_${email}`);
-      if(pinArmazenado===pinInput){
-        console.log('✓ PIN validado via localStorage');
-        await concluirLogin(email);
-        setLoading(false);
-        return;
-      }
+      // O PIN sobe para o servidor e é conferido contra a cliente DESTE
+      // telefone. Antes procurava o PIN digitado na tabela inteira, sem
+      // amarrar à pessoa: quem digitasse um PIN igual ao de outra mãe
+      // entrava na área dela, com a ficha clínica da criança.
+      const limpo=telefone.replace(/\D/g,'');
+      const r=await chamarAreaCliente('validar-pin',{telefone:limpo,pin:pinInput});
 
-      // Buscar cliente no Supabase
-      const {data:cliente,error}=await supabase.from('clientes').select('pin').eq('pin',pinInput).single();
+      if(r.ok){await entrarComCliente(r.cliente);setPinInput('');setLoading(false);return;}
 
-      // Se erro é sobre coluna não existir, vai para criar-pin
-      if(error && error.message && error.message.includes('pin')) {
-        console.log('⚠️ Coluna PIN não existe no Supabase, redirecionando para criar PIN');
+      if(r.motivo==='pin_errado'){
+        setErroAuth(`PIN incorreto. ${r.restantes} tentativa${r.restantes===1?'':'s'} antes de bloquear.`);
+      }else if(r.motivo==='bloqueado'){
+        setErroAuth(`Muitas tentativas. Tente de novo em ${r.minutos} minutos.`);
+      }else if(r.motivo==='sem_pin'){
         setAuthTela('criar-pin');
-        setPinInput('');
-        setLoading(false);
-        return;
+      }else{
+        setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
       }
-
-      if(cliente){
-        // PIN existe → logar
-        await concluirLogin(email);
-      } else {
-        // PIN não existe → cliente novo ou precisa criar PIN
-        setAuthTela('criar-pin');
-        setPinInput('');
-      }
-    }catch(e){
-      console.error('Erro em loginComPIN:', e);
-      // Cliente não encontrado com esse PIN → ir para criar PIN
-      setAuthTela('criar-pin');
       setPinInput('');
+    }catch(e){
+      console.error('Erro em loginComPIN:',e);
+      setErroAuth(e.message||'Não conseguimos verificar agora. Tente de novo.');
     }
     setLoading(false);
   };
@@ -2324,11 +2383,23 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       const challenge=crypto.getRandomValues(new Uint8Array(32));
       const rpId=window.location.hostname==='localhost'?'localhost':window.location.hostname;
       await navigator.credentials.get({publicKey:{challenge,rpId,allowCredentials:[{type:'public-key',id:credId}],userVerification:'required',timeout:60000}});
-      const bioEmail=localStorage.getItem('cresci_bio_email');
-      await loginComEmail(bioEmail);
+      // A digital destranca a sessão que já está no aparelho. Antes caía
+      // no envio de código por e-mail, que vai para uma caixa de teste:
+      // a mãe passava o dedo e ficava esperando um e-mail que não vem.
+      const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
+      if(!(sess&&sess.expires>Date.now()&&sess.clienteId)){
+        setErroAuth('Sua sessão venceu. Entre com o telefone e o PIN.');
+        setAuthTela('telefone');setLoading(false);return;
+      }
+      const r=await sb(`clientes?id=eq.${sess.clienteId}&limit=1`);
+      if(!(r&&r.length)){
+        setErroAuth('Não encontramos seu cadastro. Fale com a Crescidinhos 🌸');
+        setAuthTela('telefone');setLoading(false);return;
+      }
+      await entrarComCliente(r[0]);
     }catch(e){
       if(e.name==='NotAllowedError'){setErroAuth('Biometria cancelada ou não reconhecida');}
-      else{setErroAuth('Erro na biometria. Tente outra forma.');}
+      else{setErroAuth(e.message||'Erro na biometria. Tente outra forma.');}
     }
     setLoading(false);
   };
@@ -2337,9 +2408,20 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(pinInput.length<4){setErroAuth('Use 4 a 6 dígitos');return;}
     if(setupPinStep===1){setSetupPin1(pinInput);setPinInput('');setSetupPinStep(2);setErroAuth('');return;}
     if(pinInput!==setupPin1){setErroAuth('PINs não coincidem. Tente novamente.');setPinInput('');setSetupPinStep(1);return;}
-    setLoading(true);
-    const h=await hashPIN(pinInput);
-    localStorage.setItem(`cresci_pin_${logado.email}`,h);
+    setLoading(true);setErroAuth('');
+    // Este PIN também vai para o servidor. Antes ficava só no aparelho,
+    // como um hash no localStorage — e sumia junto com ele.
+    try{
+      const r=await chamarAreaCliente('criar-pin',{telefone:(logado?.telefone||telefone||'').replace(/\D/g,''),pin:pinInput});
+      if(!r.ok&&r.motivo!=='ja_tem_pin'){
+        setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
+        setPinInput('');setSetupPinStep(1);setLoading(false);return;
+      }
+    }catch(e){
+      console.error('Erro em configurarPIN:',e);
+      setErroAuth(e.message||'Não conseguimos salvar agora. Tente de novo.');
+      setPinInput('');setSetupPinStep(1);setLoading(false);return;
+    }
     setTemPIN(true);setSetupPinStep(1);setPinInput('');setSetupPin1('');
     if(bioDisponivel){setAuthTela('setup-bio');}else{setAuthTela(null);}
     setLoading(false);
@@ -2364,35 +2446,13 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   };
 
   const sair=()=>{
-    const em=logado?.email||email;
+    // Sair apaga a sessão do aparelho, e a digital depende dela. Então
+    // a volta é sempre pelo telefone — não adianta oferecer digital.
     setLogado(null);setPinInput('');setErroAuth('');
     localStorage.removeItem('cresci_session');
-    const hasPIN=!!localStorage.getItem(`cresci_pin_${em}`);
-    const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
-    setEmail(em);
-    if(hasBio){setAuthTela('bio');}else if(hasPIN){setAuthTela('pin');}else{setEmail('');setAuthTela('email');}
+    setEmail('');setTelefone('');
+    setAuthTela('telefone');
   };
-
-  // Criar coluna PIN se não existir
-  useEffect(()=>{
-    const ensurePinColumn=async()=>{
-      try{
-        const {error}=await supabase.from('clientes').select('pin').limit(1);
-        if(error && error.message && error.message.includes('pin')){
-          console.log('🔧 Tentando criar coluna PIN via RPC...');
-          // Tenta via RPC (requer permissão apropriada)
-          const {data,error:rpcError}=await supabase.rpc('exec_sql',{sql:'ALTER TABLE clientes ADD COLUMN IF NOT EXISTS pin VARCHAR(10);'});
-          if(rpcError) console.log('⚠️ RPC não disponível, usando fallback localStorage');
-          else console.log('✓ Coluna PIN criada via RPC');
-        }else if(!error){
-          console.log('✓ Coluna PIN já existe');
-        }
-      }catch(e){
-        console.log('ℹ️ Verificação de coluna PIN (fallback a localStorage)');
-      }
-    };
-    ensurePinColumn();
-  },[]);
 
   // ── Teclado PIN ──
   const PINKeypad=({valor,onChange,onConfirm})=>(
@@ -2475,26 +2535,31 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
     if(authTela==='criar-pin'){
       const criarPIN=async()=>{
-        if(pinConfirm!==pinInput){setErroAuth('PINs não conferem');return;}
-        setLoading(true);
+        if(pinInput.length<4){setErroAuth('O PIN tem de 4 a 6 números.');return;}
+        if(pinConfirm!==pinInput){setErroAuth('Os dois PINs não são iguais.');return;}
+        setLoading(true);setErroAuth('');
         try{
-          console.log('DEBUG criarPIN: email=', email, 'pin=', pinInput);
-          const {error}=await supabase.from('clientes').update({pin:pinInput}).eq('email',email);
-          console.log('DEBUG Supabase response:', {error});
+          // O PIN vai para o servidor e é guardado cifrado, numa tabela
+          // que o navegador não alcança. Antes o app mandava um UPDATE
+          // com a chave pública: o banco recusava calado (0 linhas, sem
+          // erro), o app dizia "pronto" e nada era salvo. Nenhuma das
+          // 134 clientes tinha PIN gravado por causa disso.
+          const limpo=telefone.replace(/\D/g,'');
+          const r=await chamarAreaCliente('criar-pin',{telefone:limpo,pin:pinInput});
 
-          // Se erro é sobre coluna não existir, usa localStorage como fallback
-          if(error && error.message && error.message.includes('pin')) {
-            console.log('⚠️ Coluna PIN não existe no Supabase, usando localStorage como fallback');
-            localStorage.setItem(`cresci_pin_db_${email}`, pinInput);
-          } else if(error) {
-            throw error;
+          if(r.ok){await entrarComCliente(r.cliente);setPinInput('');setPinConfirm('');setLoading(false);return;}
+
+          // Já tem PIN: manda para a tela de digitar, não deixa trocar.
+          if(r.motivo==='ja_tem_pin'){
+            setErroAuth(RECADO_ACESSO.ja_tem_pin);
+            setPinInput('');setPinConfirm('');
+            setAuthTela('pin');
+          }else{
+            setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
           }
-
-          console.log('DEBUG chamando concluirLogin com:', email);
-          await concluirLogin(email);
         }catch(e){
-          console.error('DEBUG erro em criarPIN:', e);
-          setErroAuth('Erro ao criar PIN');
+          console.error('Erro em criarPIN:',e);
+          setErroAuth(e.message||'Não conseguimos salvar agora. Tente de novo.');
         }
         setLoading(false);
       };
@@ -2502,7 +2567,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🔐</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Crie seu PIN</h2>
-          {clienteEncontrado&&<p style={{fontSize:13,color:"#888",marginBottom:4}}>Bem-vinda, <strong>{clienteEncontrado.nome_mae}</strong></p>}
+          {clienteEncontrado?.nome&&<p style={{fontSize:13,color:"#888",marginBottom:4}}>Bem-vinda, <strong>{clienteEncontrado.nome}</strong></p>}
           <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Defina um PIN de 4 dígitos 🌸</p>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
             <p style={{fontSize:12,color:"#666",marginBottom:12}}>Seu PIN (4 dígitos)</p>
@@ -2551,7 +2616,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
           <PINKeypad valor={pinInput} onChange={v=>{setPinInput(v);setErroAuth('');}} onConfirm={loginComPIN}/>
           <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:20,flexWrap:'wrap'}}>
             {temBio&&<button onClick={()=>{setAuthTela('bio');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>👆 Usar digital</button>}
-            <button onClick={()=>{setAuthTela('email');setErroAuth('');setPinInput('');setEmail('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#888'}}>📧 Usar e-mail</button>
+            <a href={linkWhatsAppEmpresa(PHOTOGRAPHER.phone,'Oi! Esqueci meu PIN da Minha Área 🌸')} target="_blank" rel="noreferrer" style={{display:'inline-block',padding:'8px 14px',borderRadius:8,background:'#f5f0eb',textDecoration:'none',cursor:'pointer',fontSize:12,color:'#888'}}>Esqueci meu PIN</a>
           </div>
         </div>
       );
@@ -2569,7 +2634,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
           </button>
           <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:8,flexWrap:'wrap'}}>
             {temPIN&&<button onClick={()=>{setAuthTela('pin');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>🔢 Usar PIN</button>}
-            <button onClick={()=>{setAuthTela('email');setErroAuth('');setPinInput('');setEmail('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#888'}}>📧 Usar e-mail</button>
+            <a href={linkWhatsAppEmpresa(PHOTOGRAPHER.phone,'Oi! Esqueci meu PIN da Minha Área 🌸')} target="_blank" rel="noreferrer" style={{display:'inline-block',padding:'8px 14px',borderRadius:8,background:'#f5f0eb',textDecoration:'none',cursor:'pointer',fontSize:12,color:'#888'}}>Esqueci meu PIN</a>
           </div>
         </div>
       );
