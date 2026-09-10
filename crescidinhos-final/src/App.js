@@ -70,6 +70,15 @@ const RECADO_ACESSO = {
   ja_tem_pin: "Esse cadastro já tem PIN. Use o PIN que você criou.",
   sem_pin: "Você ainda não criou um PIN.",
   pin_invalido: "O PIN precisa ter de 4 a 6 números.",
+  codigo_necessario: "Para criar o PIN, precisamos confirmar com um código no WhatsApp.",
+  cadastro_incompleto: "O celular do seu cadastro está incompleto, então não conseguimos mandar o código. Fale com a Crescidinhos 🌸",
+  sem_whatsapp: "O celular do seu cadastro não tem WhatsApp. Fale com a Crescidinhos para atualizar 🌸",
+  falha_envio: "Não conseguimos mandar o código agora. Tente de novo em instantes.",
+  envio_indisponivel: "O envio de código está fora do ar agora. Fale com a Crescidinhos 🌸",
+  muitos_codigos: "Você já pediu 3 códigos na última hora. Espere um pouco ou fale com a Crescidinhos.",
+  codigo_invalido: "O código tem 6 números.",
+  codigo_vencido: "Esse código venceu ou já foi usado. Peça outro.",
+  codigo_bloqueado: "Muitas tentativas com esse código. Peça outro.",
   erro_servidor: "Tivemos um problema aqui. Tente de novo em instantes.",
 };
 
@@ -2187,7 +2196,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
   // ── Estado de autenticação ──
   const [authTela,setAuthTela]=useState('verificando');
-  // valores: 'verificando','entrar','criar-pin','bio','setup','setup-pin','setup-bio'
+  // valores: 'verificando','entrar','criar-pin','bio','setup','setup-bio'
   const [email,setEmail]=useState('');
   // E-mail OU celular — o que ela digitar. O servidor reconhece os dois.
   const [identificador,setIdentificador]=useState('');
@@ -2200,8 +2209,10 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [temPIN,setTemPIN]=useState(false);
   const [temBio,setTemBio]=useState(false);
   const [erroAuth,setErroAuth]=useState('');
-  const [setupPinStep,setSetupPinStep]=useState(1);
-  const [setupPin1,setSetupPin1]=useState('');
+  // Código do WhatsApp para criar o PIN: o que ela digita e o final do
+  // número para onde foi mandado ('' = ainda não mandou).
+  const [codigoInput,setCodigoInput]=useState('');
+  const [codigoFinal,setCodigoFinal]=useState('');
 
   // ── Init ──
   useEffect(()=>{
@@ -2355,7 +2366,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         // redefiniu): cria agora.
         const s=await chamarAreaCliente('iniciar',{identificador:ident}).catch(()=>({}));
         setClienteEncontrado(s?.ok?{nome:s.nome}:null);
-        setPinConfirm('');
+        setPinConfirm('');setCodigoInput('');setCodigoFinal('');
         setAuthTela('criar-pin');
       }else{
         setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
@@ -2396,28 +2407,6 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     setLoading(false);
   };
 
-  const configurarPIN=async()=>{
-    if(pinInput.length<4){setErroAuth('Use 4 a 6 dígitos');return;}
-    if(setupPinStep===1){setSetupPin1(pinInput);setPinInput('');setSetupPinStep(2);setErroAuth('');return;}
-    if(pinInput!==setupPin1){setErroAuth('PINs não coincidem. Tente novamente.');setPinInput('');setSetupPinStep(1);return;}
-    setLoading(true);setErroAuth('');
-    // Este PIN também vai para o servidor — nunca fica só no aparelho.
-    try{
-      const r=await chamarAreaCliente('criar-pin',{identificador:(logado?.email||identificador||'').trim(),pin:pinInput});
-      if(!r.ok&&r.motivo!=='ja_tem_pin'){
-        setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
-        setPinInput('');setSetupPinStep(1);setLoading(false);return;
-      }
-    }catch(e){
-      console.error('Erro em configurarPIN:',e);
-      setErroAuth(e.message||'Não conseguimos salvar agora. Tente de novo.');
-      setPinInput('');setSetupPinStep(1);setLoading(false);return;
-    }
-    setTemPIN(true);setSetupPinStep(1);setPinInput('');setSetupPin1('');
-    if(bioDisponivel){setAuthTela('setup-bio');}else{setAuthTela(null);}
-    setLoading(false);
-  };
-
   const configurarBio=async()=>{
     setLoading(true);setErroAuth('');
     try{
@@ -2445,31 +2434,6 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     setAuthTela('entrar');
   };
 
-  // ── Teclado PIN ──
-  const PINKeypad=({valor,onChange,onConfirm})=>(
-    <div>
-      <div style={{display:'flex',justifyContent:'center',gap:12,marginBottom:28}}>
-        {Array.from({length:6}).map((_,i)=>(
-          <div key={i} style={{width:14,height:14,borderRadius:'50%',background:i<valor.length?'#1a1a1a':'#e8e0d8',border:'2px solid '+(i<valor.length?'#1a1a1a':'#ccc'),transition:'all .15s'}}/>
-        ))}
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,maxWidth:240,margin:'0 auto'}}>
-        {[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map((d,i)=>(
-          <button key={i} onClick={()=>{
-            if(d==='⌫'){onChange(valor.slice(0,-1));setErroAuth('');}
-            else if(d===''){}
-            else if(valor.length<6){onChange(valor+d);}
-          }} style={{padding:'16px 0',borderRadius:12,border:'1.5px solid #e8e0d8',background:d===''?'transparent':'#fff',fontSize:d==='⌫'?18:20,fontWeight:600,color:'#1a1a1a',cursor:d===''?'default':'pointer',boxShadow:d===''?'none':'0 1px 3px rgba(0,0,0,0.06)'}}>{d}</button>
-        ))}
-      </div>
-      {valor.length>=4&&(
-        <button onClick={onConfirm} disabled={loading} style={{width:'100%',padding:13,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:'pointer',marginTop:16,maxWidth:240,display:'block',margin:'16px auto 0'}}>
-          {loading?'Verificando...':'Confirmar →'}
-        </button>
-      )}
-    </div>
-  );
-
   const recarregarAgs=async()=>{
     if(!logado)return;
     try{const ags=await getAgendamentosByCliente(logado.id);setAgendamentos(ags||[]);}catch(e){}
@@ -2479,7 +2443,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
 
   // ── Telas de autenticação ──
-  if(!logado||authTela==='setup'||authTela==='setup-pin'||authTela==='setup-bio'){
+  if(!logado||authTela==='setup'||authTela==='criar-pin'||authTela==='setup-bio'){
 
     if(authTela==='verificando'){
       return <div style={{textAlign:'center',padding:'80px 16px'}}><div style={{fontSize:48}}>🐘</div><p style={{color:'#aaa',marginTop:12,fontSize:13}}>Carregando...</p></div>;
@@ -2522,23 +2486,41 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       );
     }
 
+    // Criar o primeiro PIN — ou trocar, de dentro da área — passa sempre
+    // por um código no WhatsApp DO CADASTRO. Antes bastava saber o e-mail
+    // ou o celular de uma cliente sem PIN para criar um e entrar na área
+    // dela. A trava de verdade é no servidor: `criar-pin` sem código é
+    // recusado; aqui a tela só conduz pelo caminho com código.
     if(authTela==='criar-pin'){
+      const ident=(identificador||logado?.email||'').trim();
+      const mandarCodigo=async()=>{
+        if(!ident){setErroAuth(RECADO_ACESSO.identificador_vazio);return;}
+        setLoading(true);setErroAuth('');
+        try{
+          const r=await chamarAreaCliente('enviar-codigo',{identificador:ident});
+          if(r.ok){setCodigoFinal(r.final);setCodigoInput('');}
+          else setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
+        }catch(e){
+          console.error('Erro ao mandar código:',e);
+          setErroAuth(e.message||'Não conseguimos mandar o código agora. Tente de novo.');
+        }
+        setLoading(false);
+      };
       const criarPIN=async()=>{
-        if(pinInput.length<4){setErroAuth('O PIN tem de 4 a 6 números.');return;}
+        if(codigoInput.length!==6){setErroAuth(RECADO_ACESSO.codigo_invalido);return;}
+        if(pinInput.length!==4){setErroAuth('O PIN tem 4 números.');return;}
         if(pinConfirm!==pinInput){setErroAuth('Os dois PINs não são iguais.');return;}
         setLoading(true);setErroAuth('');
         try{
-          // O PIN vai para o servidor e é guardado cifrado, numa tabela
-          // que o navegador não alcança.
-          const r=await chamarAreaCliente('criar-pin',{identificador:identificador.trim(),pin:pinInput});
-
-          if(r.ok){await entrarComCliente(r.cliente,identificador);setPinInput('');setPinConfirm('');setLoading(false);return;}
-
-          // Já tem PIN: volta para entrar, não deixa trocar por cima.
-          if(r.motivo==='ja_tem_pin'){
-            setErroAuth(RECADO_ACESSO.ja_tem_pin);
-            setPinInput('');setPinConfirm('');
-            setAuthTela('entrar');
+          // Código certo cria o PIN — ou troca, se já existia um.
+          const r=await chamarAreaCliente('redefinir-pin',{identificador:ident,codigo:codigoInput,pin:pinInput});
+          if(r.ok){
+            setTemPIN(true);setPinInput('');setPinConfirm('');setCodigoInput('');setCodigoFinal('');
+            await entrarComCliente(r.cliente,ident);
+            setLoading(false);return;
+          }
+          if(r.motivo==='codigo_errado'){
+            setErroAuth(`Código incorreto. ${r.restantes} tentativa${r.restantes===1?'':'s'} com esse código.`);
           }else{
             setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
           }
@@ -2548,26 +2530,44 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         }
         setLoading(false);
       };
-      const pronto=pinInput.length===4&&pinConfirm.length===4;
+      const pronto=codigoInput.length===6&&pinInput.length===4&&pinConfirm.length===4;
+      const campoDigitos={...inp,textAlign:'center',fontSize:28,letterSpacing:8,fontWeight:600,padding:'12px',marginBottom:12};
+      const rotulo={fontSize:12,color:"#666",marginBottom:8};
       return(
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🔐</div>
-          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Crie seu PIN</h2>
+          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>{temPIN&&logado?'Trocar seu PIN':'Crie seu PIN'}</h2>
           {clienteEncontrado?.nome&&<p style={{fontSize:13,color:"#888",marginBottom:4}}>Bem-vinda, <strong>{clienteEncontrado.nome}</strong></p>}
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Você ainda não tem PIN. Defina um de 4 dígitos 🌸</p>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
-            <p style={{fontSize:12,color:"#666",marginBottom:12}}>Seu PIN (4 dígitos)</p>
-            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:16}} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
-
-            <p style={{fontSize:12,color:"#666",marginBottom:12}}>Confirme o PIN</p>
-            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinConfirm} onChange={e=>{setPinConfirm(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
-
-            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={criarPIN} disabled={loading||!pronto} style={{width:"100%",padding:13,borderRadius:10,background:pronto?"#1a1a1a":"#e8e0d8",color:pronto?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:pronto?"pointer":"default",marginTop:12}}>
-              {loading?"Criando PIN...":"Confirmar 🌸"}
-            </button>
-          </div>
-          <button onClick={()=>{setAuthTela('entrar');setPinInput('');setPinConfirm('');setErroAuth('');setClienteEncontrado(null);}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
+          {!codigoFinal?(
+            <>
+              <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Para sua segurança, vamos confirmar que é você com um código no WhatsApp do seu cadastro 🌸</p>
+              <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,marginBottom:16}}>
+                {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'0 0 12px'}}>{erroAuth}</p>}
+                <button onClick={mandarCodigo} disabled={loading} style={{width:"100%",padding:13,borderRadius:10,background:"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:"pointer"}}>
+                  {loading?"Mandando...":"Mandar código no WhatsApp"}
+                </button>
+              </div>
+            </>
+          ):(
+            <>
+              <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Mandamos um código para o WhatsApp terminado em <strong>••{codigoFinal}</strong>. Ele vale por 10 minutos.</p>
+              <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,marginBottom:16}}>
+                <p style={rotulo}>Código de 6 dígitos</p>
+                <input style={campoDigitos} type="text" inputMode="numeric" autoComplete="one-time-code" placeholder="000000" maxLength="6" value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+                <p style={rotulo}>Seu PIN (4 dígitos)</p>
+                <input style={campoDigitos} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+                <p style={rotulo}>Confirme o PIN</p>
+                <input style={campoDigitos} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinConfirm} onChange={e=>{setPinConfirm(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+                {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'4px 0 8px'}}>{erroAuth}</p>}
+                <button onClick={criarPIN} disabled={loading||!pronto} style={{width:"100%",padding:13,borderRadius:10,background:pronto?"#1a1a1a":"#e8e0d8",color:pronto?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:pronto?"pointer":"default",marginTop:4}}>
+                  {loading?"Criando PIN...":"Criar PIN 🌸"}
+                </button>
+                <button onClick={mandarCodigo} disabled={loading} style={{display:'block',margin:'12px auto 0',background:'none',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>Mandar outro código</button>
+              </div>
+            </>
+          )}
+          {erroAuth&&<a href={linkWhatsAppEmpresa(PHOTOGRAPHER.phone,'Oi! Não consigo criar meu PIN da Minha Área 🌸')} target="_blank" rel="noreferrer" style={{display:'block',fontSize:12,color:'#888',marginBottom:12}}>Não conseguiu? Fale com a gente no WhatsApp</a>}
+          <button onClick={()=>{setAuthTela(logado?null:'entrar');setPinInput('');setPinConfirm('');setCodigoInput('');setCodigoFinal('');setErroAuth('');setClienteEncontrado(null);}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
         </div>
       );
     }
@@ -2597,27 +2597,10 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:8}}>Proteja sua conta</h2>
           <p style={{fontSize:13,color:'#888',marginBottom:28,lineHeight:1.6}}>Adicione uma camada de segurança para próximos acessos. 🌸</p>
           <div style={{display:'flex',flexDirection:'column',gap:10,marginBottom:16}}>
-            <button onClick={()=>{setSetupPinStep(1);setPinInput('');setSetupPin1('');setAuthTela('setup-pin');}} style={{padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:'pointer'}}>🔢 Criar PIN</button>
+            <button onClick={()=>{setPinInput('');setPinConfirm('');setCodigoInput('');setCodigoFinal('');setErroAuth('');setAuthTela('criar-pin');}} style={{padding:14,borderRadius:10,background:'#1a1a1a',color:'#fff',border:'none',fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:'pointer'}}>🔢 Criar PIN</button>
             {bioDisponivel&&<button onClick={()=>setAuthTela('setup-bio')} style={{padding:14,borderRadius:10,background:'#fff',color:'#1a1a1a',border:'1.5px solid #1a1a1a',fontFamily:"'Cormorant Garamond',serif",fontSize:15,cursor:'pointer'}}>👆 Ativar digital / Face ID</button>}
             <button onClick={()=>setAuthTela(null)} style={{padding:12,borderRadius:10,background:'transparent',color:'#aaa',border:'none',fontSize:13,cursor:'pointer'}}>Agora não</button>
           </div>
-        </div>
-      );
-    }
-
-    if(authTela==='setup-pin'){
-      return(
-        <div style={{textAlign:'center',padding:'32px 16px'}}>
-          <div style={{fontSize:44,marginBottom:12}}>🔢</div>
-          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>
-            {setupPinStep===1?'Crie seu PIN':'Confirme seu PIN'}
-          </h2>
-          <p style={{fontSize:12,color:'#888',marginBottom:28}}>
-            {setupPinStep===1?'Digite de 4 a 6 números':'Digite novamente para confirmar'}
-          </p>
-          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:12}}>{erroAuth}</p>}
-          <PINKeypad valor={pinInput} onChange={v=>{setPinInput(v);setErroAuth('');}} onConfirm={configurarPIN}/>
-          <button onClick={()=>{setAuthTela('setup');setPinInput('');setSetupPinStep(1);setErroAuth('');}} style={{marginTop:16,padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#aaa'}}>← Voltar</button>
         </div>
       );
     }
@@ -2873,7 +2856,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
                 <p style={{margin:0,fontSize:13,fontWeight:600}}>🔢 PIN</p>
                 <p style={{margin:'2px 0 0',fontSize:11,color:temPIN?'#2e7d32':'#aaa'}}>{temPIN?'✅ Configurado':'Não configurado'}</p>
               </div>
-              <button onClick={()=>{setSetupPinStep(1);setPinInput('');setSetupPin1('');setAuthTela('setup-pin');}} style={{padding:'6px 12px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>{temPIN?'Alterar':'Ativar'}</button>
+              <button onClick={()=>{setPinInput('');setPinConfirm('');setCodigoInput('');setCodigoFinal('');setErroAuth('');setAuthTela('criar-pin');}} style={{padding:'6px 12px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>{temPIN?'Alterar':'Ativar'}</button>
             </div>
             {bioDisponivel&&(
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:12,borderTop:'1px solid #f0e8e0'}}>
