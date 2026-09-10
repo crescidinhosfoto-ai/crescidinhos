@@ -63,13 +63,33 @@ const chamarAreaCliente = async (acao, dados = {}) => {
 
 // Recado em português para cada recusa da tranca.
 const RECADO_ACESSO = {
-  telefone_incompleto: "Digite o telefone com DDD.",
-  nao_encontrada: "Não encontramos cadastro com esse telefone. Fale com a Crescidinhos 🌸",
-  ambiguo: "Encontramos mais de um cadastro com esse número. Fale com a Crescidinhos 🌸",
+  identificador_vazio: "Digite seu e-mail ou celular.",
+  telefone_incompleto: "Digite o celular com DDD — ou use seu e-mail.",
+  nao_encontrada: "Não encontramos cadastro com esse e-mail ou celular. Confira ou fale com a Crescidinhos 🌸",
+  ambiguo: "Encontramos mais de um cadastro com esse número. Tente entrar com seu e-mail 🌸",
   ja_tem_pin: "Esse cadastro já tem PIN. Use o PIN que você criou.",
   sem_pin: "Você ainda não criou um PIN.",
   pin_invalido: "O PIN precisa ter de 4 a 6 números.",
   erro_servidor: "Tivemos um problema aqui. Tente de novo em instantes.",
+};
+
+// Página de redefinir o PIN. Mora no app novo e atende as duas Áreas do
+// Cliente. Nada de dado pessoal na URL: a página pede de novo.
+const LINK_REDEFINIR_PIN = "https://crescidinhos2.vercel.app/redefinir-pin";
+
+// A mesma conta que a função eh_fotografa() do banco reconhece.
+const EMAIL_FOTOGRAFA = "crescidinhosfoto@gmail.com";
+
+// "Entrando como •••0657" ou "ka•••@gmail.com": diz de quem é a conta
+// sem deixar o dado inteiro à vista na tela.
+const mascararIdentificador = (v) => {
+  const s = String(v || "").trim();
+  if (s.includes("@")) {
+    const [u, d] = s.split("@");
+    return `${u.slice(0, 2)}•••@${d}`;
+  }
+  const dig = s.replace(/\D/g, "");
+  return dig ? `•••${dig.slice(-4)}` : "";
 };
 
 // ─── CADASTRO NO FLUXO PÚBLICO ────────────────────────────────────
@@ -2167,11 +2187,13 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
   // ── Estado de autenticação ──
   const [authTela,setAuthTela]=useState('verificando');
-  // valores: 'verificando','email','pin','bio','setup','setup-pin','setup-bio'
+  // valores: 'verificando','entrar','criar-pin','bio','setup','setup-pin','setup-bio'
   const [email,setEmail]=useState('');
-  const [telefone,setTelefone]=useState('');
+  // E-mail OU celular — o que ela digitar. O servidor reconhece os dois.
+  const [identificador,setIdentificador]=useState('');
+  // Conta lembrada neste aparelho: mostra "Entrando como…" em vez do campo.
+  const [lembrado,setLembrado]=useState(false);
   const [clienteEncontrado,setClienteEncontrado]=useState(null);
-  const [codigoInput,setCodigoInput]=useState('');
   const [pinInput,setPinInput]=useState('');
   const [pinConfirm,setPinConfirm]=useState('');
   const [bioDisponivel,setBioDisponivel]=useState(false);
@@ -2204,7 +2226,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         // e o catch guardava o erro sem trocar de tela. Como a tela
         // começa em 'verificando', a mãe ficava no "Carregando..." para
         // sempre — sem mensagem, porque aquela tela retorna antes.
-        setTelefone(clienteInicial.telefone||'');
+        setIdentificador(clienteInicial.email||clienteInicial.telefone||'');
         setEmail(clienteInicial.email||'');
         setClienteEncontrado({nome:String(clienteInicial.nome_mae||'').trim().split(/\s+/)[0]||''});
         setAuthTela('criar-pin');
@@ -2217,70 +2239,63 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   // Rede de segurança: "Carregando..." nunca pode ser um estado final.
   // Se em 15 segundos ninguém decidiu para onde ir — chamada pendurada,
   // erro que esqueceu de trocar a tela, caminho novo que ninguém previu
-  // — cai na tela do telefone, de onde ela consegue entrar. Antes o
+  // — cai na tela de entrar, de onde ela consegue seguir. Antes o
   // único jeito de sair dessa tela era fechar o app.
   useEffect(()=>{
     if(authTela!=='verificando')return;
     const relogio=setTimeout(()=>{
-      setAuthTela(tela=>tela==='verificando'?'telefone':tela);
+      setAuthTela(tela=>tela==='verificando'?'entrar':tela);
     },15000);
     return()=>clearTimeout(relogio);
   },[authTela]);
 
   const verificarSessao=async()=>{
-    console.log('🟡 verificarSessao chamada');
     try{
-      // Chegou pelo link do e-mail? Então o Supabase já criou a sessão
-      // ao abrir a página — entra direto, sem pedir código nem PIN.
-      const sessaoSupabase=getSessao();
-      if(sessaoSupabase?.user?.email){
-        await concluirLogin(sessaoSupabase.user.email);
-        return;
+      // Sessão do Supabase só serve aqui se for de uma CLIENTE que chegou
+      // pelo link do e-mail. A da fotógrafa — logada no painel no mesmo
+      // celular — fazia a Área do Cliente procurar uma cliente com o
+      // e-mail do estúdio, não achar, e cair numa tela só com PIN, sem
+      // dizer de quem era a conta. Ninguém conseguia entrar por ali.
+      const emailSessao=String(getSessao()?.user?.email||'').toLowerCase();
+      if(emailSessao&&emailSessao!==EMAIL_FOTOGRAFA){
+        if(await concluirLogin(emailSessao))return;
       }
+      // Quem já entrou neste aparelho volta com a conta lembrada: a tela
+      // mostra "Entrando como •••0657" e pede só o PIN.
       const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
-      if(sess&&sess.expires>Date.now()&&sess.telefone){
-        // O telefone volta da sessão porque é ele que a tranca usa para
-        // saber contra quem conferir o PIN. Sem isso, quem reabria o app
-        // caía numa tela de PIN que não tinha como validar nada.
-        setTelefone(sess.telefone);
+      const lembrar=sess&&sess.expires>Date.now()?(sess.identificador||sess.email||sess.telefone||''):'';
+      if(lembrar){
+        setIdentificador(lembrar);setLembrado(true);
         setEmail(sess.email||'');
         setTemPIN(true);
         const temDigital=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===sess.email;
         setTemBio(temDigital);
-        setAuthTela(temDigital?'bio':'pin');
+        setAuthTela(temDigital?'bio':'entrar');
         return;
       }
-      // Sessão velha, de aparelho novo ou sem telefone guardado: começa
-      // pelo telefone. Antes caía no envio de código por e-mail, que
-      // manda tudo para uma caixa de teste e nunca chega na cliente.
-      setAuthTela('telefone');
+      setAuthTela('entrar');
     }catch(e){
       console.error('verificarSessao:',e);
-      setAuthTela('telefone');
+      setAuthTela('entrar');
     }
   };
 
-  // Carrega os dados da cliente. Só roda depois que ela provou ser dona
-  // do e-mail — antes disso o banco nem devolve a linha.
+  // Entra pela sessão do link de e-mail. Sem cliente com esse e-mail, só
+  // devolve false e quem chamou segue para a tela de entrar. Antes gravava
+  // um erro e jogava numa tela sem campo de identificação.
   const concluirLogin=async(em)=>{
     const r=await getClienteByEmail(em);
-    if(!(r&&r.length>0)){
-      setErroAuth('Não encontramos cadastro com esse e-mail. Fale com a Crescidinhos 🌸');
-      setAuthTela('email');
-      return false;
-    }
+    if(!(r&&r.length>0))return false;
     const cl=r[0];
     setLogado(cl);
     const ags=await getAgendamentosByCliente(cl.id);
     setAgendamentos(ags||[]);
-    localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,expires:Date.now()+(7*24*60*60*1000)}));
-    setTelefone(cl.telefone||'');
-    // Quem sabe se existe PIN é o servidor. Antes a resposta vinha do
-    // localStorage do aparelho, que o iPhone apaga sozinho — e aí o app
-    // mandava a mãe criar um PIN novo por cima do que ela já tinha.
+    localStorage.setItem('cresci_session',JSON.stringify({email:em,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,identificador:em,expires:Date.now()+(7*24*60*60*1000)}));
+    setIdentificador(em);setLembrado(true);
+    // Quem sabe se existe PIN é o servidor, não o aparelho.
     let temPin=false;
     try{
-      const s=await chamarAreaCliente('iniciar',{telefone:(cl.telefone||'').replace(/\D/g,'')});
+      const s=await chamarAreaCliente('iniciar',{identificador:em});
       temPin=!!s.tem_pin;
     }catch(e){console.error('Não foi possível conferir o PIN:',e);}
     const hasBio=!!localStorage.getItem('cresci_bio_credId')&&localStorage.getItem('cresci_bio_email')===em;
@@ -2290,77 +2305,9 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     return true;
   };
 
-  // Resend envia código + Supabase valida (simples e seguro)
-  const enviarCodigo=async(emailParam)=>{
-    const em=(emailParam||email||'').trim().toLowerCase();
-    if(!em)return;
-    setLoading(true);setErroAuth('');
-    try{
-      // 1. Gera código aleatório de 6 dígitos
-      const codigo=String(Math.floor(Math.random()*1000000)).padStart(6,'0');
-      console.log('📧 Enviando código para:', em);
-
-      // 2. Envia via Resend
-      const resendKey = process.env.REACT_APP_RESEND_API_KEY || '';
-      if(!resendKey){console.error('❌ Chave Resend não configurada');throw new Error('API key missing');}
-      console.log('🔑 Chave Resend: ✓ Carregada');
-
-      // Em desenvolvimento, usa email de teste do Resend
-      const emailDestino = em.endsWith('@resend.dev') ? em : 'delivered@resend.dev';
-      console.log('📬 Destino real:', emailDestino);
-
-      const res=await fetch('https://api.resend.com/emails',{
-        method:'POST',
-        headers:{'Authorization':`Bearer ${resendKey}`,'Content-Type':'application/json'},
-        body:JSON.stringify({
-          from:'Crescidinhos <onboarding@resend.dev>',
-          to:emailDestino,
-          subject:'Seu código de acesso - Crescidinhos 🧸',
-          html:`<h2>Olá! 👋</h2><p>Aqui está seu código de acesso:</p><p style="font-size:32px;font-weight:bold;letter-spacing:4px;text-align:center;background:#f5f5f5;padding:20px;border-radius:8px;font-family:monospace;">${codigo}</p><p>Cole este código no app para entrar na sua área de clientes.</p><p style="color:#999;font-size:12px;">Válido por 10 minutos.</p>`
-        })
-      });
-      if(!res.ok){
-        const errorData = await res.json().catch(()=>({}));
-        console.error('Resend error:', res.status, errorData);
-        throw new Error(`Erro ao enviar email: ${res.status}`);
-      }
-
-      // 3. Guarda código temporariamente (usa email original para validação)
-      sessionStorage.setItem('_code_'+em,codigo);
-      setEmail(em);
-      setAuthTela('codigo');
-      console.log('✓ Código enviado para '+em + (emailDestino !== em ? ` (testando em ${emailDestino})` : ''));
-    }catch(e){
-      console.error(e);
-      setErroAuth('Não conseguimos enviar. Tente novamente.');
-    }
-    setLoading(false);
-  };
-
-  const conferirCodigo=async()=>{
-    if(codigoInput.length!==6){setErroAuth('Digite 6 dígitos');return;}
-    setLoading(true);setErroAuth('');
-    try{
-      // Valida código local
-      const codigoEsperado=sessionStorage.getItem('_code_'+email);
-      if(!codigoEsperado) throw new Error('Código expirou');
-      if(codigoInput!==codigoEsperado) throw new Error('Código incorreto');
-
-      // Limpa e faz login
-      sessionStorage.removeItem('_code_'+email);
-      await concluirLogin(email);
-    }catch(e){
-      console.error(e);
-      setErroAuth(e.message);
-    }
-    setLoading(false);
-  };
-
-  // PIN e digital destrancam o aparelho. Se a sessão do banco ainda
-  // vale, entra direto; se venceu, pede código novo.
-  // A tranca do servidor já conferiu quem é — não precisa procurar de
-  // novo pelo e-mail. Some com a segunda ida ao banco que podia travar.
-  const entrarComCliente=async(cl)=>{
+  // A tranca do servidor já conferiu quem é. Guarda no aparelho o
+  // identificador que ELA usou, para a próxima vez vir preenchido.
+  const entrarComCliente=async(cl,ident)=>{
     setLogado(cl);
     try{
       const ags=await getAgendamentosByCliente(cl.id);
@@ -2371,61 +2318,51 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       console.error('Não foi possível carregar os ensaios:',e);
       setAgendamentos([]);
     }
-    localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,expires:Date.now()+(7*24*60*60*1000)}));
+    const lembrar=String(ident||identificador||cl.email||'').trim();
+    localStorage.setItem('cresci_session',JSON.stringify({email:cl.email,clienteId:cl.id,nome:cl.nome_mae,telefone:cl.telefone,identificador:lembrar,expires:Date.now()+(7*24*60*60*1000)}));
+    setIdentificador(lembrar);setLembrado(true);
     setEmail(cl.email||'');
     setAuthTela(null);
   };
 
-  const buscarClientePorTelefone=async()=>{
-    const limpo=telefone.replace(/\D/g,'');
-    if(limpo.length<10){setErroAuth('Digite o telefone com DDD.');return;}
-    setLoading(true);setErroAuth('');
-    try{
-      // Quem responde é o servidor. O navegador não lê mais a tabela de
-      // clientes por telefone, e a resposta traz só o primeiro nome da
-      // mãe — nunca o nome da criança nem o cadastro inteiro.
-      const r=await chamarAreaCliente('iniciar',{telefone:limpo});
-      if(!r.ok){
-        setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
-        setLoading(false);return;
-      }
-      setClienteEncontrado({nome:r.nome});
-      setPinInput('');setPinConfirm('');
-      // Se já existe PIN, pede o PIN. Antes ia direto para "criar PIN",
-      // e era por aí que dava para tomar a conta de quem já tinha um.
-      setAuthTela(r.tem_pin?'pin':'criar-pin');
-    }catch(e){
-      console.error('Erro ao buscar cliente:',e);
-      setErroAuth(e.message||'Não conseguimos verificar agora. Tente de novo.');
-    }
-    setLoading(false);
+  // "não é você?": esquece a conta lembrada neste aparelho.
+  const trocarConta=()=>{
+    localStorage.removeItem('cresci_session');
+    setIdentificador('');setLembrado(false);setEmail('');
+    setTemBio(false);setPinInput('');setErroAuth('');
+    setAuthTela('entrar');
   };
 
-  const loginComPIN=async()=>{
+  // Uma tela só: e-mail ou celular + PIN. Antes eram três telas em
+  // sequência, e uma delas (a do print de 10/09) mostrava só o PIN.
+  const entrar=async()=>{
+    const ident=identificador.trim();
+    if(!ident){setErroAuth(RECADO_ACESSO.identificador_vazio);return;}
     if(pinInput.length<4){setErroAuth('O PIN tem de 4 a 6 números.');return;}
     setLoading(true);setErroAuth('');
     try{
-      // O PIN sobe para o servidor e é conferido contra a cliente DESTE
-      // telefone. Antes procurava o PIN digitado na tabela inteira, sem
-      // amarrar à pessoa: quem digitasse um PIN igual ao de outra mãe
-      // entrava na área dela, com a ficha clínica da criança.
-      const limpo=telefone.replace(/\D/g,'');
-      const r=await chamarAreaCliente('validar-pin',{telefone:limpo,pin:pinInput});
+      // Confere no servidor, contra a cliente DESTE e-mail ou celular.
+      const r=await chamarAreaCliente('validar-pin',{identificador:ident,pin:pinInput});
 
-      if(r.ok){await entrarComCliente(r.cliente);setPinInput('');setLoading(false);return;}
+      if(r.ok){await entrarComCliente(r.cliente,ident);setPinInput('');setLoading(false);return;}
 
       if(r.motivo==='pin_errado'){
         setErroAuth(`PIN incorreto. ${r.restantes} tentativa${r.restantes===1?'':'s'} antes de bloquear.`);
       }else if(r.motivo==='bloqueado'){
-        setErroAuth(`Muitas tentativas. Tente de novo em ${r.minutos} minutos.`);
+        setErroAuth(`Muitas tentativas. Tente de novo em ${r.minutos} minutos — ou toque em "Esqueci a senha".`);
       }else if(r.motivo==='sem_pin'){
+        // Tem cadastro mas não tem PIN (primeiro acesso, ou o estúdio
+        // redefiniu): cria agora.
+        const s=await chamarAreaCliente('iniciar',{identificador:ident}).catch(()=>({}));
+        setClienteEncontrado(s?.ok?{nome:s.nome}:null);
+        setPinConfirm('');
         setAuthTela('criar-pin');
       }else{
         setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
       }
       setPinInput('');
     }catch(e){
-      console.error('Erro em loginComPIN:',e);
+      console.error('Erro ao entrar:',e);
       setErroAuth(e.message||'Não conseguimos verificar agora. Tente de novo.');
     }
     setLoading(false);
@@ -2440,20 +2377,18 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       const challenge=crypto.getRandomValues(new Uint8Array(32));
       const rpId=window.location.hostname==='localhost'?'localhost':window.location.hostname;
       await navigator.credentials.get({publicKey:{challenge,rpId,allowCredentials:[{type:'public-key',id:credId}],userVerification:'required',timeout:60000}});
-      // A digital destranca a sessão que já está no aparelho. Antes caía
-      // no envio de código por e-mail, que vai para uma caixa de teste:
-      // a mãe passava o dedo e ficava esperando um e-mail que não vem.
+      // A digital destranca a sessão que já está no aparelho.
       const sess=JSON.parse(localStorage.getItem('cresci_session')||'null');
       if(!(sess&&sess.expires>Date.now()&&sess.clienteId)){
-        setErroAuth('Sua sessão venceu. Entre com o telefone e o PIN.');
-        setAuthTela('telefone');setLoading(false);return;
+        setErroAuth('Sua sessão venceu. Entre com seu e-mail ou celular e o PIN.');
+        setAuthTela('entrar');setLoading(false);return;
       }
       const r=await sb(`clientes?id=eq.${sess.clienteId}&limit=1`);
       if(!(r&&r.length)){
         setErroAuth('Não encontramos seu cadastro. Fale com a Crescidinhos 🌸');
-        setAuthTela('telefone');setLoading(false);return;
+        setAuthTela('entrar');setLoading(false);return;
       }
-      await entrarComCliente(r[0]);
+      await entrarComCliente(r[0],sess.identificador);
     }catch(e){
       if(e.name==='NotAllowedError'){setErroAuth('Biometria cancelada ou não reconhecida');}
       else{setErroAuth(e.message||'Erro na biometria. Tente outra forma.');}
@@ -2466,10 +2401,9 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
     if(setupPinStep===1){setSetupPin1(pinInput);setPinInput('');setSetupPinStep(2);setErroAuth('');return;}
     if(pinInput!==setupPin1){setErroAuth('PINs não coincidem. Tente novamente.');setPinInput('');setSetupPinStep(1);return;}
     setLoading(true);setErroAuth('');
-    // Este PIN também vai para o servidor. Antes ficava só no aparelho,
-    // como um hash no localStorage — e sumia junto com ele.
+    // Este PIN também vai para o servidor — nunca fica só no aparelho.
     try{
-      const r=await chamarAreaCliente('criar-pin',{telefone:(logado?.telefone||telefone||'').replace(/\D/g,''),pin:pinInput});
+      const r=await chamarAreaCliente('criar-pin',{identificador:(logado?.email||identificador||'').trim(),pin:pinInput});
       if(!r.ok&&r.motivo!=='ja_tem_pin'){
         setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
         setPinInput('');setSetupPinStep(1);setLoading(false);return;
@@ -2503,12 +2437,12 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   };
 
   const sair=()=>{
-    // Sair apaga a sessão do aparelho, e a digital depende dela. Então
-    // a volta é sempre pelo telefone — não adianta oferecer digital.
+    // Sair apaga a sessão do aparelho, e a digital depende dela. A volta
+    // é pela tela de entrar, sem conta lembrada.
     setLogado(null);setPinInput('');setErroAuth('');
     localStorage.removeItem('cresci_session');
-    setEmail('');setTelefone('');
-    setAuthTela('telefone');
+    setEmail('');setIdentificador('');setLembrado(false);
+    setAuthTela('entrar');
   };
 
   // ── Teclado PIN ──
@@ -2551,41 +2485,39 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
       return <div style={{textAlign:'center',padding:'80px 16px'}}><div style={{fontSize:48}}>🐘</div><p style={{color:'#aaa',marginTop:12,fontSize:13}}>Carregando...</p></div>;
     }
 
-    if(authTela==='telefone'||(!authTela&&!logado)){
-      console.log('🔵 RENDERIZANDO TELA DE TELEFONE - authTela:', authTela);
+    // Uma tela só para entrar: quem é (e-mail ou celular) + PIN, e o
+    // "Esqueci a senha" embaixo, pequeno. Pedido da Thais em 10/09.
+    if(authTela==='entrar'||(!authTela&&!logado)){
+      const podeEntrar=identificador.trim().length>0&&pinInput.length>=4;
       return(
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🐘</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Digite seu número de celular 🌸</p>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
-            <p style={{fontSize:12,color:"#666",marginBottom:16}}>Celular</p>
-            <input style={{...inp,textAlign:'center',fontSize:16,padding:'12px',marginBottom:12}} type="tel" inputMode="tel" placeholder="(11) 98765-4321" value={telefone} onChange={e=>{setTelefone(e.target.value);setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&telefone.length>=10&&buscarClientePorTelefone()}/>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Entre com seu e-mail ou celular e seu PIN 🌸</p>
+          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"left",marginBottom:12}}>
+            {lembrado?(
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:16}}>
+                <p style={{fontSize:13,color:'#555',margin:0}}>Entrando como <strong>{mascararIdentificador(identificador)}</strong></p>
+                <button onClick={trocarConta} style={{background:'none',border:'none',padding:0,cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600,whiteSpace:'nowrap'}}>não é você?</button>
+              </div>
+            ):(
+              <>
+                <label style={{display:'block',fontSize:12,color:'#666',marginBottom:6}}>E-mail ou celular</label>
+                <input style={{...inp,fontSize:16,padding:'12px',marginBottom:16}} type="text" inputMode="email" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="seu@email.com ou (14) 99999-9999" value={identificador} onChange={e=>{setIdentificador(e.target.value);setErroAuth('');}}/>
+              </>
+            )}
+            <label style={{display:'block',fontSize:12,color:'#666',marginBottom:6}}>PIN</label>
+            <input style={{...inp,textAlign:'center',fontSize:28,letterSpacing:8,fontWeight:600,padding:'12px',marginBottom:4}} type="password" inputMode="numeric" autoComplete="current-password" placeholder="••••" maxLength="6" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&podeEntrar&&entrar()}/>
             {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={buscarClientePorTelefone} disabled={loading||telefone.length<10} style={{width:"100%",padding:13,borderRadius:10,background:telefone.length>=10?"#1a1a1a":"#e8e0d8",color:telefone.length>=10?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:telefone.length>=10?"pointer":"default",marginTop:12}}>
-              {loading?"Procurando...":"Procurar 🔍"}
-            </button>
-          </div>
-          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
-        </div>
-      );
-    }
-
-    if(authTela==='email'){
-      return(
-        <div style={{textAlign:"center",padding:"48px 16px"}}>
-          <div style={{fontSize:48,marginBottom:16}}>🐘</div>
-          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Minha Área</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Digite seu PIN para entrar 🌸</p>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
-            <p style={{fontSize:12,color:"#666",marginBottom:16}}>PIN (4 dígitos)</p>
-            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&pinInput.length===4&&loginComPIN()}/>
-            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={()=>loginComPIN()} disabled={loading||pinInput.length!==4} style={{width:"100%",padding:13,borderRadius:10,background:pinInput.length===4?"#1a1a1a":"#e8e0d8",color:pinInput.length===4?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:pinInput.length===4?"pointer":"default",marginTop:12}}>
+            <button onClick={entrar} disabled={loading||!podeEntrar} style={{width:"100%",padding:13,borderRadius:10,background:podeEntrar?"#1a1a1a":"#e8e0d8",color:podeEntrar?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:podeEntrar?"pointer":"default",marginTop:12}}>
               {loading?"Entrando...":"Entrar 🌸"}
             </button>
+            <div style={{textAlign:'center',marginTop:14}}>
+              <a href={LINK_REDEFINIR_PIN} style={{fontSize:12,color:'#999',textDecoration:'underline'}}>Esqueci a senha</a>
+            </div>
           </div>
-          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem PIN? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
+          {temBio&&<button onClick={()=>{setAuthTela('bio');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600,marginBottom:12}}>👆 Usar digital</button>}
+          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6}}>Não tem cadastro? Use o botão <strong>"Cadastre-se"</strong> na página inicial 🌸</p>
         </div>
       );
     }
@@ -2597,20 +2529,16 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         setLoading(true);setErroAuth('');
         try{
           // O PIN vai para o servidor e é guardado cifrado, numa tabela
-          // que o navegador não alcança. Antes o app mandava um UPDATE
-          // com a chave pública: o banco recusava calado (0 linhas, sem
-          // erro), o app dizia "pronto" e nada era salvo. Nenhuma das
-          // 134 clientes tinha PIN gravado por causa disso.
-          const limpo=telefone.replace(/\D/g,'');
-          const r=await chamarAreaCliente('criar-pin',{telefone:limpo,pin:pinInput});
+          // que o navegador não alcança.
+          const r=await chamarAreaCliente('criar-pin',{identificador:identificador.trim(),pin:pinInput});
 
-          if(r.ok){await entrarComCliente(r.cliente);setPinInput('');setPinConfirm('');setLoading(false);return;}
+          if(r.ok){await entrarComCliente(r.cliente,identificador);setPinInput('');setPinConfirm('');setLoading(false);return;}
 
-          // Já tem PIN: manda para a tela de digitar, não deixa trocar.
+          // Já tem PIN: volta para entrar, não deixa trocar por cima.
           if(r.motivo==='ja_tem_pin'){
             setErroAuth(RECADO_ACESSO.ja_tem_pin);
             setPinInput('');setPinConfirm('');
-            setAuthTela('pin');
+            setAuthTela('entrar');
           }else{
             setErroAuth(RECADO_ACESSO[r.motivo]||RECADO_ACESSO.erro_servidor);
           }
@@ -2620,61 +2548,26 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
         }
         setLoading(false);
       };
+      const pronto=pinInput.length===4&&pinConfirm.length===4;
       return(
         <div style={{textAlign:"center",padding:"48px 16px"}}>
           <div style={{fontSize:48,marginBottom:16}}>🔐</div>
           <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Crie seu PIN</h2>
           {clienteEncontrado?.nome&&<p style={{fontSize:13,color:"#888",marginBottom:4}}>Bem-vinda, <strong>{clienteEncontrado.nome}</strong></p>}
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Defina um PIN de 4 dígitos 🌸</p>
+          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Você ainda não tem PIN. Defina um de 4 dígitos 🌸</p>
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,textAlign:"center",marginBottom:16}}>
             <p style={{fontSize:12,color:"#666",marginBottom:12}}>Seu PIN (4 dígitos)</p>
-            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:16}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:16}} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinInput} onChange={e=>{setPinInput(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
 
             <p style={{fontSize:12,color:"#666",marginBottom:12}}>Confirme o PIN</p>
-            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="text" inputMode="numeric" placeholder="0000" maxLength="4" value={pinConfirm} onChange={e=>{setPinConfirm(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
+            <input style={{...inp,textAlign:'center',fontSize:32,letterSpacing:8,fontWeight:600,padding:'16px',marginBottom:12}} type="password" inputMode="numeric" autoComplete="new-password" placeholder="••••" maxLength="4" value={pinConfirm} onChange={e=>{setPinConfirm(e.target.value.replace(/\D/g,''));setErroAuth('');}}/>
 
             {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'8px 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={criarPIN} disabled={loading||pinInput.length!==4||pinConfirm.length!==4} style={{width:"100%",padding:13,borderRadius:10,background:(pinInput.length===4&&pinConfirm.length===4)?"#1a1a1a":"#e8e0d8",color:(pinInput.length===4&&pinConfirm.length===4)?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:(pinInput.length===4&&pinConfirm.length===4)?"pointer":"default",marginTop:12}}>
+            <button onClick={criarPIN} disabled={loading||!pronto} style={{width:"100%",padding:13,borderRadius:10,background:pronto?"#1a1a1a":"#e8e0d8",color:pronto?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:pronto?"pointer":"default",marginTop:12}}>
               {loading?"Criando PIN...":"Confirmar 🌸"}
             </button>
           </div>
-          <button onClick={()=>{setAuthTela(clienteEncontrado?'telefone':'email');setPinInput('');setPinConfirm('');setErroAuth('');setClienteEncontrado(null);setTelefone('');}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
-        </div>
-      );
-    }
-
-    if(authTela==='codigo'){
-      return(
-        <div style={{textAlign:"center",padding:"48px 16px"}}>
-          <div style={{fontSize:48,marginBottom:16}}>📬</div>
-          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:24,color:"#1a1a1a",marginBottom:8}}>Confira seu e-mail</h2>
-          <p style={{fontSize:13,color:"#888",marginBottom:24,lineHeight:1.6}}>Mandamos um código para<br/><strong style={{color:"#1a1a1a"}}>{email}</strong></p>
-          <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:14,padding:20,marginBottom:16}}>
-            <input style={{...inp,textAlign:'center',fontSize:26,letterSpacing:6,fontWeight:600,padding:'12px 8px'}} type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={10} placeholder="000000" value={codigoInput} onChange={e=>{setCodigoInput(e.target.value.replace(/\D/g,''));setErroAuth('');}} onKeyDown={e=>e.key==="Enter"&&conferirCodigo()}/>
-            {erroAuth&&<p style={{fontSize:12,color:'#c62828',margin:'12px 0 0',textAlign:'center'}}>{erroAuth}</p>}
-            <button onClick={conferirCodigo} disabled={loading||codigoInput.length<6} style={{width:"100%",marginTop:16,padding:13,borderRadius:10,background:codigoInput.length>=6?"#1a1a1a":"#e8e0d8",color:codigoInput.length>=6?"#fff":"#aaa",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:codigoInput.length>=6?"pointer":"default"}}>
-              {loading?"Conferindo...":"Entrar 🌸"}
-            </button>
-          </div>
-          <p style={{fontSize:12,color:"#aaa",lineHeight:1.6,marginBottom:8}}>Não chegou? Olhe no spam.</p>
-          <button onClick={()=>{setCodigoInput('');setErroAuth('');enviarCodigo();}} disabled={loading} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>Enviar outro código</button>
-          <button onClick={()=>{setCodigoInput('');setErroAuth('');setAuthTela('email');}} style={{display:'block',margin:'4px auto 0',padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#aaa'}}>← Usar outro e-mail</button>
-        </div>
-      );
-    }
-
-    if(authTela==='pin'){
-      return(
-        <div style={{textAlign:'center',padding:'40px 16px'}}>
-          <div style={{fontSize:44,marginBottom:12}}>🔐</div>
-          <h2 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,color:'#1a1a1a',marginBottom:4}}>Digite seu PIN</h2>
-          <p style={{fontSize:12,color:'#888',marginBottom:28}}>Confirme seu PIN para entrar</p>
-          {erroAuth&&<p style={{fontSize:12,color:'#c62828',marginBottom:16}}>{erroAuth}</p>}
-          <PINKeypad valor={pinInput} onChange={v=>{setPinInput(v);setErroAuth('');}} onConfirm={loginComPIN}/>
-          <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:20,flexWrap:'wrap'}}>
-            {temBio&&<button onClick={()=>{setAuthTela('bio');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>👆 Usar digital</button>}
-            <a href={linkWhatsAppEmpresa(PHOTOGRAPHER.phone,'Oi! Esqueci meu PIN da Minha Área 🌸')} target="_blank" rel="noreferrer" style={{display:'inline-block',padding:'8px 14px',borderRadius:8,background:'#f5f0eb',textDecoration:'none',cursor:'pointer',fontSize:12,color:'#888'}}>Esqueci meu PIN</a>
-          </div>
+          <button onClick={()=>{setAuthTela('entrar');setPinInput('');setPinConfirm('');setErroAuth('');setClienteEncontrado(null);}} style={{padding:'8px 14px',borderRadius:8,background:'transparent',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>← Voltar</button>
         </div>
       );
     }
@@ -2690,8 +2583,8 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
             {loading?'Verificando...':'👆 Entrar com biometria'}
           </button>
           <div style={{display:'flex',gap:8,justifyContent:'center',marginTop:8,flexWrap:'wrap'}}>
-            {temPIN&&<button onClick={()=>{setAuthTela('pin');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>🔢 Usar PIN</button>}
-            <a href={linkWhatsAppEmpresa(PHOTOGRAPHER.phone,'Oi! Esqueci meu PIN da Minha Área 🌸')} target="_blank" rel="noreferrer" style={{display:'inline-block',padding:'8px 14px',borderRadius:8,background:'#f5f0eb',textDecoration:'none',cursor:'pointer',fontSize:12,color:'#888'}}>Esqueci meu PIN</a>
+            <button onClick={()=>{setAuthTela('entrar');setErroAuth('');setPinInput('');}} style={{padding:'8px 14px',borderRadius:8,background:'#f5f0eb',border:'none',cursor:'pointer',fontSize:12,color:'#b8967e',fontWeight:600}}>🔢 Usar PIN</button>
+            <a href={LINK_REDEFINIR_PIN} style={{display:'inline-block',padding:'8px 14px',borderRadius:8,background:'#f5f0eb',textDecoration:'none',cursor:'pointer',fontSize:12,color:'#888'}}>Esqueci a senha</a>
           </div>
         </div>
       );
