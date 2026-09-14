@@ -27,6 +27,17 @@ function montarEndereco(c = {}) {
   return [rua, local, cep && `CEP ${cep}`].filter(Boolean).join(" — ");
 }
 
+// Mesma ideia para o local do evento ou do ensaio externo, que fica em
+// `dados_evento` em peças (local_nome, local_rua, local_complemento,
+// local_bairro, local_cidade). Antes o contrato levava só o nome do lugar.
+function montarLocal(d) {
+  if (!d) return "";
+  const rua = [d.local_rua, d.local_complemento].filter(p => String(p || "").trim()).join(", ");
+  const lugar = [d.local_bairro, d.local_cidade].filter(p => String(p || "").trim()).join(", ");
+  const nome = String(d.local_nome || d.local || "").trim();
+  return [nome, [rua, lugar].filter(Boolean).join(" — ")].filter(Boolean).join(" — ");
+}
+
 async function enviarWhatsApp(numero, mensagem) {
   const tel = numero.replace(/\D/g, "");
   if (!tel || tel.length < 10) return;
@@ -139,9 +150,9 @@ export default function ContractPanel({ agendamento, onUpdate }) {
     autorizaImagem: autorizaImagemInicial,
     obs: agendamento?.obs || "",
     extras: extrasIniciais,
-    localEnsaio: "",
+    localEnsaio: (catKey?.includes("externa") || catKey?.includes("externo")) ? montarLocal(agendamento?.dados_evento) : "",
     // Evento: puxa do dados_evento salvo no agendamento
-    localEvento: agendamento?.dados_evento?.local_nome || agendamento?.dados_evento?.local || "",
+    localEvento: montarLocal(agendamento?.dados_evento),
     nomeAniversariante: agendamento?.dados_evento?.nome_aniversariante || "",
   });
 
@@ -231,9 +242,14 @@ export default function ContractPanel({ agendamento, onUpdate }) {
 
   // Menor
   const filhos = cl.filhos || [];
-  const temMenor = filhos.length > 0 || !!cl.nome_crianca;
-  const nomeCrianca = filhos[0]?.nome_crianca || cl.nome_crianca || "";
-  const idadeCrianca = filhos[0]?.idade || cl.idade || "";
+  // O agendamento pode dizer de qual criança é o ensaio — mãe com mais de
+  // um filho. Sem essa informação, vale o primeiro filho do cadastro, como
+  // sempre foi.
+  const criancaDoEnsaio = agendamento?.nome_crianca || "";
+  const filhoDoEnsaio = criancaDoEnsaio ? filhos.find(f => f?.nome_crianca === criancaDoEnsaio) : null;
+  const temMenor = filhos.length > 0 || !!cl.nome_crianca || !!criancaDoEnsaio;
+  const nomeCrianca = criancaDoEnsaio || filhos[0]?.nome_crianca || cl.nome_crianca || "";
+  const idadeCrianca = criancaDoEnsaio ? (filhoDoEnsaio?.idade || "") : (filhos[0]?.idade || cl.idade || "");
 
   // Links do contrato
   const linkCliente   = `${APP_URL}/contrato/${agendamento?.id}`;

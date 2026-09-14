@@ -1234,6 +1234,132 @@ function ParcelasSection({ agendamento, onUpdate }) {
 }
 
 // ─── CRM VIEW ─────────────────────────────────────────────────────
+// ─── NOVO ENSAIO OU EVENTO A PARTIR DA FICHA DA CLIENTE ─────────
+// Pedido da Thais (14/09): marcar ensaio ou evento usando o cadastro que a
+// cliente já tem, gerar o contrato e mandar o link — a cliente só assina.
+// Nome, CPF, RG, endereço e telefone saem da ficha; aqui só se escolhe o
+// que é, quando e quanto. Grava direto em `agendamentos` com o crachá da
+// fotógrafa (policy fotografa_total) e abre o agendamento criado, que é
+// onde mora o painel do contrato.
+function NovoEnsaioNaFicha({ cliente, agendamentos, onCriado }) {
+  const vazio={servico_id:"",modalidade_id:"",data:"",hora:"",valor:"",nome_crianca:"",obs:""};
+  const [aberto,setAberto]=useState(false);
+  const [f,setF]=useState(vazio);
+  const [dadosEvento,setDadosEvento]=useState({});
+  const [salvando,setSalvando]=useState(false);
+  const [erro,setErro]=useState("");
+  const set=(k,v)=>{setF(x=>({...x,[k]:v}));setErro("");};
+
+  const servicos=SERVICES.filter(s=>s.grupo!=="vale"&&s.grupo!=="cofrinho");
+  const svc=SERVICES.find(s=>s.id===f.servico_id);
+  const modalidades=svc?.modalities||[];
+  const mod=modalidades.find(m=>m.id===f.modalidade_id)||(modalidades.length===1?modalidades[0]:null);
+  const precisaEvento=!!svc&&requerDadosEvento(svc.id);
+  const ehEvento=!!svc&&SERVICOS_EVENTO.includes(svc.id);
+  const filhos=(Array.isArray(cliente.filhos)?cliente.filhos:[]).filter(x=>x&&x.nome_crianca);
+  const mesmoDia=f.data?agendamentos.filter(a=>a.data===f.data&&a.status!=="Cancelado"):[];
+  const primeiroNome=String(cliente.nome_mae||"").trim().split(" ")[0]||"a cliente";
+  const preenchido=v=>String(v??"").trim()!=="";
+  // O contrato trava sem CPF, RG e endereço. Avisa já aqui, para ela saber
+  // que vai completar na hora de gerar — e não achar que deu erro.
+  const faltaNoCadastro=[!preenchido(cliente.cpf_mae)&&"CPF",!preenchido(cliente.rg)&&"RG",!preenchido(cliente.rua)&&"endereço"].filter(Boolean);
+
+  const faltam=[
+    !svc&&"Serviço",
+    svc&&modalidades.length>0&&!mod&&"Modalidade",
+    !f.data&&"Data",
+    !f.hora&&"Horário",
+    !(Number(f.valor)>0)&&"Valor",
+    ehEvento&&!preenchido(dadosEvento.nome_aniversariante)&&"Nome do aniversariante",
+    precisaEvento&&!preenchido(dadosEvento.local_nome)&&"Local",
+  ].filter(Boolean);
+
+  const escolherServico=(id)=>{
+    const s=SERVICES.find(x=>x.id===id);
+    const unica=s?.modalities?.length===1?s.modalities[0]:null;
+    setF(x=>({...x,servico_id:id,modalidade_id:unica?.id||"",valor:unica?.price!=null?String(unica.price):""}));
+    setDadosEvento({});setErro("");
+  };
+  const escolherModalidade=(id)=>{
+    const m=modalidades.find(x=>x.id===id);
+    setF(x=>({...x,modalidade_id:id,valor:m?.price!=null?String(m.price):x.valor}));setErro("");
+  };
+  const fechar=()=>{setAberto(false);setF(vazio);setDadosEvento({});setErro("");};
+
+  const salvar=async()=>{
+    if(faltam.length){setErro("Falta preencher: "+faltam.join(" · "));return;}
+    setSalvando(true);setErro("");
+    try{
+      const criado=await sb("agendamentos",{method:"POST",body:JSON.stringify({
+        cliente_id:cliente.id,
+        servico:svc.label,servico_id:svc.id,
+        modalidade:mod?.label||"",modalidade_id:mod?.id||null,
+        duracao_min:mod?.duracao_min||60,
+        data:f.data,hora:f.hora,valor:Number(f.valor),
+        nome_crianca:f.nome_crianca||null,
+        cpf_mae:cliente.cpf_mae||null,
+        obs:f.obs.trim()||null,
+        dados_evento:precisaEvento?dadosEvento:null,
+        status:"Pendente",pagamento_status:"Pendente",
+      })});
+      const id=Array.isArray(criado)?criado[0]?.id:criado?.id;
+      if(!id)throw new Error("o agendamento não voltou do banco. Confira na Agenda antes de tentar de novo.");
+      fechar();
+      await onCriado(id);
+    }catch(e){setErro("Não foi possível salvar: "+e.message);}
+    setSalvando(false);
+  };
+
+  if(!aberto)return(
+    <button onClick={()=>setAberto(true)} style={{width:"100%",padding:13,borderRadius:10,background:"#72243E",color:"#fff",border:"none",cursor:"pointer",fontSize:14,fontWeight:700,marginBottom:12}}>📅 Novo ensaio ou evento para {primeiroNome}</button>
+  );
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,overflowY:"auto",padding:16}}>
+      <div style={{background:"#fff",borderRadius:16,padding:20,maxWidth:480,margin:"0 auto",paddingBottom:40}}>
+        <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:22,margin:"0 0 4px"}}>Novo ensaio ou evento</h3>
+        <p style={{fontSize:13,color:"#888",margin:0,lineHeight:1.5}}>Para <strong style={{color:"#1a1a1a"}}>{cliente.nome_mae}</strong>. Os dados dela saem do cadastro — não precisa digitar de novo.</p>
+        {faltaNoCadastro.length>0&&<p style={{fontSize:12,color:"#856404",background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"8px 10px",margin:"10px 0 0",lineHeight:1.5}}>O cadastro dela está sem {faltaNoCadastro.join(", ")}. O contrato pede na hora de gerar, e o que você completar lá fica salvo na ficha.</p>}
+        <p style={sec}>📅 O que e quando</p>
+        <Field label="Serviço" required>
+          <select style={inp} value={f.servico_id} onChange={e=>escolherServico(e.target.value)}>
+            <option value="">Selecione...</option>
+            {servicos.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </Field>
+        {modalidades.length>1&&(
+          <Field label="Modalidade" required>
+            <select style={inp} value={f.modalidade_id} onChange={e=>escolherModalidade(e.target.value)}>
+              <option value="">Selecione...</option>
+              {modalidades.map(m=><option key={m.id} value={m.id}>{m.label}{m.price!=null?` — R$ ${m.price}`:""}</option>)}
+            </select>
+          </Field>
+        )}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Field label="Data" required><input style={inp} type="date" value={f.data} onChange={e=>set("data",e.target.value)}/></Field>
+          <Field label="Horário" required><input style={inp} type="time" value={f.hora} onChange={e=>set("hora",e.target.value)}/></Field>
+        </div>
+        {mesmoDia.length>0&&<p style={{fontSize:12,color:"#856404",background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"8px 10px",margin:"-4px 0 14px",lineHeight:1.5}}>⚠️ Já tem neste dia: {mesmoDia.map(a=>`${a.hora||"sem horário"} · ${a.servico}${a.clientes?.nome_mae?" ("+a.clientes.nome_mae.split(" ")[0]+")":""}`).join(" — ")}</p>}
+        <Field label="Valor (R$)" required><input style={inp} type="number" min="0" step="0.01" value={f.valor} onChange={e=>set("valor",e.target.value)} placeholder="0,00"/></Field>
+        {filhos.length>0&&(
+          <Field label="Para qual criança?">
+            <select style={inp} value={f.nome_crianca} onChange={e=>set("nome_crianca",e.target.value)}>
+              <option value="">— sem criança / ainda não sei —</option>
+              {filhos.map((x,i)=><option key={i} value={x.nome_crianca}>{x.nome_crianca}{x.idade?" · "+x.idade:""}</option>)}
+            </select>
+          </Field>
+        )}
+        {precisaEvento&&<DadosEventoForm serviceId={svc.id} data={dadosEvento} onChange={d=>{setDadosEvento(d);setErro("");}}/>}
+        <Field label="Observações (aparecem no contrato)"><textarea style={{...inp,resize:"vertical"}} rows={2} value={f.obs} onChange={e=>set("obs",e.target.value)}/></Field>
+        {erro&&<p style={{fontSize:12,color:"#c62828",background:"#ffebee",border:"1px solid #f4a0a0",borderRadius:8,padding:"8px 10px",margin:"0 0 10px",lineHeight:1.5}}>{erro}</p>}
+        <div style={{display:"flex",gap:10,marginTop:16}}>
+          <button onClick={fechar} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
+          <button disabled={salvando} onClick={salvar} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#72243E",color:"#fff",border:"none",cursor:salvando?"default":"pointer",fontSize:14,fontWeight:700}}>{salvando?"Salvando...":"Salvar e ir para o contrato →"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
   const [agendamentos,setAgendamentos]=useState([]);
   const [clientes,setClientes]=useState([]);
@@ -1708,7 +1834,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             </div>
           )}
         </div>
-        <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12}}>
+        <div id="contrato-do-agendamento" style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:14,marginBottom:12,scrollMarginTop:12}}>
           <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:"0 0 12px"}}>📄 Contrato</p>
           <ContractPanel agendamento={agendamento} onUpdate={(patch)=>update(agendamento.id,patch)}/>
         </div>
@@ -1787,6 +1913,15 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             </div>
           )}
         </div>
+        <NovoEnsaioNaFicha
+          cliente={cliente}
+          agendamentos={agendamentos}
+          onCriado={async(id)=>{
+            await carregar();
+            setSelectedCliente(null);setEditandoCliente(false);setSelected(id);
+            setTimeout(()=>document.getElementById("contrato-do-agendamento")?.scrollIntoView({behavior:"smooth",block:"start"}),400);
+          }}
+        />
         {confirmDeleteCliente&&(
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
             <div style={{background:"#fff",borderRadius:14,padding:24,maxWidth:360,width:"100%"}}>
@@ -1990,7 +2125,16 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
             <AnamneseForm data={newAnamnese} onChange={setNewAnamnese} titulo={null}/>
             <div style={{display:"flex",gap:10,marginTop:24}}>
               <button onClick={()=>{setShowNew(false);setNewClient({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});}} style={{flex:1,padding:12,borderRadius:10,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",color:"#666"}}>Cancelar</button>
-              <button disabled={salvando} onClick={async()=>{setSalvando(true);try{const ex=await getClienteByTelefone(newClient.telefone);let cid;const filhos=newAnamnese.nome_crianca?[newAnamnese]:[];if(ex&&ex.length>0){cid=ex[0].id;await atualizarCliente(cid,{nome_mae:newClient.nome_mae,email:newClient.email,cpf_mae:newClient.cpf_mae,filhos,anamnese:newAnamnese,updated_at:new Date().toISOString()});}else{const nc=await criarCliente({nome_mae:newClient.nome_mae,email:newClient.email,telefone:newClient.telefone,cpf_mae:newClient.cpf_mae,atipico:newAnamnese.atipico==="Sim",filhos,anamnese:newAnamnese});cid=nc[0].id;}const svc=SERVICES.find(s=>s.label===newClient.servico);const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";const mod=svc?.modalities?.find(m=>m.label===modLabel)||svc?.modalities?.[0];const duracaoMin=mod?.duracao_min||60;await criarAgendamento({cliente_id:cid,servico:newClient.servico,servico_id:svc?.id||null,modalidade:modLabel,modalidade_id:mod?.id||null,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente",duracao_min:duracaoMin});setShowNew(false);setNewClient({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});carregar();}catch(e){alert("Erro: "+e.message);}finally{setSalvando(false);}}} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:salvando?"default":"pointer"}}>{salvando?"Salvando...":"Salvar agendamento"}</button>
+              <button disabled={salvando} onClick={async()=>{setSalvando(true);try{const ex=await getClienteByTelefone(newClient.telefone);let cid;const filhos=newAnamnese.nome_crianca?[newAnamnese]:[];if(ex&&ex.length>0){cid=ex[0].id;
+                // Cliente que já existe: só completa o que veio preenchido. Antes
+                // regravava tudo — deixar a parte da criança em branco apagava
+                // os filhos do cadastro, e CPF em branco apagava o CPF.
+                const patch={};
+                if(String(newClient.nome_mae||"").trim())patch.nome_mae=newClient.nome_mae;
+                if(String(newClient.email||"").trim())patch.email=newClient.email;
+                if(String(newClient.cpf_mae||"").trim())patch.cpf_mae=newClient.cpf_mae;
+                if(newAnamnese.nome_crianca){const atuais=Array.isArray(ex[0].filhos)?ex[0].filhos:[];patch.filhos=[...atuais.filter(x=>x?.nome_crianca!==newAnamnese.nome_crianca),newAnamnese];}
+                if(Object.keys(patch).length)await atualizarCliente(cid,{...patch,updated_at:new Date().toISOString()});}else{const nc=await criarCliente({nome_mae:newClient.nome_mae,email:newClient.email,telefone:newClient.telefone,cpf_mae:newClient.cpf_mae,atipico:newAnamnese.atipico==="Sim",filhos,anamnese:newAnamnese});cid=nc[0].id;}const svc=SERVICES.find(s=>s.label===newClient.servico);const modLabel=newClient.modalidade||(svc?.modalities[0]?.label)||"";const mod=svc?.modalities?.find(m=>m.label===modLabel)||svc?.modalities?.[0];const duracaoMin=mod?.duracao_min||60;await criarAgendamento({cliente_id:cid,servico:newClient.servico,servico_id:svc?.id||null,modalidade:modLabel,modalidade_id:mod?.id||null,data:newClient.data,hora:newClient.hora,valor:newClient.valor,obs:newClient.obs,cpf_mae:newClient.cpf_mae,pagamento_link:newClient.pagamento_link||null,pagamento_status:"Pendente",status:"Pendente",duracao_min:duracaoMin});setShowNew(false);setNewClient({nome_mae:"",email:"",telefone:"",servico:"",modalidade:"",data:"",hora:"",valor:"",obs:"",cpf_mae:"",pagamento_link:""});setNewAnamnese({});carregar();}catch(e){alert("Erro: "+e.message);}finally{setSalvando(false);}}} style={{flex:2,padding:12,borderRadius:10,background:salvando?"#ccc":"#1a1a1a",color:"#fff",border:"none",fontFamily:"'Cormorant Garamond',serif",fontSize:16,cursor:salvando?"default":"pointer"}}>{salvando?"Salvando...":"Salvar agendamento"}</button>
             </div>
           </div>
         </div>
