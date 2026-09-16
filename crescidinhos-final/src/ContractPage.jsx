@@ -120,11 +120,25 @@ function SignaturePad({ onSign, disabled, jaSalvo, nomeLabel, dataLabel, savedIm
     setSalvando(false);
   }
 
+  // Campo da outra parte JÁ ASSINADO: mostra a assinatura, não o cadeado.
+  // Antes dizia "campo reservado" mesmo com o contrato assinado pelos
+  // dois, e quem abria ficava na dúvida se a outra parte já tinha
+  // assinado. Ver não muda nada: o campo continua travado.
+  if (disabled && savedImage) return (
+    <div style={st.sigBox}>
+      <canvas ref={canvasRef} width={900} height={360}
+        style={{ ...st.canvas, borderColor: "#a5d6a7", cursor: "default", opacity: 0.85, height: 180 }} />
+      <p style={{ fontSize: 13, color: "#2e7d32", fontWeight: 600, margin: "8px 0 2px", textAlign: "center" }}>✅ Assinado</p>
+      <p style={st.sigLabel}>{nomeLabel}</p>
+      {dataLabel && <p style={st.sigDate}>{dataLabel}</p>}
+    </div>
+  );
+
   if (disabled) return (
     <div style={st.sigBox}>
       <div style={st.sigCanvasLocked}>
         <p style={{ fontSize: 12, color: "#aaa", margin: 0, textAlign: "center" }}>
-          🔒 Campo reservado para {nomeLabel}
+          🔒 Ainda não assinado por {nomeLabel}
         </p>
       </div>
       <p style={st.sigLabel}>{nomeLabel}</p>
