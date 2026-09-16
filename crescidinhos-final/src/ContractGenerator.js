@@ -224,7 +224,7 @@ function blocoAcompanhamento(d) {
 <div class="clause">
   <h4>Cláusula E3 — Pagamento</h4>
   <p>O valor total do plano contratado é de <strong>${fmtMoeda(d.valorTotal)}</strong>, pago na forma: <strong>${d.formaPagamento || "conforme combinado com a CONTRATADA"}</strong>.</p>
-  <p>§1º A reserva do plano é confirmada com o pagamento da primeira parcela ou do valor integral. Chave PIX: crescidinhosfoto@gmail.com.</p>
+  <p>§1º A reserva do plano é confirmada com o pagamento da primeira parcela ou do valor integral. Chave PIX: 14996845521 (celular).</p>
   <p>§2º O atraso no pagamento implica multa de 10%, juros de 1% ao mês e correção monetária. Em caso de inadimplência por mais de 30 dias, a CONTRATADA poderá suspender as sessões subsequentes até a regularização, sem devolução das sessões já realizadas.</p>
 </div>
 <div class="clause">
@@ -318,7 +318,7 @@ function blocoNewborn(d) {
   <h4>Cláusula 6 — Pagamento</h4>
   <p>O valor total do presente contrato é de <strong>${fmtMoeda(d.valorTotal)}</strong>, pago na forma: <strong>${d.formaPagamento || "conforme combinado com a CONTRATADA"}</strong>.</p>
   <p>§1º A reserva da data somente será confirmada após o pagamento do sinal. O saldo deverá ser quitado antes do início da sessão.</p>
-  <p>§2º Em caso de atraso no pagamento, incidirão multa de 10%, juros de 1% ao mês e correção monetária pelo IGPM. Formas aceitas: PIX (crescidinhosfoto@gmail.com), dinheiro e cartão de crédito.</p>
+  <p>§2º Em caso de atraso no pagamento, incidirão multa de 10%, juros de 1% ao mês e correção monetária pelo IGPM. Formas aceitas: PIX (14996845521), dinheiro e cartão de crédito.</p>
 </div>
 <div class="clause">
   <h4>Cláusula 7 — Cancelamento pela CONTRATANTE</h4>
@@ -429,7 +429,7 @@ function blocoEvento(d) {
 <div class="clause">
   <h4>Cláusula E3 — Pagamento</h4>
   <p>O valor total do presente contrato é de <strong>${fmtMoeda(d.valorTotal)}</strong>, pago na forma: <strong>${d.formaPagamento || "conforme combinado com a CONTRATADA"}</strong>.</p>
-  <p>§1º A reserva da data somente será confirmada após a compensação do pagamento do sinal. Formas aceitas: PIX (crescidinhosfoto@gmail.com), dinheiro e cartão de crédito.</p>
+  <p>§1º A reserva da data somente será confirmada após a compensação do pagamento do sinal. Formas aceitas: PIX (14996845521), dinheiro e cartão de crédito.</p>
   <p>§2º Em caso de inadimplência, incidirão multa de 10%, juros de mora de 1% ao mês e correção monetária pelo IGPM/FGV.</p>
 </div>
 <div class="clause">
