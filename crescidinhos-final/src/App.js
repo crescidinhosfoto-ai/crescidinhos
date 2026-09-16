@@ -246,6 +246,17 @@ const pad = n => String(n).padStart(2,"0");
 const formatDate    = (y,m,d) => `${y}-${pad(m+1)}-${pad(d)}`;
 const formatDateBR  = iso => { if(!iso) return "—"; const [y,m,d]=iso.split("-"); return `${d}/${m}/${y}`; };
 const mesAno        = iso => { if(!iso) return "—"; const [y,m]=iso.split("-"); return `${MONTHS[parseInt(m)-1]}/${y}`; };
+// O endereço mora nas colunas soltas (cep, rua, complemento, bairro,
+// cidade) — são elas que o contrato lê e que o cadastro do site preenche.
+// O bloco `endereco` é do cadastro antigo e vale só como reserva de
+// leitura, enquanto 6 fichas ainda o têm. Gravar, só nas colunas.
+const enderecoDoCadastro = (c={}) => ({
+  cep:         c.cep         || c.endereco?.cep         || "",
+  rua:         c.rua         || c.endereco?.rua         || "",
+  complemento: c.complemento || c.endereco?.complemento || "",
+  bairro:      c.bairro      || c.endereco?.bairro      || "",
+  cidade:      c.cidade      || c.endereco?.cidade      || "",
+});
 const getDaysInMonth = (y,m) => new Date(y,m+1,0).getDate();
 const getFirstDay    = (y,m) => new Date(y,m,1).getDay();
 
@@ -1849,8 +1860,8 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
   // ── Detalhe do cliente ──────────────────────────────────────────
   if(cliente){
     const ensaiosCliente=agendamentos.filter(a=>a.cliente_id===cliente.id);
-    const endereco=cliente.endereco||{};
-    const salvarEdicaoCliente=async()=>{setSalvandoEditCliente(true);try{await atualizarCliente(cliente.id,editClienteForm);setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm}:c));setEditandoCliente(false);}catch(e){alert("Erro: "+e.message);}setSalvandoEditCliente(false);};
+    const endereco=enderecoDoCadastro(cliente);
+    const salvarEdicaoCliente=async()=>{setSalvandoEditCliente(true);try{await atualizarCliente(cliente.id,{...editClienteForm,endereco:null,updated_at:new Date().toISOString()});setClientes(cs=>cs.map(c=>c.id===cliente.id?{...c,...editClienteForm,endereco:null}:c));setEditandoCliente(false);}catch(e){alert("Erro: "+e.message);}setSalvandoEditCliente(false);};
     // Excluir cliente apaga os agendamentos dela junto — e é dentro do
     // agendamento que mora o contrato, com as assinaturas. Contrato
     // assinado é a prova do que foi combinado: não se apaga. Então a
@@ -1874,7 +1885,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
             <h3 style={{fontFamily:"'Cormorant Garamond',serif",fontSize:20,margin:0}}>{cliente.nome_mae}</h3>
             <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>{setEditandoCliente(!editandoCliente);setEditClienteForm({nome_mae:cliente.nome_mae||"",email:cliente.email||"",telefone:cliente.telefone||"",cpf_mae:cliente.cpf_mae||"",rg:cliente.rg||"",data_nascimento:cliente.data_nascimento||"",endereco:cliente.endereco||{}});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Editar</button>
+              <button onClick={()=>{setEditandoCliente(!editandoCliente);setEditClienteForm({nome_mae:cliente.nome_mae||"",email:cliente.email||"",telefone:cliente.telefone||"",cpf_mae:cliente.cpf_mae||"",rg:cliente.rg||"",data_nascimento:cliente.data_nascimento||"",...enderecoDoCadastro(cliente)});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Editar</button>
               <button onClick={()=>setConfirmDeleteCliente(true)} style={{padding:"5px 10px",borderRadius:7,background:"#fde8e8",border:"1px solid #f4a0a0",cursor:"pointer",fontSize:12,color:"#c62828",fontWeight:600}}>🗑 Excluir</button>
             </div>
           </div>
@@ -1885,7 +1896,7 @@ function CRMView({ abrirAgendamentoId, onAgendamentoAberto, auth }) {
               ))}
               <p style={{...sec,marginTop:12}}>Endereço</p>
               {[["cep","CEP"],["rua","Rua e número"],["complemento","Complemento"],["bairro","Bairro"],["cidade","Cidade"]].map(([k,l])=>(
-                <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={editClienteForm.endereco?.[k]||""} onChange={e=>setEditClienteForm(f=>({...f,endereco:{...f.endereco,[k]:e.target.value}}))}/></Field>
+                <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={editClienteForm[k]||""} onChange={e=>setEditClienteForm(f=>({...f,[k]:e.target.value}))}/></Field>
               ))}
               <div style={{display:"flex",gap:8,marginTop:8}}>
                 <button onClick={()=>setEditandoCliente(false)} style={{flex:1,padding:10,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
@@ -2334,7 +2345,6 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   const [galeriaAg,setGaleriaAg]=useState(null);
   const [editandoPerfil,setEditandoPerfil]=useState(false);
   const [perfilForm,setPerfilForm]=useState({});
-  const [salvandoPerfil,setSalvandoPerfil]=useState(false);
   const [criandoAssinatura,setCriandoAssinatura]=useState(false);
   const [linkAssinatura,setLinkAssinatura]=useState(null);
 
@@ -2584,7 +2594,21 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
   };
   useEffect(()=>{if(logado&&(tab==="agendamentos"||tab==="contratos"))recarregarAgs();},[tab,logado?.id]);
 
-  const salvarPerfil=async()=>{setSalvandoPerfil(true);try{await atualizarCliente(logado.id,perfilForm);setLogado(l=>({...l,...perfilForm}));setEditandoPerfil(false);}catch(e){alert("Erro ao salvar: "+e.message);}setSalvandoPerfil(false);};
+  // A cliente NÃO tem permissão de gravar no próprio cadastro: o RLS
+  // recusa, o Supabase devolve 200 sem alterar nada, e a tela dizia
+  // "salvo". Mentira antiga, encontrada em 15/09. Enquanto a edição de
+  // verdade não existe (vai nascer na Área do Cliente do app novo, com o
+  // PIN conferido no servidor), o botão manda o pedido pelo WhatsApp.
+  // Só os NOMES dos campos vão no link — dado pessoal não entra em URL.
+  const pedirCorrecaoPerfil=()=>{
+    const rotulos={nome_mae:"Nome",email:"E-mail",cpf_mae:"CPF",rg:"RG",data_nascimento:"Data de nascimento",cep:"CEP",rua:"Rua e número",complemento:"Complemento",bairro:"Bairro",cidade:"Cidade"};
+    const atual={...logado,...enderecoDoCadastro(logado)};
+    const mudou=Object.keys(rotulos).filter(k=>String(perfilForm[k]??"").trim()!==String(atual[k]??"").trim());
+    if(mudou.length===0){setEditandoPerfil(false);return;}
+    const texto=`Oi! Quero corrigir meus dados na Minha Área 🌸\n\nPreciso mudar: ${mudou.map(k=>rotulos[k]).join(", ")}`;
+    window.open(`https://wa.me/${PHOTOGRAPHER.whatsapp}?text=${encodeURIComponent(texto)}`,"_blank","noopener");
+    setEditandoPerfil(false);
+  };
 
   // ── Telas de autenticação ──
   if(!logado||authTela==='setup'||authTela==='criar-pin'||authTela==='setup-bio'){
@@ -2767,7 +2791,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
 
   // ── Painel principal ──
   const cofrinho=logado.cofrinho;
-  const endereco=logado.endereco||{};
+  const endereco=enderecoDoCadastro(logado);
 
   return(
     <div>
@@ -2952,7 +2976,7 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
           <div style={{background:"#fff",border:"1.5px solid #e8e0d8",borderRadius:12,padding:16,marginBottom:12}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
               <p style={{fontSize:11,color:"#b8967e",fontWeight:700,letterSpacing:"1px",textTransform:"uppercase",margin:0}}>Seus dados</p>
-              <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilForm({nome_mae:logado.nome_mae||"",email:logado.email||"",cpf_mae:logado.cpf_mae||"",rg:logado.rg||"",data_nascimento:logado.data_nascimento||"",endereco:logado.endereco||{}});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Atualizar</button>
+              <button onClick={()=>{setEditandoPerfil(!editandoPerfil);setPerfilForm({nome_mae:logado.nome_mae||"",email:logado.email||"",cpf_mae:logado.cpf_mae||"",rg:logado.rg||"",data_nascimento:logado.data_nascimento||"",...enderecoDoCadastro(logado)});}} style={{padding:"5px 10px",borderRadius:7,background:"#f0f4ff",border:"1px solid #c0d0ff",cursor:"pointer",fontSize:12,color:"#1565C0",fontWeight:600}}>✏️ Atualizar</button>
             </div>
             {editandoPerfil?(
               <div>
@@ -2961,11 +2985,12 @@ function ClientePanel({ clienteInicial=null, onLoaded=null, onIrCatalogo=null })
                 ))}
                 <p style={{...sec,marginTop:12}}>Endereço</p>
                 {[["cep","CEP"],["rua","Rua e número"],["complemento","Complemento"],["bairro","Bairro"],["cidade","Cidade"]].map(([k,l])=>(
-                  <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={perfilForm.endereco?.[k]||""} onChange={e=>setPerfilForm(f=>({...f,endereco:{...f.endereco,[k]:e.target.value}}))}/></Field>
+                  <Field key={k} label={l}><input style={{...inp,marginBottom:0}} value={perfilForm[k]||""} onChange={e=>setPerfilForm(f=>({...f,[k]:e.target.value}))}/></Field>
                 ))}
+                <p style={{fontSize:11,color:"#856404",background:"#fff8e1",border:"1px solid #ffe082",borderRadius:8,padding:"8px 10px",margin:"12px 0 0",lineHeight:1.5}}>Corrija aqui e toque em "Pedir correção": abre o WhatsApp do estúdio com o que você quer mudar. A alteração é feita por nós.</p>
                 <div style={{display:"flex",gap:8,marginTop:12}}>
                   <button onClick={()=>setEditandoPerfil(false)} style={{flex:1,padding:10,borderRadius:8,background:"#fff",border:"1.5px solid #e8e0d8",cursor:"pointer",fontSize:13,color:"#666"}}>Cancelar</button>
-                  <button disabled={salvandoPerfil} onClick={salvarPerfil} style={{flex:2,padding:10,borderRadius:8,background:"#1a1a1a",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>{salvandoPerfil?"Salvando...":"Salvar"}</button>
+                  <button onClick={pedirCorrecaoPerfil} style={{flex:2,padding:10,borderRadius:8,background:"#25D366",color:"#fff",border:"none",cursor:"pointer",fontSize:13,fontWeight:600}}>💬 Pedir correção</button>
                 </div>
               </div>
             ):(
